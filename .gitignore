@@ -13,7 +13,7 @@ node_modules/
 .vite/
 
 # Data (large binary — regenerate with pipelines)
-data/tiles/*.pmtiles
+data/tiles/
 data/raw/
 data/processed/
 
