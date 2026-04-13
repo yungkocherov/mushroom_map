@@ -36,11 +36,14 @@
 | React + MapLibre GL фронтенд с лесным слоем | ✅ работает |
 | PMTiles отдаётся через FastAPI StaticFiles | ✅ работает |
 | Клик на полигон → попап с названием леса + список грибов | ✅ работает |
+| Docker Compose — все три контейнера (db, api, web) | ✅ работает |
+| Векторный стиль базовой карты (OpenFreeMap Bright) | ✅ чёткие надписи |
 
-### Проблемы с данными ⚠️
+### Известные баги и решения ⚠️
 
-- **88% полигонов имеют тип `unknown`** — в OSM Россия почти не имеет тегов `wood=` или `leaf_type=`. Полигоны есть, тип неизвестен. Частичный фикс: добавлены виды грибов для типа `unknown`, но визуально всё серо-зелёное.
-- Долгосрочное решение: **Copernicus HRL Tree Species** — архитектура уже готова, нужно только скачать данные и запустить пайплайн (см. `docs/copernicus_migration.md`)
+- **88% полигонов имеют тип `unknown`** (серые на карте) — в OSM Россия почти не имеет тегов `wood=`/`leaf_type=`. Виды грибов для `unknown` добавлены в БД, попап работает. Долгосрочное решение: Copernicus HRL (см. `docs/copernicus_migration.md`).
+- **Windows: `localhost` → IPv6** — Node.js 18+ резолвит `localhost` в `::1`, а Docker публикует на IPv4. В `vite.config.ts` прокси настроен на `http://127.0.0.1:8000`. **Не менять на `localhost`**.
+- **PMTiles Range-запросы через Vite** — решено в `vite.config.ts` (правильный target + Range-заголовки). В `MapView.tsx` также прописан прямой URL к API как fallback.
 
 ### Что НЕ сделано ❌
 
@@ -55,6 +58,12 @@
 | Легенда (кликабельная) | Низкий | `components/Legend.tsx` — отображает цвета, клик не работает |
 | Мобильная вёрстка | Низкий | Не тестировалась |
 | Copernicus миграция | Высокий для точности | Описана в `docs/copernicus_migration.md` |
+
+### Приоритет следующих шагов
+
+1. **Эмпирические виды** — VK-парсер → observation → H3 → попап
+2. **Классификация лесов** — эвристика OSM или Copernicus
+3. **UI** — фильтры сезон/съедобность, кликабельная легенда
 
 ---
 
@@ -175,18 +184,28 @@ mushroom-map/
 - Python 3.14 (venv в `.venv/`)
 - Node.js 24 (`C:\Program Files\nodejs\` на машине разработчика)
 
-### Запуск на Windows (bash/git-bash)
+### Запуск (Docker Compose — рекомендуется)
 
 ```bash
-# 1. База данных
+# Поднять все три сервиса (db + api + web)
+docker compose --profile full up -d
+
+# Только база (для локальной разработки api/web)
+docker compose up -d db
+```
+
+### Запуск локально (без Docker для api/web)
+
+```bash
+# База через Docker
 docker compose up -d db
 
-# 2. API
+# API (venv в .venv/, создан из python 3.14)
 cd services/api
 "/c/Users/ikoch/mushroom-map/.venv/Scripts/python.exe" -m uvicorn api.main:app \
   --host 0.0.0.0 --port 8000 --reload
 
-# 3. Фронтенд (в другом терминале)
+# Фронтенд (Node PATH нужен в bash)
 export PATH="/c/Program Files/nodejs:$PATH"
 cd services/web && npm run dev
 ```

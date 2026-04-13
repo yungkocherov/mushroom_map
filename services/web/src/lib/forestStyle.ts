@@ -23,7 +23,7 @@ export const FOREST_COLORS = {
   mixed_broadleaved: "#8db959",
   mixed: "#6a9146",
 
-  unknown: "#4a8c4a",
+  unknown: "#9e9e9e",
 } as const;
 
 /**
