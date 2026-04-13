@@ -16,6 +16,9 @@ node_modules/
 data/tiles/
 data/raw/
 data/processed/
+data/copernicus/tree_species/
+data/copernicus/tcd/
+data/vk/
 
 # Env / secrets
 .env

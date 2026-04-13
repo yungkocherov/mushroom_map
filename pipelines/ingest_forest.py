@@ -12,6 +12,7 @@ import argparse
 import os
 import sys
 import time
+from pathlib import Path
 
 # Добавляем src директории в PYTHONPATH
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "services", "geodata", "src"))
@@ -20,6 +21,7 @@ import psycopg
 
 from geodata.db import get_region_id, upsert_forest_polygons
 from geodata.sources import get_source
+from geodata.sources.copernicus import CopernicusConfig, CopernicusForestSource
 from geodata.types import BoundingBox
 
 
@@ -45,7 +47,59 @@ def get_region_bbox(conn: psycopg.Connection, code: str) -> BoundingBox:
     )
 
 
+def _load_env() -> None:
+    """Мягко подхватываем .env если он есть (как делают другие пайплайны)."""
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(Path(__file__).parent.parent / ".env")
+    except ImportError:
+        pass
+
+
+def _build_dsn_fallback() -> str | None:
+    if (url := os.environ.get("DATABASE_URL")):
+        return url
+    user = os.environ.get("POSTGRES_USER")
+    if not user:
+        return None
+    pw = os.environ.get("POSTGRES_PASSWORD", "")
+    host = os.environ.get("POSTGRES_HOST", "127.0.0.1")
+    port = os.environ.get("POSTGRES_PORT", "5432")
+    db = os.environ.get("POSTGRES_DB", "mushroom_map")
+    return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
+
+
+def _build_copernicus_source(args: argparse.Namespace) -> CopernicusForestSource:
+    cfg = CopernicusConfig()
+    if args.copernicus_dir:
+        cfg.download_dir = Path(args.copernicus_dir)
+    if args.copernicus_tcd_dir:
+        cfg.tcd_dir = Path(args.copernicus_tcd_dir)
+    if args.copernicus_product:
+        cfg.product = args.copernicus_product
+    if args.copernicus_min_m2 is not None:
+        cfg.min_polygon_m2 = float(args.copernicus_min_m2)
+    if args.copernicus_tcd_min is not None:
+        cfg.tcd_min = int(args.copernicus_tcd_min)
+    # маппинг классов: если задан файл YAML/JSON — загружаем
+    if args.copernicus_class_map:
+        path = Path(args.copernicus_class_map)
+        if not path.exists():
+            raise SystemExit(f"class map {path} не найден")
+        if path.suffix in (".yaml", ".yml"):
+            import yaml
+            data = yaml.safe_load(path.read_text(encoding="utf-8"))
+        else:
+            import json
+            data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise SystemExit("class map должен быть object {class_code: slug}")
+        cfg.class_map = {int(k): v for k, v in data.items()}
+    return CopernicusForestSource(cfg)
+
+
 def main() -> None:
+    _load_env()
     parser = argparse.ArgumentParser(description="Ingest forest polygons for a region")
     parser.add_argument("--source", required=True, choices=["osm", "copernicus"],
                         help="Forest data source")
@@ -55,9 +109,26 @@ def main() -> None:
                         help="PostgreSQL DSN; если не задан — берётся из $DATABASE_URL")
     parser.add_argument("--dry-run", action="store_true",
                         help="Только скачать и распарсить, не писать в БД")
+
+    cop = parser.add_argument_group("copernicus options")
+    cop.add_argument("--copernicus-dir", default=None,
+                     help="Директория с GeoTIFF-тайлами "
+                          "(по умолчанию data/copernicus/tree_species)")
+    cop.add_argument("--copernicus-tcd-dir", default=None,
+                     help="Опциональная директория с Tree Cover Density растрами "
+                          "для фильтра 'не лес'")
+    cop.add_argument("--copernicus-product", default=None,
+                     help="Слаг продукта для source_version, напр. hrl-dlt-2018")
+    cop.add_argument("--copernicus-class-map", default=None,
+                     help="Путь к YAML/JSON с маппингом {класс: slug}")
+    cop.add_argument("--copernicus-min-m2", type=float, default=None,
+                     help="Минимальная площадь полигона в m2 (отбрасываем мелкие лоскуты)")
+    cop.add_argument("--copernicus-tcd-min", type=int, default=None,
+                     help="Пороговое значение tree cover density 0..100 (если tcd-dir задан)")
+
     args = parser.parse_args()
 
-    dsn = args.dsn or os.environ.get("DATABASE_URL")
+    dsn = args.dsn or _build_dsn_fallback()
     if not dsn:
         print("ERROR: DATABASE_URL не задан", file=sys.stderr)
         sys.exit(2)
@@ -70,8 +141,11 @@ def main() -> None:
         bbox = get_region_bbox(conn, args.region)
         print(f"Регион id={region_id}, bbox={bbox}")
 
-        SourceClass = get_source(args.source)
-        source = SourceClass()
+        if args.source == "copernicus":
+            source = _build_copernicus_source(args)
+        else:
+            SourceClass = get_source(args.source)
+            source = SourceClass()
 
         print(f"Скачиваю данные через {args.source}...")
         normalized = source.fetch_normalized(bbox)
@@ -88,6 +162,11 @@ def main() -> None:
             count = upsert_forest_polygons(conn, region_id, normalized, verbose=True)
             conn.commit()
             print(f"\nГотово: {count} полигонов за {time.time() - t0:.1f}с")
+            if args.source == "copernicus":
+                print(
+                    "\nНапоминание: после этого нужно перегенерировать PMTiles:\n"
+                    "    python pipelines/build_tiles.py"
+                )
 
 
 if __name__ == "__main__":
