@@ -1,0 +1,28 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+.vite/
+
+# Data (large binary — regenerate with pipelines)
+data/tiles/*.pmtiles
+data/raw/
+data/processed/
+
+# Env / secrets
+.env
+*.env.local
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

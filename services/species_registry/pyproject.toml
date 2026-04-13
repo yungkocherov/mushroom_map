@@ -1,0 +1,18 @@
+[project]
+name = "mushroom-species-registry"
+version = "0.1.0"
+description = "Species registry loader for mushroom-map"
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml>=6.0",
+    "psycopg[binary]>=3.2",
+    "pydantic>=2.6",
+    "click>=8.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/species_registry"]

@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: mushroom_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mushroom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mushroom_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-mushroom_map}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mushroom} -d ${POSTGRES_DB:-mushroom_map}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./services/api
+    container_name: mushroom_api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-mushroom}:${POSTGRES_PASSWORD:-mushroom_dev}@db:5432/${POSTGRES_DB:-mushroom_map}
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:5173}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./services/api:/app
+      - ./data/tiles:/tiles:ro
+    profiles: ["full"]
+
+  web:
+    build:
+      context: ./services/web
+    container_name: mushroom_web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./services/web:/app
+      - /app/node_modules
+    profiles: ["full"]
+
+volumes:
+  pgdata:

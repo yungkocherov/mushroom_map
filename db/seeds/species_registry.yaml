@@ -1,0 +1,315 @@
+# Справочник видов грибов и их связь с типами леса.
+#
+# Формат:
+#   slug: стабильный идентификатор (не менять после публикации)
+#   name_ru: каноническое русское название
+#   name_lat: латинское название
+#   synonyms: народные и региональные названия
+#   edibility: edible | conditionally_edible | inedible | toxic | deadly
+#   season_months: в каких месяцах бывает (1..12)
+#   forests: список {type, affinity} — в каких лесах встречается и насколько сильно
+#       affinity 0..1: 1.0 = основной субстрат, 0.3 = бывает, но редко
+#   description: короткое описание для попапа
+#   photo_url: опционально
+#
+# Типы леса (slug'и) синхронизированы с geodata.types.ForestTypeSlug:
+#   pine, spruce, larch, fir, cedar,
+#   birch, aspen, alder, oak, linden, maple,
+#   mixed_coniferous, mixed_broadleaved, mixed, unknown
+#
+# Этот файл — seed. Пополняется вручную. Более полную базу (200+ видов)
+# подтянем на phase 2 из Wikipedia/GBIF.
+
+species:
+  # ─── Болетовые ─────────────────────────────────────────
+  - slug: boletus-edulis
+    name_ru: Белый гриб
+    name_lat: Boletus edulis
+    synonyms: [боровик, белый, коровка]
+    edibility: edible
+    season_months: [6, 7, 8, 9, 10]
+    forests:
+      - { type: pine,             affinity: 0.95 }
+      - { type: spruce,           affinity: 0.9 }
+      - { type: birch,            affinity: 0.85 }
+      - { type: oak,              affinity: 0.8 }
+      - { type: mixed_coniferous, affinity: 0.9 }
+      - { type: mixed,            affinity: 0.85 }
+    description: Король грибов. Микориза с хвойными и берёзой.
+
+  - slug: leccinum-scabrum
+    name_ru: Подберёзовик обыкновенный
+    name_lat: Leccinum scabrum
+    synonyms: [обабок, берёзовик, черноголовик]
+    edibility: edible
+    season_months: [6, 7, 8, 9, 10]
+    forests:
+      - { type: birch,            affinity: 1.0 }
+      - { type: mixed_broadleaved,affinity: 0.7 }
+      - { type: mixed,            affinity: 0.7 }
+    description: Строгая микориза с берёзой. Массовый гриб.
+
+  - slug: leccinum-aurantiacum
+    name_ru: Подосиновик красный
+    name_lat: Leccinum aurantiacum
+    synonyms: [красноголовик, осиновик, красный]
+    edibility: edible
+    season_months: [6, 7, 8, 9, 10]
+    forests:
+      - { type: aspen,            affinity: 1.0 }
+      - { type: birch,            affinity: 0.6 }
+      - { type: mixed_broadleaved,affinity: 0.7 }
+      - { type: mixed,            affinity: 0.6 }
+    description: Ярко-оранжевая шляпка, растёт под осинами и берёзами.
+
+  - slug: suillus-luteus
+    name_ru: Масленок настоящий
+    name_lat: Suillus luteus
+    synonyms: [маслёнок, жёлтый маслёнок]
+    edibility: edible
+    season_months: [6, 7, 8, 9, 10]
+    forests:
+      - { type: pine,             affinity: 1.0 }
+      - { type: mixed_coniferous, affinity: 0.7 }
+    description: Молодые сосняки — излюбленное место. Скользкая шляпка.
+
+  - slug: suillus-granulatus
+    name_ru: Маслёнок зернистый
+    name_lat: Suillus granulatus
+    synonyms: [летний маслёнок]
+    edibility: edible
+    season_months: [6, 7, 8, 9]
+    forests:
+      - { type: pine,             affinity: 1.0 }
+      - { type: mixed_coniferous, affinity: 0.6 }
+    description: Сухие сосняки, часто большими семьями.
+
+  - slug: xerocomus-subtomentosus
+    name_ru: Моховик зелёный
+    name_lat: Xerocomellus subtomentosus
+    synonyms: [моховик]
+    edibility: edible
+    season_months: [6, 7, 8, 9, 10]
+    forests:
+      - { type: spruce,           affinity: 0.7 }
+      - { type: pine,             affinity: 0.6 }
+      - { type: mixed_coniferous, affinity: 0.7 }
+      - { type: birch,            affinity: 0.5 }
+    description: Хвойные и смешанные леса, во мху.
+
+  # ─── Лисичковые ────────────────────────────────────────
+  - slug: cantharellus-cibarius
+    name_ru: Лисичка обыкновенная
+    name_lat: Cantharellus cibarius
+    synonyms: [лисичка, петушок]
+    edibility: edible
+    season_months: [6, 7, 8, 9]
+    forests:
+      - { type: spruce,           affinity: 0.9 }
+      - { type: pine,             affinity: 0.85 }
+      - { type: birch,            affinity: 0.7 }
+      - { type: mixed_coniferous, affinity: 0.9 }
+      - { type: mixed,            affinity: 0.8 }
+    description: Не червивеет. Микориза с елью, сосной, берёзой.
+
+  - slug: craterellus-tubaeformis
+    name_ru: Лисичка трубчатая
+    name_lat: Craterellus tubaeformis
+    synonyms: [зимняя лисичка]
+    edibility: edible
+    season_months: [9, 10, 11]
+    forests:
+      - { type: spruce,           affinity: 0.95 }
+      - { type: mixed_coniferous, affinity: 0.8 }
+    description: Осенняя лисичка, плотными колониями во мху ельников.
+
+  # ─── Рыжики и млечники ─────────────────────────────────
+  - slug: lactarius-deliciosus
+    name_ru: Рыжик сосновый
+    name_lat: Lactarius deliciosus
+    synonyms: [рыжик, рыжик обыкновенный]
+    edibility: edible
+    season_months: [7, 8, 9, 10]
+    forests:
+      - { type: pine,             affinity: 1.0 }
+      - { type: mixed_coniferous, affinity: 0.6 }
+    description: Молодые сосняки, на опушках. Оранжевый млечный сок.
+
+  - slug: lactarius-resimus
+    name_ru: Груздь настоящий
+    name_lat: Lactarius resimus
+    synonyms: [груздь, белый груздь, сырой груздь]
+    edibility: conditionally_edible
+    season_months: [7, 8, 9]
+    forests:
+      - { type: birch,            affinity: 0.9 }
+      - { type: mixed_broadleaved,affinity: 0.6 }
+      - { type: mixed,            affinity: 0.6 }
+    description: Берёзовые и смешанные леса. Требует вымачивания.
+
+  - slug: lactarius-torminosus
+    name_ru: Волнушка розовая
+    name_lat: Lactarius torminosus
+    synonyms: [волнушка, волжанка]
+    edibility: conditionally_edible
+    season_months: [7, 8, 9, 10]
+    forests:
+      - { type: birch,            affinity: 1.0 }
+      - { type: mixed,            affinity: 0.5 }
+    description: Строгая микориза с берёзой. Для соления.
+
+  - slug: lactarius-rufus
+    name_ru: Горькушка
+    name_lat: Lactarius rufus
+    synonyms: [горькая, горькуша]
+    edibility: conditionally_edible
+    season_months: [7, 8, 9, 10]
+    forests:
+      - { type: pine,             affinity: 0.9 }
+      - { type: spruce,           affinity: 0.7 }
+      - { type: mixed_coniferous, affinity: 0.85 }
+    description: Во мху хвойных лесов. Для длительного засола.
+
+  # ─── Сыроежки ──────────────────────────────────────────
+  - slug: russula-vesca
+    name_ru: Сыроежка пищевая
+    name_lat: Russula vesca
+    synonyms: [сыроежка]
+    edibility: edible
+    season_months: [6, 7, 8, 9]
+    forests:
+      - { type: birch,            affinity: 0.7 }
+      - { type: oak,              affinity: 0.7 }
+      - { type: mixed_broadleaved,affinity: 0.8 }
+      - { type: mixed,            affinity: 0.7 }
+    description: Один из многих видов сыроежек в лиственных лесах.
+
+  # ─── Опята ─────────────────────────────────────────────
+  - slug: armillaria-mellea
+    name_ru: Опёнок осенний
+    name_lat: Armillaria mellea
+    synonyms: [опята, осенние опята]
+    edibility: edible
+    season_months: [8, 9, 10]
+    forests:
+      - { type: birch,            affinity: 0.8 }
+      - { type: aspen,            affinity: 0.8 }
+      - { type: oak,              affinity: 0.8 }
+      - { type: spruce,           affinity: 0.7 }
+      - { type: mixed_broadleaved,affinity: 0.9 }
+      - { type: mixed,            affinity: 0.9 }
+    description: Пни и живые деревья лиственных пород. Большие колонии.
+
+  - slug: kuehneromyces-mutabilis
+    name_ru: Опёнок летний
+    name_lat: Kuehneromyces mutabilis
+    synonyms: [летний опёнок]
+    edibility: edible
+    season_months: [6, 7, 8, 9]
+    forests:
+      - { type: birch,            affinity: 0.8 }
+      - { type: aspen,            affinity: 0.7 }
+      - { type: mixed_broadleaved,affinity: 0.8 }
+      - { type: mixed,            affinity: 0.7 }
+    description: На пнях и валежнике лиственных пород.
+
+  # ─── Весенние ──────────────────────────────────────────
+  - slug: morchella-esculenta
+    name_ru: Сморчок настоящий
+    name_lat: Morchella esculenta
+    synonyms: [сморчок]
+    edibility: conditionally_edible
+    season_months: [4, 5]
+    forests:
+      - { type: mixed_broadleaved,affinity: 0.8 }
+      - { type: aspen,            affinity: 0.6 }
+      - { type: oak,              affinity: 0.6 }
+      - { type: mixed,            affinity: 0.6 }
+    description: На открытых местах, старых кострищах, в лиственных лесах.
+
+  - slug: gyromitra-esculenta
+    name_ru: Строчок обыкновенный
+    name_lat: Gyromitra esculenta
+    synonyms: [строчок]
+    edibility: toxic
+    season_months: [4, 5]
+    forests:
+      - { type: pine,             affinity: 0.9 }
+      - { type: mixed_coniferous, affinity: 0.7 }
+    description: Песчаные сосняки, вырубки. ВНИМАНИЕ: ядовит, содержит гиромитрин.
+
+  # ─── Зонтики ───────────────────────────────────────────
+  - slug: macrolepiota-procera
+    name_ru: Гриб-зонтик пёстрый
+    name_lat: Macrolepiota procera
+    synonyms: [зонтик, зонт]
+    edibility: edible
+    season_months: [7, 8, 9, 10]
+    forests:
+      - { type: mixed_broadleaved,affinity: 0.6 }
+      - { type: mixed,            affinity: 0.5 }
+      - { type: birch,            affinity: 0.5 }
+    description: Опушки, луга, светлые лиственные леса.
+
+  # ─── Ядовитые (нужны для предупреждений) ───────────────
+  - slug: amanita-phalloides
+    name_ru: Бледная поганка
+    name_lat: Amanita phalloides
+    synonyms: [поганка]
+    edibility: deadly
+    season_months: [7, 8, 9, 10]
+    forests:
+      - { type: oak,              affinity: 0.9 }
+      - { type: mixed_broadleaved,affinity: 0.8 }
+      - { type: mixed,            affinity: 0.5 }
+    description: СМЕРТЕЛЬНО ЯДОВИТА. Похожа на зелёную сыроежку.
+
+  - slug: amanita-muscaria
+    name_ru: Мухомор красный
+    name_lat: Amanita muscaria
+    synonyms: [мухомор]
+    edibility: toxic
+    season_months: [7, 8, 9, 10]
+    forests:
+      - { type: birch,            affinity: 0.8 }
+      - { type: spruce,           affinity: 0.8 }
+      - { type: pine,             affinity: 0.6 }
+      - { type: mixed,            affinity: 0.8 }
+    description: Микоризный партнёр берёзы и ели. Ядовит.
+
+  - slug: amanita-citrina
+    name_ru: Мухомор поганковидный
+    name_lat: Amanita citrina
+    synonyms: [жёлтый мухомор]
+    edibility: inedible
+    season_months: [7, 8, 9, 10]
+    forests:
+      - { type: pine,             affinity: 0.7 }
+      - { type: spruce,           affinity: 0.6 }
+      - { type: birch,            affinity: 0.5 }
+      - { type: mixed,            affinity: 0.6 }
+    description: Неприятный запах картофеля. Несъедобен.
+
+  # ─── Полубелый, польский ───────────────────────────────
+  - slug: imleria-badia
+    name_ru: Польский гриб
+    name_lat: Imleria badia
+    synonyms: [польский, панский, моховик каштановый]
+    edibility: edible
+    season_months: [7, 8, 9, 10]
+    forests:
+      - { type: pine,             affinity: 0.9 }
+      - { type: spruce,           affinity: 0.7 }
+      - { type: mixed_coniferous, affinity: 0.85 }
+    description: Замена белому в хвойных лесах. Синеет на срезе.
+
+  - slug: leccinum-versipelle
+    name_ru: Подосиновик жёлто-бурый
+    name_lat: Leccinum versipelle
+    synonyms: [красноголовик берёзовый, челыш]
+    edibility: edible
+    season_months: [6, 7, 8, 9]
+    forests:
+      - { type: birch,            affinity: 1.0 }
+      - { type: mixed,            affinity: 0.6 }
+    description: Растёт под берёзой, не под осиной — путать не надо.
