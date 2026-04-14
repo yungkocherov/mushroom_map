@@ -348,11 +348,13 @@ export function MapView() {
     };
 
     const onSwitch = () => {
-      if (m.isStyleLoaded()) {
-        cleanup();
-        setStyleSwitching(false);
-        setupForestAndInteractions(m);
-      }
+      // Для inline-стилей (osm/satellite) isStyleLoaded() может вернуть false
+      // в момент styledata — стиль применён без внешних ресурсов и достаточно
+      // самого события. Для CDN-схемы ждём полной загрузки (isStyleLoaded).
+      if (baseMap === "scheme" && !m.isStyleLoaded()) return;
+      cleanup();
+      setStyleSwitching(false);
+      setupForestAndInteractions(m);
     };
 
     // Если стиль упал с ошибкой (CDN недоступен) — откатываемся на OSM
