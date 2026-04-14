@@ -84,10 +84,11 @@ def upsert_forest_polygons(
             for poly in b
         ]
         with conn.transaction():
-            conn.executemany(SQL, params)
+            with conn.cursor() as cur:
+                cur.executemany(SQL, params)
         total += len(b)
         if verbose:
-            print(f"  → записано {total} полигонов...")
+            print(f"  -> записано {total} полигонов...")
 
     for poly in polygons:
         batch.append(poly)

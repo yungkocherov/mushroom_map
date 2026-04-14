@@ -273,7 +273,10 @@ class RosleshozForestSource(ForestSource):
                 pass
         if (ts := attrs.get("timber_stock")) is not None:
             try:
-                meta_out["timber_stock"] = float(ts)
+                val = float(ts)
+                import math
+                if math.isfinite(val):
+                    meta_out["timber_stock"] = val
             except (ValueError, TypeError):
                 pass
         if (ag := attrs.get("age_group")) is not None:

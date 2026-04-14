@@ -1,9 +1,9 @@
 """
-build_water_tiles: генерация PMTiles слоя водоохранных зон из таблицы water_zone.
+build_oopt_tiles: generate oopt.pmtiles from the protected_area table.
 
-Использование:
-    python pipelines/build_water_tiles.py --region lenoblast
-    python pipelines/build_water_tiles.py --region lenoblast --out data/tiles/water.pmtiles
+Usage:
+    python pipelines/build_oopt_tiles.py --region lenoblast
+    python pipelines/build_oopt_tiles.py --region lenoblast --out data/tiles/oopt.pmtiles
 """
 
 from __future__ import annotations
@@ -21,19 +21,19 @@ from pmtiles.writer import Writer
 
 DEFAULT_MINZOOM = 7
 DEFAULT_MAXZOOM = 13
-DEFAULT_EXTENT = 4096
-DEFAULT_BUFFER = 64
-DEFAULT_REGION = "lenoblast"
+DEFAULT_EXTENT  = 4096
+DEFAULT_BUFFER  = 64
+DEFAULT_REGION  = "lenoblast"
 
 
 def _build_dsn() -> str:
     if url := os.environ.get("DATABASE_URL"):
         return url
     user = os.environ.get("POSTGRES_USER", "mushroom")
-    pw = os.environ.get("POSTGRES_PASSWORD", "mushroom_dev")
+    pw   = os.environ.get("POSTGRES_PASSWORD", "mushroom_dev")
     host = os.environ.get("POSTGRES_HOST", "127.0.0.1")
     port = os.environ.get("POSTGRES_PORT", "5434")
-    db = os.environ.get("POSTGRES_DB", "mushroom_map")
+    db   = os.environ.get("POSTGRES_DB", "mushroom_map")
     return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
 
 
@@ -51,23 +51,8 @@ def region_bbox(conn: psycopg.Connection, code: str) -> tuple[float, float, floa
         (code,),
     ).fetchone()
     if row is None:
-        raise SystemExit(f"регион {code!r} не найден")
+        raise SystemExit(f"region {code!r} not found")
     return tuple(float(v) for v in row)  # type: ignore[return-value]
-
-
-def prepare_projected_source(conn: psycopg.Connection) -> None:
-    """Pre-project water_zone geometries into EPSG:3857 temp table + GIST index."""
-    conn.execute("DROP TABLE IF EXISTS water_3857")
-    conn.execute(
-        """
-        CREATE TEMP TABLE water_3857 AS
-        SELECT externalid, zone_type, area_m2,
-               ST_Transform(geometry, 3857) AS geom
-        FROM water_zone
-        """
-    )
-    conn.execute("CREATE INDEX idx_water_3857_gix ON water_3857 USING GIST (geom)")
-    conn.execute("ANALYZE water_3857")
 
 
 def build_tile_bytes(
@@ -80,14 +65,18 @@ def build_tile_bytes(
         """
         WITH mvt_src AS (
             SELECT
-                w.externalid,
-                w.zone_type,
-                w.area_m2,
-                ST_AsMVTGeom(w.geom, ST_TileEnvelope(%s, %s, %s), %s, %s, true) AS geom
-            FROM water_3857 w
-            WHERE w.geom && ST_TileEnvelope(%s, %s, %s)
+                p.name,
+                p.oopt_category,
+                (p.federal::int) AS federal,
+                ST_AsMVTGeom(
+                    ST_Transform(p.geometry, 3857),
+                    ST_TileEnvelope(%s, %s, %s),
+                    %s, %s, true
+                ) AS geom
+            FROM protected_area p
+            WHERE ST_Transform(p.geometry, 3857) && ST_TileEnvelope(%s, %s, %s)
         )
-        SELECT ST_AsMVT(mvt_src, 'water', %s, 'geom')
+        SELECT ST_AsMVT(mvt_src, 'oopt', %s, 'geom')
         FROM mvt_src
         WHERE geom IS NOT NULL
         """,
@@ -99,13 +88,13 @@ def build_tile_bytes(
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--region", default=DEFAULT_REGION)
+    ap = argparse.ArgumentParser(description="Build oopt.pmtiles from protected_area table")
+    ap.add_argument("--region",  default=DEFAULT_REGION)
     ap.add_argument("--minzoom", type=int, default=DEFAULT_MINZOOM)
     ap.add_argument("--maxzoom", type=int, default=DEFAULT_MAXZOOM)
-    ap.add_argument("--out", default="data/tiles/water.pmtiles")
-    ap.add_argument("--extent", type=int, default=DEFAULT_EXTENT)
-    ap.add_argument("--buffer", type=int, default=DEFAULT_BUFFER)
+    ap.add_argument("--out",     default="data/tiles/oopt.pmtiles")
+    ap.add_argument("--extent",  type=int, default=DEFAULT_EXTENT)
+    ap.add_argument("--buffer",  type=int, default=DEFAULT_BUFFER)
     args = ap.parse_args()
 
     out_path = Path(args.out)
@@ -121,16 +110,11 @@ def main() -> None:
         min_lon, min_lat, max_lon, max_lat = bbox
         print(f"bbox: {bbox}")
 
-        n_rows = conn.execute("SELECT COUNT(*) FROM water_zone").fetchone()[0]
-        print(f"water_zone rows: {n_rows}")
-
-        print("prepare_projected_source: ST_Transform into temp table...")
-        t_prep = time.monotonic()
-        prepare_projected_source(conn)
-        print(f"  done in {time.monotonic() - t_prep:.1f}s")
+        n_rows = conn.execute("SELECT COUNT(*) FROM protected_area").fetchone()[0]
+        print(f"protected_area rows: {n_rows}")
 
         t0 = time.monotonic()
-        written = 0
+        written   = 0
         total_size = 0
 
         with open(tmp_path, "wb") as f:
@@ -145,7 +129,7 @@ def main() -> None:
                 print(f"\n  z={z:<2d} ({n_tiles} tiles)")
 
                 z_ok = 0
-                t_z = time.monotonic()
+                t_z  = time.monotonic()
 
                 for x in range(x_min, x_max + 1):
                     for y in range(y_min, y_max + 1):
@@ -153,9 +137,9 @@ def main() -> None:
                         if data is None:
                             continue
                         writer.write_tile(zxy_to_tileid(z, x, y), data)
-                        z_ok += 1
+                        z_ok      += 1
                         total_size += len(data)
-                        written += 1
+                        written   += 1
 
                 dt = time.monotonic() - t_z
                 print(f"     done: ok={z_ok} ({n_tiles / max(dt, 0.001):.0f} tile/s, {dt:.1f}s)")
@@ -175,13 +159,13 @@ def main() -> None:
                 "center_lat_e7": int((min_lat + max_lat) / 2 * 1e7),
             }
             metadata = {
-                "name": f"mushroom-map water zones {args.region}",
+                "name": f"mushroom-map oopt {args.region}",
                 "vector_layers": [{
-                    "id": "water",
+                    "id": "oopt",
                     "fields": {
-                        "externalid": "String",
-                        "zone_type": "String",
-                        "area_m2": "Number",
+                        "name":          "String",
+                        "oopt_category": "String",
+                        "federal":       "Number",
                     },
                     "minzoom": args.minzoom,
                     "maxzoom": args.maxzoom,

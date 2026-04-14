@@ -18,6 +18,8 @@ const API_ORIGIN = import.meta.env.DEV
   : window.location.origin;
 const FOREST_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/forest.pmtiles`;
 const WATER_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/water.pmtiles`;
+const OOPT_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/oopt.pmtiles`;
+const ROADS_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/roads.pmtiles`;
 
 // ─── Отображение типов леса ───────────────────────────────────────────────────
 const FOREST_NAMES: Record<string, string> = {
@@ -160,6 +162,56 @@ function addForestLayer(m: Map) {
   // цветовые переходы между породами и так видны на границах.
 }
 
+function addOoptLayer(m: Map) {
+  if (m.getLayer("oopt-fill")) return;
+  if (!m.getSource("oopt")) {
+    m.addSource("oopt", { type: "vector", url: OOPT_PMTILES_URL });
+  }
+  const beforeId = findFirstSymbolLayerId(m);
+  m.addLayer(
+    {
+      id: "oopt-fill",
+      type: "fill",
+      source: "oopt",
+      "source-layer": "oopt",
+      paint: {
+        "fill-color": [
+          "match", ["get", "oopt_category"],
+          "zapovednik",    "#b71c1c",
+          "nat_park",      "#e65100",
+          "prirodny_park", "#f57f17",
+          "zakaznik",      "#558b2f",
+          "pamyatnik",     "#6a1b9a",
+          "#455a64",
+        ],
+        "fill-opacity": 0.25,
+        "fill-antialias": false,
+      } as unknown as maplibregl.FillLayerSpecification["paint"],
+    },
+    beforeId,
+  );
+}
+
+function addRoadsLayer(m: Map) {
+  if (m.getLayer("roads-line")) return;
+  if (!m.getSource("roads")) {
+    m.addSource("roads", { type: "vector", url: ROADS_PMTILES_URL });
+  }
+  m.addLayer({
+    id: "roads-line",
+    type: "line",
+    source: "roads",
+    "source-layer": "roads",
+    minzoom: 10,
+    paint: {
+      "line-color": "#5d4037",
+      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.8, 14, 2],
+      "line-opacity": 0.7,
+      "line-dasharray": [3, 2],
+    } as unknown as maplibregl.LineLayerSpecification["paint"],
+  });
+}
+
 function addWaterLayer(m: Map) {
   if (m.getLayer("water-fill")) return;
   if (!m.getSource("water")) {
@@ -240,6 +292,16 @@ function setWaterVisibility(m: Map, visible: boolean) {
     m.setLayoutProperty("water-fill", "visibility", visible ? "visible" : "none");
 }
 
+function setOoptVisibility(m: Map, visible: boolean) {
+  if (m.getLayer("oopt-fill"))
+    m.setLayoutProperty("oopt-fill", "visibility", visible ? "visible" : "none");
+}
+
+function setRoadsVisibility(m: Map, visible: boolean) {
+  if (m.getLayer("roads-line"))
+    m.setLayoutProperty("roads-line", "visibility", visible ? "visible" : "none");
+}
+
 export function MapView() {
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
@@ -248,6 +310,10 @@ export function MapView() {
   const [forestLoaded, setForestLoaded] = useState(false);
   const [waterVisible, setWaterVisible] = useState(true);
   const [waterLoaded, setWaterLoaded] = useState(false);
+  const [ooptVisible, setOoptVisible] = useState(true);
+  const [ooptLoaded, setOoptLoaded] = useState(false);
+  const [roadsVisible, setRoadsVisible] = useState(true);
+  const [roadsLoaded, setRoadsLoaded] = useState(false);
   const [styleSwitching, setStyleSwitching] = useState(false);
 
   // Refs для доступа из стабильных колбэков без пересоздания
@@ -257,6 +323,12 @@ export function MapView() {
   const waterVisibleRef = useRef(waterVisible);
   waterVisibleRef.current = waterVisible;
   const waterLoadedRef = useRef(false);
+  const ooptVisibleRef = useRef(ooptVisible);
+  ooptVisibleRef.current = ooptVisible;
+  const ooptLoadedRef = useRef(false);
+  const roadsVisibleRef = useRef(roadsVisible);
+  roadsVisibleRef.current = roadsVisible;
+  const roadsLoadedRef = useRef(false);
   // Отслеживаем уже применённый baseMap чтобы не вызывать setStyle зря
   // (совпадает с начальным значением useState, чтобы первый рендер был no-op)
   const appliedBaseMap = useRef<BaseMapMode>("osm");
@@ -277,6 +349,18 @@ export function MapView() {
       if (m.getSource("water")) m.removeSource("water");
       addWaterLayer(m);
       setWaterVisibility(m, waterVisibleRef.current);
+    }
+    if (ooptLoadedRef.current) {
+      if (m.getLayer("oopt-fill")) m.removeLayer("oopt-fill");
+      if (m.getSource("oopt")) m.removeSource("oopt");
+      addOoptLayer(m);
+      setOoptVisibility(m, ooptVisibleRef.current);
+    }
+    if (roadsLoadedRef.current) {
+      if (m.getLayer("roads-line")) m.removeLayer("roads-line");
+      if (m.getSource("roads")) m.removeSource("roads");
+      addRoadsLayer(m);
+      setRoadsVisibility(m, roadsVisibleRef.current);
     }
   }, []);
 
@@ -303,17 +387,44 @@ export function MapView() {
     const m = map.current;
     if (!m) return;
     if (!waterLoadedRef.current) {
-      waterLoadedRef.current = true;
-      setWaterLoaded(true);
+      waterLoadedRef.current = true; setWaterLoaded(true);
       addWaterLayer(m);
-      waterVisibleRef.current = true;
-      setWaterVisible(true);
+      waterVisibleRef.current = true; setWaterVisible(true);
       setWaterVisibility(m, true);
     } else {
       const next = !waterVisibleRef.current;
-      waterVisibleRef.current = next;
-      setWaterVisible(next);
+      waterVisibleRef.current = next; setWaterVisible(next);
       setWaterVisibility(m, next);
+    }
+  }, []);
+
+  const handleOoptToggle = useCallback(() => {
+    const m = map.current;
+    if (!m) return;
+    if (!ooptLoadedRef.current) {
+      ooptLoadedRef.current = true; setOoptLoaded(true);
+      addOoptLayer(m);
+      ooptVisibleRef.current = true; setOoptVisible(true);
+      setOoptVisibility(m, true);
+    } else {
+      const next = !ooptVisibleRef.current;
+      ooptVisibleRef.current = next; setOoptVisible(next);
+      setOoptVisibility(m, next);
+    }
+  }, []);
+
+  const handleRoadsToggle = useCallback(() => {
+    const m = map.current;
+    if (!m) return;
+    if (!roadsLoadedRef.current) {
+      roadsLoadedRef.current = true; setRoadsLoaded(true);
+      addRoadsLayer(m);
+      roadsVisibleRef.current = true; setRoadsVisible(true);
+      setRoadsVisibility(m, true);
+    } else {
+      const next = !roadsVisibleRef.current;
+      roadsVisibleRef.current = next; setRoadsVisible(next);
+      setRoadsVisibility(m, next);
     }
   }, []);
 
@@ -486,6 +597,12 @@ export function MapView() {
         waterVisible={waterVisible}
         waterLoaded={waterLoaded}
         onWaterToggle={handleWaterToggle}
+        ooptVisible={ooptVisible}
+        ooptLoaded={ooptLoaded}
+        onOoptToggle={handleOoptToggle}
+        roadsVisible={roadsVisible}
+        roadsLoaded={roadsLoaded}
+        onRoadsToggle={handleRoadsToggle}
       />
     </div>
   );

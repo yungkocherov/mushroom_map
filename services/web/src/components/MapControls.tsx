@@ -17,6 +17,12 @@ interface Props {
   waterVisible: boolean;
   waterLoaded: boolean;
   onWaterToggle: () => void;
+  ooptVisible: boolean;
+  ooptLoaded: boolean;
+  onOoptToggle: () => void;
+  roadsVisible: boolean;
+  roadsLoaded: boolean;
+  onRoadsToggle: () => void;
 }
 
 const WRAP_STYLE: React.CSSProperties = {
@@ -121,11 +127,25 @@ export function MapControls(props: Props) {
           onClick={props.onWaterToggle}
           style={layerBtn(props.waterLoaded, props.waterVisible, "#1565C0")}
         >
-          {!props.waterLoaded
-            ? "Водоохранные зоны"
-            : props.waterVisible
-            ? "Водоохрана: вкл"
-            : "Водоохрана: выкл"}
+          {!props.waterLoaded ? "Водоохранные зоны" : props.waterVisible ? "Водоохрана: вкл" : "Водоохрана: выкл"}
+        </button>
+      </div>
+
+      <div style={CARD_STYLE}>
+        <button
+          onClick={props.onOoptToggle}
+          style={layerBtn(props.ooptLoaded, props.ooptVisible, "#b71c1c")}
+        >
+          {!props.ooptLoaded ? "ООПТ" : props.ooptVisible ? "ООПТ: вкл" : "ООПТ: выкл"}
+        </button>
+      </div>
+
+      <div style={CARD_STYLE}>
+        <button
+          onClick={props.onRoadsToggle}
+          style={layerBtn(props.roadsLoaded, props.roadsVisible, "#5d4037")}
+        >
+          {!props.roadsLoaded ? "Лесные дороги" : props.roadsVisible ? "Дороги: вкл" : "Дороги: выкл"}
         </button>
       </div>
     </div>
