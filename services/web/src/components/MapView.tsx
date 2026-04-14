@@ -295,25 +295,6 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
 
 const SCHEME_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
 
-/** Гибрид: спутник ESRI + метки из OpenFreeMap Bright (только symbol-слои). */
-async function buildHybridStyle(): Promise<maplibregl.StyleSpecification> {
-  const resp = await fetch(SCHEME_STYLE_URL);
-  const style = await resp.json() as maplibregl.StyleSpecification;
-  (style.sources as Record<string, unknown>)["esri-satellite"] = {
-    type: "raster",
-    tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-    tileSize: 256,
-    maxzoom: 19,
-    attribution: "Imagery © Esri, Maxar, Earthstar Geographics",
-  };
-  const labelLayers = style.layers.filter(l => l.type === "symbol");
-  style.layers = [
-    { id: "esri-satellite-layer", type: "raster", source: "esri-satellite" } as maplibregl.RasterLayerSpecification,
-    ...labelLayers,
-  ];
-  return style;
-}
-
 // ─── Компонент ────────────────────────────────────────────────────────────────
 
 function setForestVisibility(m: Map, visible: boolean) {
@@ -353,6 +334,7 @@ export function MapView() {
   const [roadsVisible, setRoadsVisible] = useState(true);
   const [roadsLoaded, setRoadsLoaded] = useState(false);
   const [styleSwitching, setStyleSwitching] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Refs для доступа из стабильных колбэков без пересоздания
   const forestVisibleRef = useRef(forestVisible);
@@ -436,10 +418,22 @@ export function MapView() {
     }
   }, []);
 
-  const handleOoptToggle = useCallback(() => {
+  const handleOoptToggle = useCallback(async () => {
     const m = map.current;
     if (!m) return;
     if (!ooptLoadedRef.current) {
+      try {
+        const resp = await fetch(`${API_ORIGIN}/tiles/oopt.pmtiles`, { method: "HEAD" });
+        if (!resp.ok) {
+          setErrorMsg("Данные ООПТ не загружены — запустите ingest_oopt.py и build_oopt_tiles.py");
+          setTimeout(() => setErrorMsg(null), 5000);
+          return;
+        }
+      } catch {
+        setErrorMsg("Не удалось проверить наличие тайлов ООПТ");
+        setTimeout(() => setErrorMsg(null), 4000);
+        return;
+      }
       ooptLoadedRef.current = true; setOoptLoaded(true);
       addOoptLayer(m);
       ooptVisibleRef.current = true; setOoptVisible(true);
@@ -492,10 +486,22 @@ export function MapView() {
     }
   }, []);
 
-  const handleRoadsToggle = useCallback(() => {
+  const handleRoadsToggle = useCallback(async () => {
     const m = map.current;
     if (!m) return;
     if (!roadsLoadedRef.current) {
+      try {
+        const resp = await fetch(`${API_ORIGIN}/tiles/roads.pmtiles`, { method: "HEAD" });
+        if (!resp.ok) {
+          setErrorMsg("Данные дорог не загружены — запустите ingest_osm_roads.py и build_roads_tiles.py");
+          setTimeout(() => setErrorMsg(null), 5000);
+          return;
+        }
+      } catch {
+        setErrorMsg("Не удалось проверить наличие тайлов дорог");
+        setTimeout(() => setErrorMsg(null), 4000);
+        return;
+      }
       roadsLoadedRef.current = true; setRoadsLoaded(true);
       addRoadsLayer(m);
       roadsVisibleRef.current = true; setRoadsVisible(true);
@@ -653,14 +659,35 @@ export function MapView() {
     m.on("error", onError as Parameters<typeof m.on>[1]);
 
     if (baseMap === "hybrid") {
+      // Load Bright scheme first, then inject ESRI satellite raster as the bottom layer.
+      // This avoids a separate async JSON fetch+modify step and reuses the same
+      // code path we know works for "scheme".
       setStyleSwitching(true);
-      buildHybridStyle()
-        .then(style => {
-          if (appliedBaseMap.current !== "hybrid") return;
-          m.setStyle(style);
-          startRafPoll();
-        })
-        .catch(() => { cleanup(); setStyleSwitching(false); setBaseMap("satellite"); });
+      m.setStyle(SCHEME_STYLE_URL);
+      const injectSatellite = () => {
+        if (!m.isStyleLoaded()) { rafId = requestAnimationFrame(injectSatellite); return; }
+        // Add ESRI satellite source + layer at the very bottom (before all vector layers)
+        if (!m.getSource("esri-satellite")) {
+          m.addSource("esri-satellite", {
+            type: "raster",
+            tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+            tileSize: 256,
+            maxzoom: 19,
+            attribution: "Imagery © Esri, Maxar",
+          });
+        }
+        const firstLayerId = m.getStyle().layers[0]?.id;
+        if (!m.getLayer("esri-satellite-layer")) {
+          m.addLayer(
+            { id: "esri-satellite-layer", type: "raster", source: "esri-satellite" } as maplibregl.RasterLayerSpecification,
+            firstLayerId,
+          );
+        }
+        // Make background transparent so satellite shows through
+        try { m.setPaintProperty("background", "background-opacity", 0); } catch { /* layer may not exist */ }
+        onStyleReady();
+      };
+      rafId = requestAnimationFrame(injectSatellite);
     } else {
       const target =
         baseMap === "scheme"    ? SCHEME_STYLE_URL :
@@ -734,6 +761,18 @@ export function MapView() {
           fontFamily: "system-ui, sans-serif",
         }}>
           Ссылка скопирована
+        </div>
+      )}
+
+      {/* Ошибка загрузки слоя */}
+      {errorMsg && (
+        <div style={{
+          position: "absolute", bottom: 50, left: "50%", transform: "translateX(-50%)",
+          background: "#c62828", color: "white", borderRadius: 6,
+          padding: "8px 16px", fontSize: 12, zIndex: 30, maxWidth: 380, textAlign: "center",
+          fontFamily: "system-ui, sans-serif",
+        }}>
+          {errorMsg}
         </div>
       )}
 

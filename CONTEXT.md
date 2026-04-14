@@ -9,131 +9,104 @@
 
 Владелец проекта (@yungkocherov) хочет создать **коммерчески жизнеспособный веб-сервис** — интерактивную грибную карту Ленинградской области с перспективой расширения на другие регионы России.
 
-**Ключевые требования, сформулированные в начале:**
-1. Лесной слой на карте, раскрашенный по доминирующей породе деревьев (сосна, ель, берёза и т.д.)
-2. При клике на лес — попап с двумя списками грибов:
-   - **Теоретические** — из базы знаний «вид ↔ тип леса» (справочник)
-   - **Эмпирические** — из постов ВК-групп типа «Грибники Ленобласти» (реальные наблюдения)
-3. Фильтры по сезону, виду, году
-4. Точность данных важнее скорости — заложить архитектуру под Copernicus HRL Tree Species (10м спутниковые данные) с самого начала
-5. Масштабируемость: легко добавлять новые регионы, источники данных
-6. Потенциальная монетизация (подписка, B2B API, партнёрства)
+**Ключевые требования:**
+1. Лесной слой на карте, раскрашенный по доминирующей породе деревьев
+2. При клике на лес — попап с теоретическими и эмпирическими видами грибов
+3. Дополнительные слои: водоохранные зоны, ООПТ, лесные дороги
+4. Поиск по виду гриба и по географическому названию
+5. Точность данных важнее скорости — заложить архитектуру под Rosleshoz/Copernicus
+6. Масштабируемость: легко добавлять новые регионы и источники
 
 ---
 
 ## Текущее состояние (апрель 2026)
 
-### Что уже работает ✅
+### Что работает ✅
 
 | Компонент | Статус |
 |-----------|--------|
-| PostGIS схема (10 миграций) | ✅ готово |
-| 47 000 лесных полигонов Ленобласти из OSM | ✅ загружено |
+| PostGIS схема (13 миграций) | ✅ готово |
 | 111 559 полигонов Rosleshoz/ФГИСЛК (Карельский перешеек) | ✅ загружено |
-| PMTiles (83.5 МБ, 18 570 тайлов z=7..13) | ✅ сгенерировано |
-| `forest_unified` VIEW — OSM + Rosleshoz (156 911 полигонов) | ✅ работает |
-| FastAPI backend `/api/forest/at` | ✅ работает |
+| 47 000 полигонов OSM Ленобласть (88% unknown) | ✅ загружено |
+| PMTiles лесной слой (73.8 МБ) | ✅ сгенерировано |
+| `forest_unified` VIEW — Rosleshoz + OSM с приоритетами | ✅ работает |
+| FastAPI `/api/forest/at` с bonitet/timber_stock/age_group | ✅ работает |
+| FastAPI `/api/species/search` — поиск грибов | ✅ работает |
 | 24 вида грибов в справочнике с сезонами и съедобностью | ✅ загружено |
-| Теоретические виды в попапе (афинность к типу леса) | ✅ работает |
-| React + MapLibre GL фронтенд с лесным слоем | ✅ работает |
-| PMTiles отдаётся через FastAPI StaticFiles | ✅ работает |
-| Клик на полигон → попап с названием леса + список грибов | ✅ работает |
-| Docker Compose — все три контейнера (db, api, web) | ✅ работает |
-| Векторный стиль базовой карты (OpenFreeMap Bright) | ✅ чёткие надписи |
-| Текстуры коры (bark textures) для всех 15 типов леса | ✅ готово |
-| Переключатель схема/спутник + тоггл лесного слоя | ✅ готово |
-| `pipelines/ingest_vk.py` — полный VK-парсер (4 стадии) | ✅ готово |
-| `species_empirical` в API — региональная агрегация наблюдений | ✅ работает |
+| PMTiles водоохранных зон (water.pmtiles) | ✅ сгенерировано |
+| Водоохранные зоны в UI (тоггл-кнопка) | ✅ работает |
+| Docker Compose (db + api + web) | ✅ работает |
+| **4 подложки**: OSM, Схема, Спутник, Гибрид | ✅ готово |
+| **3 режима раскраски леса**: порода / бонитет / возраст | ✅ готово |
+| **Легенда** (адаптируется к режиму раскраски) | ✅ готово |
+| **Сезонный фильтр** в попапе (чекбокс) | ✅ готово |
+| **Поделиться точкой** (копировать ссылку) | ✅ готово |
+| **Координаты под курсором** | ✅ готово |
+| **Поиск по виду гриба** (+ фильтр на карте) | ✅ готово |
+| **Поиск по месту** (Nominatim геокодер) | ✅ готово |
+| URL sync (`?lat=&lon=&z=`) | ✅ готово |
+| Попап: бонитет, запас м³/га, возрастная группа | ✅ готово |
+| DB-таблица `water_zone` + пайплайны | ✅ готово |
+| DB-таблицы `protected_area`, `osm_road` | ✅ схема готова |
+| `ingest_oopt.py`, `build_oopt_tiles.py` | ✅ пайплайны готовы |
+| `ingest_osm_roads.py`, `build_roads_tiles.py` | ✅ пайплайны готовы |
+| ООПТ и дороги в UI | ✅ кнопки есть, проверяют наличие файла |
 
-### Известные баги и решения ⚠️
+### Известные особенности
 
-- **Windows: конфликт порта 5432** — на машине разработчика параллельно установлен нативный PostgreSQL на порту 5432. Docker-контейнер пробрасывается на **5434** (задан в `.env` как `POSTGRES_PORT=5434`). Пайплайны и скрипты должны использовать `DATABASE_URL=postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map`. API-контейнер подключается к `db:5432` (внутренняя сеть Docker) — там конфликта нет.
+- **Windows: конфликт порта 5432** — docker-контейнер на **5434**. Пайплайны используют `DATABASE_URL=postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map`.
+- **Vite + Docker + Windows**: hot-reload требует `watch: { usePolling: true, interval: 300 }` в `vite.config.ts` — уже настроено.
+- **localhost → IPv6 на Windows**: прокси в `vite.config.ts` использует `http://127.0.0.1:8000`.
+- **ООПТ и дороги**: PMTiles файлы (`oopt.pmtiles`, `roads.pmtiles`) ещё не сгенерированы — нет исходных данных. Кнопки показывают ошибку при нажатии.
 
-- **Загружены данные Rosleshoz/ФГИСЛК для Карельского перешейка** — 111 559 полигонов с известными видами (pine, spruce, birch и др.) из `data/rosleshoz/fgislk_vydels_karelian.geojson` (194 MB). Покрытие: lon 28.5–30.3, lat 59.8–61.2. Rosleshoz имеет приоритет 60 в `forest_unified` → перекрывает OSM в этой зоне.
+### Что нужно сделать
 
-- **Была проблема: пустая карта с бесконечной загрузкой** — MapLibre `load` ждёт первый рендер включая тайлы базовой подложки. Если OpenFreeMap CDN тормозит или недоступен, `load` не стреляет и лесной слой никогда не добавляется. **Фикс**: заменили `m.on("load", ...)` на `m.once("styledata", ...)` в `MapView.tsx`. `styledata` стреляет как только стиль обработан, без ожидания тайлов.
-
-- **88% полигонов OSM имеют тип `unknown`** (серые на карте) — в OSM Россия почти не имеет тегов `wood=`/`leaf_type=`. Для Карельского перешейка это закрыто Rosleshoz. Долгосрочное решение: Copernicus HRL (см. `docs/copernicus_migration.md`).
-- **Windows: `localhost` → IPv6** — Node.js 18+ резолвит `localhost` в `::1`, а Docker публикует на IPv4. В `vite.config.ts` прокси настроен на `http://127.0.0.1:8000`. **Не менять на `localhost`**.
-- **PMTiles Range-запросы через Vite** — решено в `vite.config.ts` (правильный target + Range-заголовки). В `MapView.tsx` также прописан прямой URL к API как fallback.
-
-### Что НЕ сделано ❌
-
-| Задача | Приоритет | Описание |
-|--------|-----------|----------|
-| Эмпирические виды в попапе | ~~Высокий~~ | ✅ API подключён, региональная агрегация работает. Нужны реальные VK-данные |
-| Импорт VK-постов | ~~Высокий~~ | ✅ `pipelines/ingest_vk.py` готов. Запустить: `python pipelines/ingest_vk.py` |
-| NER топонимов (Natasha) | Высокий | `services/placenames/` — заготовка, не запускалась |
-| Газеттир Ленобласти | Высокий | `db/migrations/006_gazetteer.sql` — таблица есть, данных нет |
-| H3-агрегация наблюдений | Средний | `db/migrations/005_observations.sql` — схема готова |
-| Фильтры в UI (сезон, вид) | Средний | Sidebar есть как компонент, логика не подключена |
-| Легенда (кликабельная) | Низкий | `components/Legend.tsx` — отображает цвета, клик не работает |
-| Мобильная вёрстка | Низкий | Не тестировалась |
-| Copernicus миграция | Высокий для точности | Описана в `docs/copernicus_migration.md` |
-
-### Приоритет следующих шагов
-
-1. **Сбор сырых данных через VK-парсер** — запустить `scripts/ingest_vk.sh` и получить первый батч наблюдений
-2. **Переработка групп видов после анализа сырых результатов** (см. раздел ниже)
-3. **Классификация лесов** — эвристика OSM или Copernicus
-4. **UI** — фильтры сезон/съедобность, кликабельная легенда
-
-### План: переработка групп видов (TODO, после первого прогона парсера)
-
-Сейчас Gemma классифицирует в 8 групп и мы мапим их на один slug. Нужно:
-
-1. **Разделить болетовые** на отдельные виды в промпте и маппинге:
-   - `porcini` (белый гриб, Boletus edulis) — отдельно
-   - `boletus` (боровик: B. pinophilus, B. reticulatus — сосновый/сетчатый) — отдельно
-   - `aspen_bolete` (подосиновик, Leccinum aurantiacum/versipelle) — отдельно
-   - `birch_bolete` (подберёзовик, Leccinum scabrum) — отдельно
-   - `suillus` (маслёнок) — отдельно
-   - `polish` (польский гриб, Imleria badia) — отдельно
-
-2. **Сезонность как фильтр распознавания:**
-   - **Только весной** (апрель-май): `morel`, `gyromitra` — не детектить в другие месяцы
-   - **Не весной** (июнь-октябрь): всё остальное — пропускать посты апреля-мая без фото морелей
-
-   Реализация: в `pipelines/ingest_vk.py` добавить проверку `observed_month` против `spring_only` / `non_spring` списков, и если вид не соответствует месяцу — отбрасывать как шум распознавания.
-
-3. Сделать это **после первого полного прогона парсера**, чтобы увидеть на реальных данных, что именно Gemma хорошо распознаёт, а что путает.
+| Задача | Приоритет |
+|--------|-----------|
+| Загрузить данные ООПТ → запустить `ingest_oopt.py` + `build_oopt_tiles.py` | Высокий |
+| Загрузить OSM PBF дороги → запустить `ingest_osm_roads.py` + `build_roads_tiles.py` | Средний |
+| Запустить VK-парсер (`ingest_vk.py`) | Средний |
+| NER топонимов (Natasha) — `services/placenames/` готово, не запускалось | Средний |
+| Bolota (OSM natural=wetland) | Низкий |
+| Copernicus HRL Tree Species | Низкий |
 
 ---
 
-## Архитектура и ключевые решения
+## Архитектура
 
 ### База данных (PostGIS)
 
 ```sql
 -- Ключевые таблицы:
-forest_polygon          -- лесные полигоны (source, dominant_species, geometry MULTIPOLYGON)
-forest_source           -- источники данных с приоритетами (osm=10, copernicus=50)
-forest_unified          -- VIEW: выбирает полигон с наивысшим приоритетом источника
+forest_polygon          -- лесные полигоны (source, dominant_species, bonitet, timber_stock, age_group, geometry)
+forest_source           -- источники (osm=10, copernicus=50, rosleshoz=60)
+forest_unified          -- VIEW: выбирает полигон с наивысшим приоритетом
 species                 -- справочник грибов (slug, name_ru, name_lat, edibility, season_months)
 species_forest_affinity -- связь вид↔тип_леса (affinity 0..1)
-observation             -- наблюдение из VK-поста (h3_index, species_id, observed_at)
-gazetteer               -- топонимы Ленобласти с геометрией
+water_zone              -- водоохранные зоны (geometry MULTIPOLYGON/POLYGON)
+protected_area          -- ООПТ (oopt_category, federal, geometry)
+osm_road                -- лесные дороги из OSM (highway, geometry LINESTRING)
+observation             -- наблюдения из VK (h3_index, species_id, observed_at)
 region                  -- регионы (bbox, name)
 ```
 
-**Переход на Copernicus = одна SQL-миграция + перезапуск пайплайна**, без изменений API и фронтенда. Это было заложено намеренно.
+Миграции: `db/migrations/001..013_*.sql`
 
 ### Типы леса (слаги)
 
-Единый словарь синхронизирован между Python, БД и TypeScript:
 ```
 pine, spruce, larch, fir, cedar,
 birch, aspen, alder, oak, linden, maple,
 mixed_coniferous, mixed_broadleaved, mixed, unknown
 ```
 
-### Источники данных
+### Источники лесных данных
 
 | Источник | Приоритет | Статус |
 |----------|-----------|--------|
-| OSM (Overpass API) | 10 | ✅ 47 559 полигонов (88% unknown) |
+| OSM (Overpass API) | 10 | ✅ 47 000 полигонов (88% unknown) |
 | TerraNorte RLC | 45 | 📋 пайплайн готов, данные не загружены |
-| Copernicus HRL | 50 | 📋 инфраструктура готова, данные не загружены |
+| Copernicus HRL | 50 | 📋 инфраструктура готова |
 | Rosleshoz/ФГИСЛК | 60 | ✅ 111 559 полигонов (Карельский перешеек) |
 
 ### Стек
@@ -141,9 +114,9 @@ mixed_coniferous, mixed_broadleaved, mixed, unknown
 - **Python 3.14** + FastAPI + psycopg3 + psycopg-pool + pydantic-settings
 - **PostgreSQL 16 + PostGIS** в Docker
 - **React 18 + TypeScript + Vite 5 + MapLibre GL JS**
-- **PMTiles** — формат векторных тайлов (один файл, range-запросы)
+- **PMTiles** — один файл, range-запросы, без тайлового сервера
 - **H3 (Uber)** — гексагональная сетка для агрегации наблюдений (resolution 7, ~5 км²)
-- **Natasha** — NER русских топонимов для извлечения мест из VK-постов
+- **Natasha** — NER русских топонимов для VK-постов
 
 ---
 
@@ -154,58 +127,66 @@ mushroom-map/
 ├── CONTEXT.md                  ← этот файл
 ├── .env.example                ← скопируй в .env
 ├── docker-compose.yml          ← PostGIS, api, web
-├── Makefile                    ← все команды разработки
+├── Makefile
 │
 ├── db/
-│   ├── migrate.py              ← запускает миграции по порядку
-│   ├── migrations/             ← 001..006 SQL-миграции
+│   ├── migrate.py
+│   ├── migrations/             ← 001..013 SQL-миграции
 │   └── seeds/
-│       ├── regions.sql         ← Ленобласть + СПб
+│       ├── regions.sql
 │       ├── species_registry.yaml  ← 24 вида грибов
-│       └── species_registry.sql   ← сгенерировано из yaml
+│       └── species_registry.sql
 │
 ├── services/
-│   ├── api/                    ← FastAPI бэкенд
-│   │   └── src/api/
-│   │       ├── main.py         ← lifespan, CORS, StaticFiles /tiles
-│   │       ├── db.py           ← psycopg ConnectionPool
-│   │       ├── settings.py     ← TILES_DIR, DATABASE_URL и др.
-│   │       └── routes/
-│   │           ├── forest.py   ← GET /api/forest/at?lat=&lon=
-│   │           ├── species.py
-│   │           ├── regions.py
-│   │           └── tiles.py
+│   ├── api/src/api/
+│   │   ├── main.py
+│   │   ├── db.py
+│   │   ├── settings.py
+│   │   └── routes/
+│   │       ├── forest.py    ← GET /api/forest/at?lat=&lon= (bonitet, timber_stock, age_group)
+│   │       ├── species.py   ← GET /api/species/search?q= + GET /api/species/{slug}/forests
+│   │       ├── regions.py
+│   │       └── tiles.py     ← StaticFiles /tiles/
 │   │
-│   ├── geodata/                ← загрузка и нормализация лесных данных
-│   │   └── src/geodata/
-│   │       ├── sources/
-│   │       │   ├── base.py     ← ABC ForestSource
-│   │       │   ├── osm.py      ← Overpass API + shapely
-│   │       │   └── copernicus.py ← заглушка
-│   │       ├── db.py           ← upsert_forest_polygons()
-│   │       └── types.py        ← NormalizedForestPolygon, ForestTypeSlug
+│   ├── geodata/src/geodata/
+│   │   ├── sources/
+│   │   │   ├── base.py        ← ABC ForestSource
+│   │   │   ├── osm.py
+│   │   │   ├── copernicus.py  ← заглушка
+│   │   │   └── rosleshoz/source.py  ← ФГИСЛК GeoJSON → forest_polygon
+│   │   └── db.py              ← upsert_forest_polygons()
 │   │
-│   ├── species_registry/       ← загрузка справочника видов из YAML
-│   ├── placenames/             ← NER + газеттир (заготовка)
-│   └── web/                    ← React фронтенд
-│       └── src/
-│           ├── components/
-│           │   ├── MapView.tsx ← главный компонент карты
-│           │   ├── Sidebar.tsx
-│           │   └── Legend.tsx
-│           └── lib/
-│               ├── api.ts      ← fetchForestAt()
-│               └── forestStyle.ts ← цвета по типу леса
+│   ├── placenames/             ← NER + газеттир (заготовка, не запускалось)
+│   └── web/src/
+│       ├── components/
+│       │   ├── MapView.tsx     ← главный компонент карты
+│       │   ├── MapControls.tsx ← плавающая панель (подложка + слои)
+│       │   ├── Legend.tsx      ← легенда (адаптируется к режиму раскраски)
+│       │   ├── SearchBar.tsx   ← поиск грибов + мест
+│       │   └── Sidebar.tsx     ← заготовка
+│       └── lib/
+│           ├── api.ts          ← fetchForestAt, searchSpecies, searchPlaces
+│           └── forestStyle.ts  ← цвета по типу леса, бонитету, возрасту
 │
 ├── pipelines/
+│   ├── build_tiles.py          ← forest → forest.pmtiles
+│   ├── build_water_tiles.py    ← water_zone → water.pmtiles (с pre-projected temp table)
+│   ├── build_oopt_tiles.py     ← protected_area → oopt.pmtiles
+│   ├── build_roads_tiles.py    ← osm_road → roads.pmtiles
+│   ├── fgislk_tiles_to_geojson.py  ← ФГИСЛК WMS tiles → GeoJSON
 │   ├── ingest_forest.py        ← OSM → forest_polygon
-│   ├── build_tiles.py          ← forest_polygon → PMTiles
-│   ├── ingest_vk.py            ← VK-посты → observation (заготовка)
-│   └── extract_places.py       ← NER топонимов → gazetteer (заготовка)
+│   ├── ingest_water_zones.py   ← ФГИСЛК water zones → water_zone
+│   ├── ingest_oopt.py          ← GeoJSON → protected_area
+│   ├── ingest_osm_roads.py     ← OSM PBF → osm_road
+│   └── ingest_vk.py            ← VK-посты → observation (4 стадии)
 │
 └── docs/
+    ├── overview.md
     ├── architecture.md
-    └── copernicus_migration.md ← пошаговый план перехода на Copernicus
+    ├── copernicus_migration.md
+    ├── rosleshoz_download.md
+    ├── oopt_download.md         ← инструкция по скачиванию ООПТ
+    └── osm_roads_download.md    ← инструкция по скачиванию дорог из OSM
 ```
 
 ---
@@ -214,102 +195,78 @@ mushroom-map/
 
 ### Предусловия
 
-- Docker Desktop (для PostGIS)
+- Docker Desktop
 - Python 3.14 (venv в `.venv/`)
-- Node.js 24 (`C:\Program Files\nodejs\` на машине разработчика)
+- Node.js 24
 
-### Запуск (Docker Compose — рекомендуется)
+### Запуск
 
 ```bash
-# Поднять все три сервиса (db + api + web)
+# Все три сервиса
 docker compose --profile full up -d
 
-# Только база (для локальной разработки api/web)
-docker compose up -d db
-```
-
-### Скрипты пайплайна (`scripts/`)
-
-```bash
-# Полный VK-пайплайн: collect → dates → photos → db
-./scripts/ingest_vk.sh                          # grib_spb → lenoblast
-./scripts/ingest_vk.sh grib_spb lenoblast       # явно
-./scripts/ingest_vk.sh grib_spb lenoblast dates # одна стадия (collect|dates|photos|db)
-
-# Только распознавание фото через Gemma (требует LM Studio)
-./scripts/classify_photos.sh                    # grib_spb
-./scripts/classify_photos.sh grib_spb
-```
-
-Есть `.bat` версии для запуска из cmd/проводника (`scripts\ingest_vk.bat`, `scripts\classify_photos.bat`).
-
-### Запуск локально (без Docker для api/web)
-
-```bash
-# База через Docker
+# Только база
 docker compose up -d db
 
-# API (venv в .venv/, создан из python 3.14)
+# Миграции (первый раз)
+.venv/Scripts/python db/migrate.py
+```
+
+### Запуск API и фронта локально (без Docker)
+
+```bash
+docker compose up -d db
+
+# API
 cd services/api
 "/c/Users/ikoch/mushroom-map/.venv/Scripts/python.exe" -m uvicorn api.main:app \
   --host 0.0.0.0 --port 8000 --reload
 
-# Фронтенд (Node PATH нужен в bash)
+# Фронтенд
 export PATH="/c/Program Files/nodejs:$PATH"
 cd services/web && npm run dev
 ```
 
-### Важные особенности Windows
+### Пайплайны (запускаются вручную)
 
-- **`localhost` → IPv6 на Windows**: Node.js 18+ резолвит `localhost` в `::1`, а uvicorn слушает IPv4. В `vite.config.ts` прокси настроен на `http://127.0.0.1:8000` (не `localhost`). Не меняй на `localhost` — сломается.
-- **PMTiles range-запросы**: PMTiles делает HTTP Range requests. Vite proxy их поддерживает при правильном target. Конфиг уже настроен.
-- **TILES_DIR**: в `services/api/.env` прописан `TILES_DIR=../../data/tiles`. Не удаляй.
+```bash
+# Пересобрать лесной PMTiles
+python pipelines/build_tiles.py --region lenoblast \
+  --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
 
----
+# Водоохранные зоны (если не сгенерированы)
+python pipelines/build_water_tiles.py \
+  --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
 
-## Следующие шаги (в порядке приоритета)
+# ООПТ (после загрузки данных из oopt.aari.ru)
+python pipelines/ingest_oopt.py --file data/oopt/oopt.geojson \
+  --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
+python pipelines/build_oopt_tiles.py \
+  --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
 
-### 1. Эмпирические виды — подключить VK-данные
-
-Старый парсер ВК есть в `~/ik_mushrooms_parser/`. Нужно:
-- Адаптировать его под схему `observation` (см. `db/migrations/005_observations.sql`)
-- Запустить `pipelines/ingest_vk.py`
-- Заполнить `gazetteer` топонимами Ленобласти
-- Запустить `pipelines/extract_places.py` (NER через Natasha)
-- Создать материализованное представление `observation_h3_species_stats`
-- Подключить в `GET /api/forest/at` — заполнить `species_empirical`
-
-### 2. Улучшить классификацию лесов
-
-88% полигонов — `unknown`. Два варианта:
-- **Быстро**: обогатить OSM-данные эвристикой (название содержит "бор", "ельник" и т.д.)
-- **Правильно**: Copernicus HRL Tree Species — инструкция в `docs/copernicus_migration.md`
-
-### 3. UI/UX
-
-- Sidebar: фильтры по сезону (текущий месяц выделен), виду, съедобности
-- Legend: клик на цвет → фильтрует карту по типу леса
-- Мобильная вёрстка
-
-### 4. Качество карты
-
-- Базовая карта: сейчас OpenFreeMap Bright (векторный стиль, бесплатно)
-- Если хочется русские подписи лучше — рассмотреть 2GIS Maps API
+# Лесные дороги (после скачивания PBF из Geofabrik)
+python pipelines/ingest_osm_roads.py --pbf data/osm/leningrad.osm.pbf \
+  --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
+python pipelines/build_roads_tiles.py \
+  --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
+```
 
 ---
 
-## Структура данных попапа (API response)
+## API
+
+### GET /api/forest/at?lat=&lon=
 
 ```json
-GET /api/forest/at?lat=60.1&lon=30.5
 {
-  "lat": 60.1,
-  "lon": 30.5,
+  "lat": 60.1, "lon": 30.5,
   "forest": {
     "dominant_species": "pine",
-    "species_composition": {"pine": 0.7, "birch": 0.3},
-    "source": "osm",
-    "confidence": 0.7,
+    "bonitet": 2,
+    "timber_stock": 185.5,
+    "age_group": "спелые",
+    "source": "rosleshoz",
+    "confidence": 0.9,
     "area_m2": 125000
   },
   "species_theoretical": [
@@ -322,8 +279,22 @@ GET /api/forest/at?lat=60.1&lon=30.5
       "affinity": 0.95
     }
   ],
-  "species_empirical": []   // ← пока пустой, см. задачу #1
+  "species_empirical": []
 }
+```
+
+### GET /api/species/search?q=белый&limit=5
+
+```json
+[
+  {
+    "slug": "boletus_edulis",
+    "name_ru": "Белый гриб",
+    "name_lat": "Boletus edulis",
+    "edibility": "edible",
+    "forest_types": ["pine", "spruce", "birch"]
+  }
+]
 ```
 
 ---
@@ -335,10 +306,12 @@ GET /api/forest/at?lat=60.1&lon=30.5
 - Не mock-ать БД в тестах — реальный PostGIS обязателен
 - Не трогать `forest_unified` VIEW без понимания системы приоритетов источников
 - Не коммитить `data/tiles/` — файлы большие, регенерируются пайплайном
+- Не использовать `conn.executemany()` в psycopg3 — нужно `cursor.executemany()`
+- Не использовать `→` в print-строках — Windows cp1251 не поддерживает
 
 ---
 
-## Контакты и ссылки
+## Контакты
 
 - GitHub: https://github.com/yungkocherov/mushroom_map
 - Владелец: @yungkocherov
