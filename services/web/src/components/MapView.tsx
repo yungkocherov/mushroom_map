@@ -221,14 +221,23 @@ export function MapView() {
     setForestVisibility(m, forestVisibleRef.current);
   }, []);
 
-  // Вызывается по кнопке "Загрузить леса"
-  const handleLoadForest = useCallback(() => {
+  // Единый обработчик кнопки: первый клик — загружает, последующие — тоглят
+  const handleForestToggle = useCallback(() => {
     const m = map.current;
     if (!m) return;
-    forestLoadedRef.current = true;
-    setForestLoaded(true);
-    addForestLayer(m);
-    setForestVisibility(m, forestVisibleRef.current);
+    if (!forestLoadedRef.current) {
+      forestLoadedRef.current = true;
+      setForestLoaded(true);
+      addForestLayer(m);
+      forestVisibleRef.current = true;
+      setForestVisible(true);
+      setForestVisibility(m, true);
+    } else {
+      const next = !forestVisibleRef.current;
+      forestVisibleRef.current = next;
+      setForestVisible(next);
+      setForestVisibility(m, next);
+    }
   }, []);
 
   useEffect(() => {
@@ -368,13 +377,6 @@ export function MapView() {
     return cleanup;
   }, [baseMap, setupForestAndInteractions]);
 
-  // Видимость лесного слоя — дешёвая операция, не требует пересборки
-  useEffect(() => {
-    const m = map.current;
-    if (!m || !m.loaded()) return;
-    setForestVisibility(m, forestVisible);
-  }, [forestVisible]);
-
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} className="map-root" />
@@ -392,9 +394,8 @@ export function MapView() {
         baseMap={baseMap}
         onBaseMapChange={setBaseMap}
         forestVisible={forestVisible}
-        onForestToggle={setForestVisible}
         forestLoaded={forestLoaded}
-        onForestLoad={handleLoadForest}
+        onForestToggle={handleForestToggle}
       />
     </div>
   );

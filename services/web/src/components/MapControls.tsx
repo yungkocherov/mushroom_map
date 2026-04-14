@@ -12,9 +12,8 @@ interface Props {
   baseMap: BaseMapMode;
   onBaseMapChange: (mode: BaseMapMode) => void;
   forestVisible: boolean;
-  onForestToggle: (visible: boolean) => void;
   forestLoaded: boolean;
-  onForestLoad: () => void;
+  onForestToggle: () => void;
 }
 
 const WRAP_STYLE: React.CSSProperties = {
@@ -59,13 +58,18 @@ const pillBtn = (active: boolean): React.CSSProperties => ({
   transition: "all 0.15s ease",
 });
 
-const CHECKBOX_LABEL: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 8,
+const forestBtn = (loaded: boolean, visible: boolean): React.CSSProperties => ({
+  border: loaded && visible ? "none" : "1.5px solid #2e7d32",
+  background: loaded && visible ? "#2e7d32" : "transparent",
+  color: loaded && visible ? "white" : "#2e7d32",
+  padding: "6px 12px",
+  fontSize: 12,
+  fontWeight: 600,
+  borderRadius: 6,
   cursor: "pointer",
-  userSelect: "none",
-};
+  width: "100%",
+  transition: "all 0.15s ease",
+});
 
 export function MapControls(props: Props) {
   return (
@@ -97,34 +101,16 @@ export function MapControls(props: Props) {
       </div>
 
       <div style={CARD_STYLE}>
-        {props.forestLoaded ? (
-          <label style={CHECKBOX_LABEL}>
-            <input
-              type="checkbox"
-              checked={props.forestVisible}
-              onChange={(e) => props.onForestToggle(e.target.checked)}
-              style={{ width: 16, height: 16, cursor: "pointer" }}
-            />
-            <span>Типы лесов</span>
-          </label>
-        ) : (
-          <button
-            onClick={props.onForestLoad}
-            style={{
-              border: "none",
-              background: "#2e7d32",
-              color: "white",
-              padding: "6px 12px",
-              fontSize: 12,
-              fontWeight: 600,
-              borderRadius: 6,
-              cursor: "pointer",
-              width: "100%",
-            }}
-          >
-            Загрузить леса
-          </button>
-        )}
+        <button
+          onClick={props.onForestToggle}
+          style={forestBtn(props.forestLoaded, props.forestVisible)}
+        >
+          {!props.forestLoaded
+            ? "Загрузить леса"
+            : props.forestVisible
+            ? "Леса: вкл"
+            : "Леса: выкл"}
+        </button>
       </div>
     </div>
   );
