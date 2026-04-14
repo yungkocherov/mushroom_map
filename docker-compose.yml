@@ -28,7 +28,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-mushroom}:${POSTGRES_PASSWORD:-mushroom_dev}@db:5432/${POSTGRES_DB:-mushroom_map}
-      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:5173}
+      API_CORS_ORIGINS: ${API_CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
