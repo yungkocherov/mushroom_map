@@ -107,7 +107,10 @@ def prepare_projected_source(conn: psycopg.Connection) -> None:
             fu.source,
             fu.confidence,
             fu.area_m2,
-            ST_Transform(fu.geometry, 3857) AS geom
+            -- Буфер 3м закрывает зазоры между полигонами из соседних MVT-тайлов
+            -- (ФГИС ЛК кодирует с точностью ~2.8 м/пкс на z12, края смежных
+            -- тайлов квантуются независимо → щели ≤ 5.6 м).
+            ST_Buffer(ST_Transform(fu.geometry, 3857), 3.0) AS geom
         FROM forest_unified fu
         """
     )
