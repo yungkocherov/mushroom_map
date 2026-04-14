@@ -1,0 +1,30 @@
+# TerraNorte RLC class map — ШАБЛОН
+#
+# Раскомментируй и поправь под легенду своей конкретной поставки TerraNorte RLC.
+# Узнать реальные коды:
+#   .venv/Scripts/python.exe -c "
+#   import rasterio
+#   with rasterio.open('data/terranorte/rlc_XXXX.tif') as src:
+#       import numpy as np
+#       arr = src.read(1)
+#       vals, counts = np.unique(arr, return_counts=True)
+#       for v, c in zip(vals, counts):
+#           print(f'{v}: {c} пикселей')
+#   "
+#
+# Допустимые slug'и пород:
+#   pine, spruce, larch, fir, cedar,
+#   birch, aspen, alder, oak, linden, maple,
+#   mixed_coniferous, mixed_broadleaved, mixed, unknown
+#
+# Лесные классы маппи на конкретные породы. Всё, чего тут нет,
+# будет отброшено (не лес: трава, пашни, вода, города, тундра).
+
+# ПРИМЕР (best-guess по Bartalev et al. RSE 2014):
+# 1: spruce            # тёмнохвойные (ель, пихта)
+# 2: pine              # светлохвойные вечнозелёные (сосна)
+# 3: larch             # лиственница
+# 4: mixed             # смешанный лес
+# 5: oak               # широколиственный (дуб, клён — их мало в ЛО)
+# 6: birch             # мелколиственный (берёза, осина, ольха)
+# 7: mixed_coniferous  # редколесье / лесотундра

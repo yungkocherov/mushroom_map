@@ -18,6 +18,9 @@ data/raw/
 data/processed/
 data/copernicus/tree_species/
 data/copernicus/tcd/
+data/terranorte/*.tif
+data/terranorte/*.tiff
+data/terranorte/*.aux.xml
 data/vk/
 
 # Env / secrets

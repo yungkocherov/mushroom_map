@@ -147,7 +147,7 @@ class CopernicusForestSource(ForestSource):
 
     @property
     def source_version(self) -> str:
-        return f"copernicus-{self.config.product}"
+        return f"{self.source_code}-{self.config.product}"
 
     # ─── API ForestSource ───────────────────────────────────────────────────
 

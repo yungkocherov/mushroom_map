@@ -22,6 +22,7 @@ import psycopg
 from geodata.db import get_region_id, upsert_forest_polygons
 from geodata.sources import get_source
 from geodata.sources.copernicus import CopernicusConfig, CopernicusForestSource
+from geodata.sources.terranorte import TerraNorteForestSource
 from geodata.types import BoundingBox
 
 
@@ -69,8 +70,22 @@ def _build_dsn_fallback() -> str | None:
     return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
 
 
-def _build_copernicus_source(args: argparse.Namespace) -> CopernicusForestSource:
-    cfg = CopernicusConfig()
+def _build_raster_source(
+    args: argparse.Namespace,
+    source_name: str,
+) -> CopernicusForestSource:
+    """Строит CopernicusForestSource или TerraNorteForestSource из CLI-флагов.
+
+    Оба источника используют одну и ту же конфигурацию (CopernicusConfig);
+    отличаются только class_code, default class_map и папкой по умолчанию.
+    Флаги --copernicus-* работают и для terranorte — имя историческое.
+    """
+    if source_name == "terranorte":
+        source = TerraNorteForestSource()
+    else:
+        source = CopernicusForestSource()
+    cfg = source.config  # стартуем с дефолтов конкретного источника
+
     if args.copernicus_dir:
         cfg.download_dir = Path(args.copernicus_dir)
     if args.copernicus_tcd_dir:
@@ -95,13 +110,14 @@ def _build_copernicus_source(args: argparse.Namespace) -> CopernicusForestSource
         if not isinstance(data, dict):
             raise SystemExit("class map должен быть object {class_code: slug}")
         cfg.class_map = {int(k): v for k, v in data.items()}
-    return CopernicusForestSource(cfg)
+    return source
 
 
 def main() -> None:
     _load_env()
     parser = argparse.ArgumentParser(description="Ingest forest polygons for a region")
-    parser.add_argument("--source", required=True, choices=["osm", "copernicus"],
+    parser.add_argument("--source", required=True,
+                        choices=["osm", "copernicus", "terranorte"],
                         help="Forest data source")
     parser.add_argument("--region", required=True,
                         help="Region code from table region (e.g. lenoblast)")
@@ -141,8 +157,8 @@ def main() -> None:
         bbox = get_region_bbox(conn, args.region)
         print(f"Регион id={region_id}, bbox={bbox}")
 
-        if args.source == "copernicus":
-            source = _build_copernicus_source(args)
+        if args.source in ("copernicus", "terranorte"):
+            source = _build_raster_source(args, args.source)
         else:
             SourceClass = get_source(args.source)
             source = SourceClass()
@@ -162,7 +178,7 @@ def main() -> None:
             count = upsert_forest_polygons(conn, region_id, normalized, verbose=True)
             conn.commit()
             print(f"\nГотово: {count} полигонов за {time.time() - t0:.1f}с")
-            if args.source == "copernicus":
+            if args.source in ("copernicus", "terranorte"):
                 print(
                     "\nНапоминание: после этого нужно перегенерировать PMTiles:\n"
                     "    python pipelines/build_tiles.py"
