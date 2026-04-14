@@ -21,6 +21,16 @@ data/copernicus/tcd/
 data/terranorte/*.tif
 data/terranorte/*.tiff
 data/terranorte/*.aux.xml
+data/rosleshoz/*.gpkg
+data/rosleshoz/*.geojson
+data/rosleshoz/*.json
+data/rosleshoz/*.shp
+data/rosleshoz/*.shx
+data/rosleshoz/*.dbf
+data/rosleshoz/*.prj
+data/rosleshoz/*.cpg
+data/rosleshoz/*.fgb
+data/rosleshoz/*.gdb/
 data/vk/
 
 # Env / secrets

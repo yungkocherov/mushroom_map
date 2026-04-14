@@ -92,14 +92,43 @@ Remote Sensing of Environment.
 - **Доступ:**
   - https://lk.rosleshoz.gov.ru (публичный просмотрщик с картой)
   - https://lesegais.ru (ФГИС ЛК)
-- **Публичного API нет** — нужен скрапинг tile-сервера, парсинг
-  атрибутики, геопривязка. Оценка работы: 1–2 недели.
+- **Публичного API нет** — нужен скрапинг tile-сервера ИЛИ запрос в
+  лесничество ИЛИ региональный геопортал.
 - **Структура данных идеально ложится на нашу схему** —
   `forest_polygon.species_composition` JSONB уже готов хранить
   `{"spruce": 0.6, "pine": 0.3, "birch": 0.1}`.
 
-**Это долгосрочный target. Когда появится — станет источником
-с приоритетом 60 (выше всех).**
+**Код готов, данные — user-supplied.** Что мы сделали 2026-04-14:
+
+1. **Парсер формулы** `parse_species_formula("6Е3С1Б")` →
+   `{"spruce": 0.6, "pine": 0.3, "birch": 0.1}`. Поддерживает 20+
+   сокращений пород, trace через `+` и `ед.`, unmapped-виды
+   (ива/тополь/граб/бук — нет своих slug'ов, не ломают композицию).
+   См. [../services/geodata/src/geodata/sources/rosleshoz/formula.py](../services/geodata/src/geodata/sources/rosleshoz/formula.py).
+
+2. **`RosleshozForestSource`** читает любой векторный файл через pyogrio
+   (GeoJSON/Shapefile/GPKG/FlatGeobuf/GDB), автоопределяет поле с
+   формулой, перепроецирует в WGS84, считает площади в EPSG:3035,
+   выдаёт `NormalizedForestPolygon` с `confidence=0.95` и реальной
+   `species_composition`.
+
+3. **Миграция 010** регистрирует rosleshoz в `forest_source` с
+   приоритетом 60 и переписывает `forest_unified` как полный каскад
+   `rosleshoz(60) > copernicus(50) > terranorte(45) > osm(10)`.
+
+4. **CLI**: `python pipelines/ingest_forest.py --source rosleshoz
+   --region lenoblast --rosleshoz-file data/rosleshoz/...`.
+
+5. **Документация**: [rosleshoz_download.md](rosleshoz_download.md) —
+   пять путей получения данных (ФГИС ЛК, региональный портал,
+   запрос в лесничество, open data, неофициальные сборки).
+
+**Что остаётся user'у:** достать собственно векторный файл с формулами.
+Это главный блокер — публичного API не существует, и ни один из
+возможных путей не быстрый. Закладывайся на 1-4 недели.
+
+Когда файл появится — всё остальное работает автоматически, включая
+перегенерацию тайлов и обновление попапа на карте.
 
 ---
 

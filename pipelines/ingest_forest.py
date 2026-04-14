@@ -22,6 +22,7 @@ import psycopg
 from geodata.db import get_region_id, upsert_forest_polygons
 from geodata.sources import get_source
 from geodata.sources.copernicus import CopernicusConfig, CopernicusForestSource
+from geodata.sources.rosleshoz import RosleshozConfig, RosleshozForestSource
 from geodata.sources.terranorte import TerraNorteForestSource
 from geodata.types import BoundingBox
 
@@ -113,11 +114,28 @@ def _build_raster_source(
     return source
 
 
+def _build_rosleshoz_source(args: argparse.Namespace) -> RosleshozForestSource:
+    cfg = RosleshozConfig()
+    if args.rosleshoz_file:
+        cfg.path = Path(args.rosleshoz_file)
+    if args.rosleshoz_layer:
+        cfg.layer = args.rosleshoz_layer
+    if args.rosleshoz_formula_field:
+        cfg.formula_field = args.rosleshoz_formula_field
+    if args.rosleshoz_id_field:
+        cfg.id_field = args.rosleshoz_id_field
+    if args.rosleshoz_version:
+        cfg.version = args.rosleshoz_version
+    if args.rosleshoz_min_m2 is not None:
+        cfg.min_polygon_m2 = float(args.rosleshoz_min_m2)
+    return RosleshozForestSource(cfg)
+
+
 def main() -> None:
     _load_env()
     parser = argparse.ArgumentParser(description="Ingest forest polygons for a region")
     parser.add_argument("--source", required=True,
-                        choices=["osm", "copernicus", "terranorte"],
+                        choices=["osm", "copernicus", "terranorte", "rosleshoz"],
                         help="Forest data source")
     parser.add_argument("--region", required=True,
                         help="Region code from table region (e.g. lenoblast)")
@@ -142,6 +160,21 @@ def main() -> None:
     cop.add_argument("--copernicus-tcd-min", type=int, default=None,
                      help="Пороговое значение tree cover density 0..100 (если tcd-dir задан)")
 
+    rl = parser.add_argument_group("rosleshoz options")
+    rl.add_argument("--rosleshoz-file", default=None,
+                    help="Путь к векторному файлу с таксационными выделами "
+                         "(GeoJSON/Shapefile/GPKG/FlatGeobuf)")
+    rl.add_argument("--rosleshoz-layer", default=None,
+                    help="Имя слоя для многослойных форматов (GPKG/GDB)")
+    rl.add_argument("--rosleshoz-formula-field", default=None,
+                    help="Имя атрибута с формулой состава (авто-определение если не задано)")
+    rl.add_argument("--rosleshoz-id-field", default=None,
+                    help="Имя атрибута с id выдела")
+    rl.add_argument("--rosleshoz-version", default=None,
+                    help="Слаг версии, идёт в source_version (напр. lo-2024-q1)")
+    rl.add_argument("--rosleshoz-min-m2", type=float, default=None,
+                    help="Мин. площадь выдела в m2 (по умолчанию 1000)")
+
     args = parser.parse_args()
 
     dsn = args.dsn or _build_dsn_fallback()
@@ -159,6 +192,8 @@ def main() -> None:
 
         if args.source in ("copernicus", "terranorte"):
             source = _build_raster_source(args, args.source)
+        elif args.source == "rosleshoz":
+            source = _build_rosleshoz_source(args)
         else:
             SourceClass = get_source(args.source)
             source = SourceClass()
@@ -178,7 +213,7 @@ def main() -> None:
             count = upsert_forest_polygons(conn, region_id, normalized, verbose=True)
             conn.commit()
             print(f"\nГотово: {count} полигонов за {time.time() - t0:.1f}с")
-            if args.source in ("copernicus", "terranorte"):
+            if args.source in ("copernicus", "terranorte", "rosleshoz"):
                 print(
                     "\nНапоминание: после этого нужно перегенерировать PMTiles:\n"
                     "    python pipelines/build_tiles.py"
