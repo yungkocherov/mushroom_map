@@ -284,10 +284,17 @@ export function MapView() {
 
     const m = map.current;
 
-    // styledata стреляет как только стиль обработан — не ждём загрузки тайлов подложки.
-    // load ждёт первый visible рендер включая тайлы OpenFreeMap; если CDN завис — load
-    // никогда не стреляет и лесной слой не добавляется. styledata надёжнее.
-    m.once("styledata", () => setupForestAndInteractions(m));
+    // Добавляем лесной слой как только стиль обработан (isStyleLoaded = true),
+    // но НЕ ждём загрузки тайлов подложки (load ждёт тайлы — если CDN завис,
+    // load никогда не стреляет). styledata может выстрелить до того как стиль
+    // применён, поэтому проверяем isStyleLoaded() в каждом вызове.
+    const onStyleReady = () => {
+      if (m.isStyleLoaded()) {
+        m.off("styledata", onStyleReady);
+        setupForestAndInteractions(m);
+      }
+    };
+    m.on("styledata", onStyleReady);
 
     // Если внешний стиль не загрузился — fallback на inline (только в начальной загрузке)
     m.on("error", (e) => {
@@ -351,7 +358,13 @@ export function MapView() {
 
     const target = baseMap === "scheme" ? SCHEME_STYLE_URL : SATELLITE_STYLE;
     m.setStyle(target as maplibregl.StyleSpecification | string);
-    m.once("styledata", () => setupForestAndInteractions(m));
+    const onSwitch = () => {
+      if (m.isStyleLoaded()) {
+        m.off("styledata", onSwitch);
+        setupForestAndInteractions(m);
+      }
+    };
+    m.on("styledata", onSwitch);
   }, [baseMap, setupForestAndInteractions]);
 
   // Видимость лесного слоя — дешёвая операция, не требует пересборки
