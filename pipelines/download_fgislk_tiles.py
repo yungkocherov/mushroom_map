@@ -53,7 +53,7 @@ from pyproj import Transformer
 
 # ─── GWC grid parameters (из TileMap descriptor) ─────────────────────────────
 ORIGIN_X = -20037508.34
-ORIGIN_Y = -20073348.34
+ORIGIN_Y = -20037508.34
 TILE_SIZE = 256
 
 #: units-per-pixel на каждом zoom level (из TileMap XML)

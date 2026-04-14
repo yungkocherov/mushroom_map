@@ -42,7 +42,7 @@ from shapely.ops import transform as shapely_transform, unary_union
 
 # ─── GWC grid (должно совпадать с download_fgislk_tiles.py) ───────────────────
 ORIGIN_X = -20037508.34
-ORIGIN_Y = -20073348.34
+ORIGIN_Y = -20037508.34
 TILE_SIZE = 256
 UPP: dict[int, float] = {7: 140.0, 8: 56.0, 9: 28.0, 10: 14.0, 11: 7.0, 12: 2.8}
 
@@ -137,12 +137,12 @@ def make_tile_to_4326(zoom: int, x: int, y: int, extent: int):
         lons = []
         lats = []
         for px, py in zip(xs, ys):
-            # MVT: (0,0) = top-left, (extent,extent) = bottom-right
+            # ФГИС GWC кодирует геометрию с y=0 внизу (TMS, не стандартный MVT).
             # EPSG:3857 tile bounds: (minx, miny) = bottom-left, (maxx, maxy) = top-right
             # Значит lon = minx + (px/extent)*(maxx-minx)
-            #       lat_meters = maxy - (py/extent)*(maxy-miny)
+            #       lat_meters = miny + (py/extent)*(maxy-miny)   ← НЕТ Y-flip
             mx = minx + (px / extent) * (maxx - minx)
-            my = maxy - (py / extent) * (maxy - miny)
+            my = miny + (py / extent) * (maxy - miny)
             lon, lat = to4326.transform(mx, my)
             lons.append(lon)
             lats.append(lat)
@@ -162,6 +162,7 @@ class VydelRecord:
     tree_species_raw: Optional[str]
     species_slug: Optional[str]
     age_group: Optional[str]
+    zoom: int = 0                              # зум, из которого взята геометрия
     polygon_parts: list[Polygon] = field(default_factory=list)
 
 
@@ -238,10 +239,18 @@ def process_tile(
                 tree_species_raw=tree_species,
                 species_slug=slug,
                 age_group=props.get("age_group"),
+                zoom=zoom,
             )
             records[externalid] = rec
+        elif zoom > rec.zoom:
+            # Нашли тот же выдел на более детальном зуме — сбрасываем грубую геометрию
+            rec.zoom = zoom
+            rec.polygon_parts.clear()
+        elif zoom < rec.zoom:
+            # Уже есть более детальная версия — пропускаем
+            continue
 
-        # Добавим полигон(ы) в накопитель
+        # Добавим полигон(ы) в накопитель (только для текущего zoom уровня)
         if isinstance(geom_wgs, Polygon):
             rec.polygon_parts.append(geom_wgs)
         elif isinstance(geom_wgs, MultiPolygon):
@@ -329,7 +338,10 @@ def main() -> None:
         raise SystemExit(f"нет директории {in_root}. Сначала запусти download_fgislk_tiles.py")
 
     tiles = iter_pbf_files(in_root)
-    print(f"Найдено pbf-файлов: {len(tiles)}")
+    # Сортируем по зуму — сначала грубые, потом детальные.
+    # Так при встрече выдела на более детальном зуме мы сбросим грубую геометрию.
+    tiles.sort(key=lambda t: t[1])
+    print(f"Найдено pbf-файлов: {len(tiles)}, зумы: {sorted(set(t[1] for t in tiles))}")
     if not tiles:
         raise SystemExit("нет тайлов для обработки")
 

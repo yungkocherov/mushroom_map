@@ -42,7 +42,7 @@ DEFAULT_LAYER = "forest"
 DEFAULT_MINZOOM = 7
 DEFAULT_MAXZOOM = 13  # z=14 в 4 раза больше тайлов, MapLibre отлично overzoom-ит с z=13
 DEFAULT_EXTENT = 4096
-DEFAULT_BUFFER = 0       # 0 устраняет двойной рендер в buffer-зонах (иначе fill-pattern даёт видимые швы)
+DEFAULT_BUFFER = 64      # 64/4096 ≈ 1.6% перекрытие — устраняет видимые швы на границах тайлов
 DEFAULT_REGION = "lenoblast"
 
 # Порог area_m2 по зумам — на мелких масштабах выкидываем мелочь,
