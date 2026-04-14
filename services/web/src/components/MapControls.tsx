@@ -14,6 +14,9 @@ interface Props {
   forestVisible: boolean;
   forestLoaded: boolean;
   onForestToggle: () => void;
+  waterVisible: boolean;
+  waterLoaded: boolean;
+  onWaterToggle: () => void;
 }
 
 const WRAP_STYLE: React.CSSProperties = {
@@ -58,10 +61,10 @@ const pillBtn = (active: boolean): React.CSSProperties => ({
   transition: "all 0.15s ease",
 });
 
-const forestBtn = (loaded: boolean, visible: boolean): React.CSSProperties => ({
-  border: loaded && visible ? "none" : "1.5px solid #2e7d32",
-  background: loaded && visible ? "#2e7d32" : "transparent",
-  color: loaded && visible ? "white" : "#2e7d32",
+const layerBtn = (loaded: boolean, visible: boolean, color: string): React.CSSProperties => ({
+  border: loaded && visible ? "none" : `1.5px solid ${color}`,
+  background: loaded && visible ? color : "transparent",
+  color: loaded && visible ? "white" : color,
   padding: "6px 12px",
   fontSize: 12,
   fontWeight: 600,
@@ -103,13 +106,26 @@ export function MapControls(props: Props) {
       <div style={CARD_STYLE}>
         <button
           onClick={props.onForestToggle}
-          style={forestBtn(props.forestLoaded, props.forestVisible)}
+          style={layerBtn(props.forestLoaded, props.forestVisible, "#2e7d32")}
         >
           {!props.forestLoaded
             ? "Загрузить леса"
             : props.forestVisible
             ? "Леса: вкл"
             : "Леса: выкл"}
+        </button>
+      </div>
+
+      <div style={CARD_STYLE}>
+        <button
+          onClick={props.onWaterToggle}
+          style={layerBtn(props.waterLoaded, props.waterVisible, "#1565C0")}
+        >
+          {!props.waterLoaded
+            ? "Водоохранные зоны"
+            : props.waterVisible
+            ? "Водоохрана: вкл"
+            : "Водоохрана: выкл"}
         </button>
       </div>
     </div>

@@ -25,10 +25,15 @@ def forest_at(
         # при равном приоритете — наименьший полигон как наиболее специфичный.
         row = conn.execute(
             """
-            SELECT dominant_species, species_composition, source, confidence, area_m2
-            FROM forest_unified
-            WHERE ST_Intersects(geometry, ST_SetSRID(ST_Point(%s, %s), 4326))
-            ORDER BY source_priority DESC, area_m2 ASC
+            SELECT fu.dominant_species, fu.species_composition, fu.source,
+                   fu.confidence, fu.area_m2,
+                   (fp.meta->>'bonitet')::int       AS bonitet,
+                   (fp.meta->>'timber_stock')::real AS timber_stock,
+                   fp.meta->>'age_group'            AS age_group
+            FROM forest_unified fu
+            JOIN forest_polygon fp ON fp.id = fu.id
+            WHERE ST_Intersects(fu.geometry, ST_SetSRID(ST_Point(%s, %s), 4326))
+            ORDER BY fu.source_priority DESC, fu.area_m2 ASC
             LIMIT 1
             """,
             (lon, lat),
@@ -117,6 +122,9 @@ def forest_at(
             "source": row[2],
             "confidence": float(row[3]),
             "area_m2": float(row[4]) if row[4] is not None else None,
+            "bonitet": int(row[5]) if row[5] is not None else None,
+            "timber_stock": float(row[6]) if row[6] is not None else None,
+            "age_group": row[7],
         },
         "species_theoretical": [
             {

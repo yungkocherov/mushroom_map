@@ -107,11 +107,13 @@ def prepare_projected_source(conn: psycopg.Connection) -> None:
             fu.source,
             fu.confidence,
             fu.area_m2,
+            fp.meta,
             -- Буфер 3м закрывает зазоры между полигонами из соседних MVT-тайлов
             -- (ФГИС ЛК кодирует с точностью ~2.8 м/пкс на z12, края смежных
             -- тайлов квантуются независимо → щели ≤ 5.6 м).
             ST_Buffer(ST_Transform(fu.geometry, 3857), 3.0) AS geom
         FROM forest_unified fu
+        JOIN forest_polygon fp ON fp.id = fu.id
         """
     )
     conn.execute("CREATE INDEX idx_forest_3857_gix ON forest_3857 USING GIST (geom)")
@@ -140,6 +142,9 @@ def build_tile_bytes(
                 f.source,
                 f.confidence,
                 f.area_m2,
+                (f.meta->>'bonitet')::int       AS bonitet,
+                (f.meta->>'timber_stock')::real AS timber_stock,
+                f.meta->>'age_group'            AS age_group,
                 ST_AsMVTGeom(f.geom, ST_TileEnvelope(%s, %s, %s), %s, %s, true) AS geom
             FROM forest_3857 f
             WHERE f.area_m2 >= %s

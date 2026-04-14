@@ -266,6 +266,18 @@ class RosleshozForestSource(ForestSource):
             meta_out["trace_fraction"] = result.trace_fraction
         if self._resolved_id_field and self._resolved_id_field in attrs:
             meta_out["vydel_id"] = attrs[self._resolved_id_field]
+        if (b := attrs.get("bonitet")) is not None:
+            try:
+                meta_out["bonitet"] = int(b)
+            except (ValueError, TypeError):
+                pass
+        if (ts := attrs.get("timber_stock")) is not None:
+            try:
+                meta_out["timber_stock"] = float(ts)
+            except (ValueError, TypeError):
+                pass
+        if (ag := attrs.get("age_group")) is not None:
+            meta_out["age_group"] = str(ag)
 
         return NormalizedForestPolygon(
             source=self.source_code,

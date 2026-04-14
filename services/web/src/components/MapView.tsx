@@ -17,6 +17,7 @@ const API_ORIGIN = import.meta.env.DEV
   ? (import.meta.env.VITE_API_URL ?? "http://localhost:8000")
   : window.location.origin;
 const FOREST_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/forest.pmtiles`;
+const WATER_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/water.pmtiles`;
 
 // ─── Отображение типов леса ───────────────────────────────────────────────────
 const FOREST_NAMES: Record<string, string> = {
@@ -46,6 +47,7 @@ const EDIBILITY_STYLE: Record<string, string> = {
 };
 
 const MONTH_SHORT = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
+const ROMAN = ["", "I", "II", "III", "IV", "V"];
 
 function buildPopupHtml(data: ForestAtResponse): string {
   if (!data.forest) {
@@ -58,6 +60,15 @@ function buildPopupHtml(data: ForestAtResponse): string {
   const forestName = FOREST_NAMES[f.dominant_species] ?? f.dominant_species;
   const areaStr = f.area_m2 ? `${(f.area_m2 / 10_000).toFixed(1)} га` : "";
   const curMonth = new Date().getMonth() + 1;
+
+  const metaBits: string[] = [];
+  if (f.bonitet != null && f.bonitet >= 1 && f.bonitet <= 5)
+    metaBits.push(`бонитет ${ROMAN[f.bonitet]}`);
+  if (f.timber_stock != null)
+    metaBits.push(`${Math.round(f.timber_stock)} м³/га`);
+  if (f.age_group != null)
+    metaBits.push(f.age_group);
+  const metaStr = metaBits.join(" · ");
 
   const speciesRows = data.species_theoretical
     .slice(0, 8)
@@ -84,6 +95,7 @@ function buildPopupHtml(data: ForestAtResponse): string {
     <div style="margin-bottom:6px">
       <strong style="font-size:14px">${forestName}</strong>
       ${areaStr ? `<span style="font-size:11px;color:#aaa;margin-left:8px">${areaStr}</span>` : ""}
+      ${metaStr ? `<div style="font-size:11px;color:#888;margin-top:2px">${metaStr}</div>` : ""}
       <div style="font-size:10px;color:#bbb;margin-top:1px">${f.source} · уверенность ${Math.round(f.confidence * 100)}%</div>
     </div>
     ${speciesRows
@@ -148,6 +160,31 @@ function addForestLayer(m: Map) {
   // цветовые переходы между породами и так видны на границах.
 }
 
+function addWaterLayer(m: Map) {
+  if (m.getLayer("water-fill")) return;
+  if (!m.getSource("water")) {
+    m.addSource("water", {
+      type: "vector",
+      url: WATER_PMTILES_URL,
+    });
+  }
+  const beforeId = findFirstSymbolLayerId(m);
+  m.addLayer(
+    {
+      id: "water-fill",
+      type: "fill",
+      source: "water",
+      "source-layer": "water",
+      paint: {
+        "fill-color": "#1565C0",
+        "fill-opacity": 0.3,
+        "fill-antialias": false,
+      } as unknown as maplibregl.FillLayerSpecification["paint"],
+    },
+    beforeId,
+  );
+}
+
 // ─── Встроенный стиль (fallback если внешний недоступен) ─────────────────────
 const INLINE_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -194,12 +231,13 @@ const SCHEME_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
 // ─── Компонент ────────────────────────────────────────────────────────────────
 
 function setForestVisibility(m: Map, visible: boolean) {
-  const v = visible ? "visible" : "none";
-  for (const id of ["forest-fill"]) {
-    if (m.getLayer(id)) {
-      m.setLayoutProperty(id, "visibility", v);
-    }
-  }
+  if (m.getLayer("forest-fill"))
+    m.setLayoutProperty("forest-fill", "visibility", visible ? "visible" : "none");
+}
+
+function setWaterVisibility(m: Map, visible: boolean) {
+  if (m.getLayer("water-fill"))
+    m.setLayoutProperty("water-fill", "visibility", visible ? "visible" : "none");
 }
 
 export function MapView() {
@@ -208,26 +246,38 @@ export function MapView() {
   const [baseMap, setBaseMap] = useState<BaseMapMode>("osm");
   const [forestVisible, setForestVisible] = useState(true);
   const [forestLoaded, setForestLoaded] = useState(false);
+  const [waterVisible, setWaterVisible] = useState(true);
+  const [waterLoaded, setWaterLoaded] = useState(false);
   const [styleSwitching, setStyleSwitching] = useState(false);
 
   // Refs для доступа из стабильных колбэков без пересоздания
   const forestVisibleRef = useRef(forestVisible);
   forestVisibleRef.current = forestVisible;
   const forestLoadedRef = useRef(false);
+  const waterVisibleRef = useRef(waterVisible);
+  waterVisibleRef.current = waterVisible;
+  const waterLoadedRef = useRef(false);
   // Отслеживаем уже применённый baseMap чтобы не вызывать setStyle зря
   // (совпадает с начальным значением useState, чтобы первый рендер был no-op)
   const appliedBaseMap = useRef<BaseMapMode>("osm");
 
-  // Вызывается при смене стиля — переaddит лесной слой только если он уже был загружен.
+  // Вызывается при смене стиля — переaddит лесной и водоохранный слои если они загружены.
   // Перед добавлением принудительно удаляем остатки предыдущего стиля: setStyle с
   // diff=true может оставить source живым но снести layer, что приводит к тому что
   // addForestLayer видит source и делает early-return не добавив layer.
   const setupForestAndInteractions = useCallback((m: Map) => {
-    if (!forestLoadedRef.current) return;
-    if (m.getLayer("forest-fill")) m.removeLayer("forest-fill");
-    if (m.getSource("forest")) m.removeSource("forest");
-    addForestLayer(m);
-    setForestVisibility(m, forestVisibleRef.current);
+    if (forestLoadedRef.current) {
+      if (m.getLayer("forest-fill")) m.removeLayer("forest-fill");
+      if (m.getSource("forest")) m.removeSource("forest");
+      addForestLayer(m);
+      setForestVisibility(m, forestVisibleRef.current);
+    }
+    if (waterLoadedRef.current) {
+      if (m.getLayer("water-fill")) m.removeLayer("water-fill");
+      if (m.getSource("water")) m.removeSource("water");
+      addWaterLayer(m);
+      setWaterVisibility(m, waterVisibleRef.current);
+    }
   }, []);
 
   // Единый обработчик кнопки: первый клик — загружает, последующие — тоглят
@@ -246,6 +296,24 @@ export function MapView() {
       forestVisibleRef.current = next;
       setForestVisible(next);
       setForestVisibility(m, next);
+    }
+  }, []);
+
+  const handleWaterToggle = useCallback(() => {
+    const m = map.current;
+    if (!m) return;
+    if (!waterLoadedRef.current) {
+      waterLoadedRef.current = true;
+      setWaterLoaded(true);
+      addWaterLayer(m);
+      waterVisibleRef.current = true;
+      setWaterVisible(true);
+      setWaterVisibility(m, true);
+    } else {
+      const next = !waterVisibleRef.current;
+      waterVisibleRef.current = next;
+      setWaterVisible(next);
+      setWaterVisibility(m, next);
     }
   }, []);
 
@@ -311,12 +379,10 @@ export function MapView() {
       }
     });
 
-    m.on("mouseenter", "forest-fill", () => {
-      m.getCanvas().style.cursor = "pointer";
-    });
-    m.on("mouseleave", "forest-fill", () => {
-      m.getCanvas().style.cursor = "";
-    });
+    m.on("mouseenter", "forest-fill", () => { m.getCanvas().style.cursor = "pointer"; });
+    m.on("mouseleave", "forest-fill", () => { m.getCanvas().style.cursor = ""; });
+    m.on("mouseenter", "water-fill", () => { m.getCanvas().style.cursor = "pointer"; });
+    m.on("mouseleave", "water-fill", () => { m.getCanvas().style.cursor = ""; });
 
     return () => {
       map.current?.remove();
@@ -417,6 +483,9 @@ export function MapView() {
         forestVisible={forestVisible}
         forestLoaded={forestLoaded}
         onForestToggle={handleForestToggle}
+        waterVisible={waterVisible}
+        waterLoaded={waterLoaded}
+        onWaterToggle={handleWaterToggle}
       />
     </div>
   );

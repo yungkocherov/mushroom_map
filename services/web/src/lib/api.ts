@@ -11,6 +11,9 @@ export interface ForestInfo {
   source: string;
   confidence: number;
   area_m2: number | null;
+  bonitet: number | null;       // класс бонитета 1..5 (1 = самый продуктивный)
+  timber_stock: number | null;  // запас древесины, м³/га
+  age_group: string | null;     // группа возраста («спелые», «молодняки», ...)
 }
 
 export interface SpeciesRef {
