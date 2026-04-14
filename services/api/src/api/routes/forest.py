@@ -20,13 +20,15 @@ def forest_at(
     lon: float = Query(..., ge=-180, le=180),
 ) -> dict:
     with get_conn() as conn:
-        # Наименьший содержащий полигон = наиболее специфичный
+        # forest_unified — каскад источников (rosleshoz > copernicus > terranorte > osm).
+        # Сначала по приоритету источника (точные данные > грубые),
+        # при равном приоритете — наименьший полигон как наиболее специфичный.
         row = conn.execute(
             """
             SELECT dominant_species, species_composition, source, confidence, area_m2
-            FROM forest_polygon
+            FROM forest_unified
             WHERE ST_Intersects(geometry, ST_SetSRID(ST_Point(%s, %s), 4326))
-            ORDER BY area_m2 ASC
+            ORDER BY source_priority DESC, area_m2 ASC
             LIMIT 1
             """,
             (lon, lat),
