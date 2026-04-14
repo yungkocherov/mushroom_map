@@ -3,12 +3,7 @@ import maplibregl, { Map } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import {
-  FOREST_LAYER_PAINT_COLOR,
-  FOREST_LAYER_PAINT_PATTERN,
-  FOREST_TEXTURE_SLUGS,
-  textureImageId,
-} from "../lib/forestStyle";
+import { FOREST_LAYER_PAINT_COLOR } from "../lib/forestStyle";
 import { fetchForestAt, ForestAtResponse } from "../lib/api";
 import { MapControls, BaseMapMode } from "./MapControls";
 
@@ -123,36 +118,8 @@ function findFirstSymbolLayerId(m: Map): string | undefined {
 }
 
 /**
- * Лениво и неблокирующе подгружает процедурные текстуры пород.
- * Возвращает promise, который резолвится когда ВСЕ текстуры добавлены
- * через map.addImage(). Если хотя бы одна упала — resolves в false.
- * Не бросает ошибки — это fire-and-forget на старте карты.
- */
-async function loadForestTextures(m: Map): Promise<boolean> {
-  try {
-    const loads = FOREST_TEXTURE_SLUGS.map(async (slug) => {
-      const name = textureImageId(slug);
-      if (m.hasImage(name)) return;
-      const res = await m.loadImage(`/textures/forest/${slug}.png`);
-      const data =
-        (res as { data?: ImageBitmap | HTMLImageElement }).data ??
-        (res as unknown as HTMLImageElement);
-      // pixelRatio=2 делает pattern мельче → чаще повторяется на экране.
-      m.addImage(name, data, { pixelRatio: 2 });
-    });
-    await Promise.all(loads);
-    return true;
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("[forest] texture load failed:", e);
-    return false;
-  }
-}
-
-/**
- * Добавляет лесной слой **синхронно** и мгновенно — сначала с flat-цветами.
- * Параллельно в фоне грузит текстуры; когда все подгружены — заменяет
- * paint на fill-pattern без перерисовки всей карты.
+ * Добавляет лесной слой с flat-цветами. Синхронно, без лишних сетевых запросов.
+ * Тайлы PMTiles подгружаются лениво по мере панорамирования/зума.
  */
 function addForestLayer(m: Map) {
   if (m.getSource("forest")) return; // уже добавлен
@@ -163,7 +130,6 @@ function addForestLayer(m: Map) {
   });
   const beforeId = findFirstSymbolLayerId(m);
 
-  // Стартуем с цветной заливки — видно сразу
   m.addLayer(
     {
       id: "forest-fill",
@@ -180,26 +146,11 @@ function addForestLayer(m: Map) {
       type: "line",
       source: "forest",
       "source-layer": "forest",
-      // solid (opacity 1) чтобы не двоилось на стыках тайлов
       paint: { "line-color": "#2a1f14", "line-width": 0.6, "line-opacity": 1 },
       minzoom: 11,
     },
     beforeId,
   );
-
-  // Параллельно грузим текстуры; когда готовы — swap paint на pattern.
-  // Невыполнение этого шага не блокирует ни базовую карту, ни forest layer.
-  loadForestTextures(m).then((ok) => {
-    if (!ok || !m.getLayer("forest-fill")) return;
-    for (const [key, val] of Object.entries(FOREST_LAYER_PAINT_PATTERN)) {
-      // setPaintProperty принимает имя свойства и его значение
-      m.setPaintProperty(
-        "forest-fill",
-        key as keyof maplibregl.FillLayerSpecification["paint"],
-        val as never,
-      );
-    }
-  });
 }
 
 // ─── Встроенный стиль (fallback если внешний недоступен) ─────────────────────
@@ -259,15 +210,28 @@ function setForestVisibility(m: Map, visible: boolean) {
 export function MapView() {
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
-  const [baseMap, setBaseMap] = useState<BaseMapMode>("scheme");
+  const [baseMap, setBaseMap] = useState<BaseMapMode>("osm");
   const [forestVisible, setForestVisible] = useState(true);
+  const [forestLoaded, setForestLoaded] = useState(false);
 
-  // Держим текущий forestVisible в ref, чтобы setupForestAndInteractions
-  // оставался stable (одна и та же ссылка) и не re-триггерил setStyle.
+  // Refs для доступа из стабильных колбэков без пересоздания
   const forestVisibleRef = useRef(forestVisible);
   forestVisibleRef.current = forestVisible;
+  const forestLoadedRef = useRef(false);
 
+  // Вызывается при смене стиля — переaddит лесной слой только если он уже был загружен
   const setupForestAndInteractions = useCallback((m: Map) => {
+    if (!forestLoadedRef.current) return;
+    addForestLayer(m);
+    setForestVisibility(m, forestVisibleRef.current);
+  }, []);
+
+  // Вызывается по кнопке "Загрузить леса"
+  const handleLoadForest = useCallback(() => {
+    const m = map.current;
+    if (!m) return;
+    forestLoadedRef.current = true;
+    setForestLoaded(true);
     addForestLayer(m);
     setForestVisibility(m, forestVisibleRef.current);
   }, []);
@@ -277,7 +241,7 @@ export function MapView() {
 
     map.current = new maplibregl.Map({
       container: mapRef.current,
-      style: SCHEME_STYLE_URL,
+      style: INLINE_STYLE,
       center: [30.5, 60.0],
       zoom: 8,
     });
@@ -356,7 +320,10 @@ export function MapView() {
     const loaded = m.loaded();
     if (!loaded) return;
 
-    const target = baseMap === "scheme" ? SCHEME_STYLE_URL : SATELLITE_STYLE;
+    const target =
+      baseMap === "scheme" ? SCHEME_STYLE_URL
+      : baseMap === "satellite" ? SATELLITE_STYLE
+      : INLINE_STYLE;
     m.setStyle(target as maplibregl.StyleSpecification | string);
     const onSwitch = () => {
       if (m.isStyleLoaded()) {
@@ -382,6 +349,8 @@ export function MapView() {
         onBaseMapChange={setBaseMap}
         forestVisible={forestVisible}
         onForestToggle={setForestVisible}
+        forestLoaded={forestLoaded}
+        onForestLoad={handleLoadForest}
       />
     </div>
   );

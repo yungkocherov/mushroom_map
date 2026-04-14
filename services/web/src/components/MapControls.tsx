@@ -6,13 +6,15 @@
  * спутник — ESRI World Imagery (бесплатно, без ключа, атрибуция внизу).
  */
 
-export type BaseMapMode = "scheme" | "satellite";
+export type BaseMapMode = "osm" | "scheme" | "satellite";
 
 interface Props {
   baseMap: BaseMapMode;
   onBaseMapChange: (mode: BaseMapMode) => void;
   forestVisible: boolean;
   onForestToggle: (visible: boolean) => void;
+  forestLoaded: boolean;
+  onForestLoad: () => void;
 }
 
 const WRAP_STYLE: React.CSSProperties = {
@@ -74,6 +76,12 @@ export function MapControls(props: Props) {
         </div>
         <div style={PILL_WRAP_STYLE}>
           <button
+            style={pillBtn(props.baseMap === "osm")}
+            onClick={() => props.onBaseMapChange("osm")}
+          >
+            OSM
+          </button>
+          <button
             style={pillBtn(props.baseMap === "scheme")}
             onClick={() => props.onBaseMapChange("scheme")}
           >
@@ -89,15 +97,34 @@ export function MapControls(props: Props) {
       </div>
 
       <div style={CARD_STYLE}>
-        <label style={CHECKBOX_LABEL}>
-          <input
-            type="checkbox"
-            checked={props.forestVisible}
-            onChange={(e) => props.onForestToggle(e.target.checked)}
-            style={{ width: 16, height: 16, cursor: "pointer" }}
-          />
-          <span>Типы лесов</span>
-        </label>
+        {props.forestLoaded ? (
+          <label style={CHECKBOX_LABEL}>
+            <input
+              type="checkbox"
+              checked={props.forestVisible}
+              onChange={(e) => props.onForestToggle(e.target.checked)}
+              style={{ width: 16, height: 16, cursor: "pointer" }}
+            />
+            <span>Типы лесов</span>
+          </label>
+        ) : (
+          <button
+            onClick={props.onForestLoad}
+            style={{
+              border: "none",
+              background: "#2e7d32",
+              color: "white",
+              padding: "6px 12px",
+              fontSize: 12,
+              fontWeight: 600,
+              borderRadius: 6,
+              cursor: "pointer",
+              width: "100%",
+            }}
+          >
+            Загрузить леса
+          </button>
+        )}
       </div>
     </div>
   );
