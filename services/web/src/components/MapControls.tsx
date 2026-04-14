@@ -1,12 +1,9 @@
 /**
- * Плавающая панель контролов карты: переключатель базовой подложки
- * (схема ↔ спутник) и тумблер видимости лесного слоя.
- *
- * Все ресурсы — raster tiles. Схема уже OpenFreeMap Bright (vector),
- * спутник — ESRI World Imagery (бесплатно, без ключа, атрибуция внизу).
+ * Плавающая панель контролов карты.
  */
+import { ForestColorMode, FOREST_COLOR_MODE_LABELS } from "../lib/forestStyle";
 
-export type BaseMapMode = "osm" | "scheme" | "satellite";
+export type BaseMapMode = "osm" | "scheme" | "satellite" | "hybrid";
 
 interface Props {
   baseMap: BaseMapMode;
@@ -14,6 +11,8 @@ interface Props {
   forestVisible: boolean;
   forestLoaded: boolean;
   onForestToggle: () => void;
+  forestColorMode: ForestColorMode;
+  onForestColorMode: (mode: ForestColorMode) => void;
   waterVisible: boolean;
   waterLoaded: boolean;
   onWaterToggle: () => void;
@@ -23,6 +22,7 @@ interface Props {
   roadsVisible: boolean;
   roadsLoaded: boolean;
   onRoadsToggle: () => void;
+  onShare: () => void;
 }
 
 const WRAP_STYLE: React.CSSProperties = {
@@ -83,69 +83,67 @@ const layerBtn = (loaded: boolean, visible: boolean, color: string): React.CSSPr
 export function MapControls(props: Props) {
   return (
     <div style={WRAP_STYLE}>
+      {/* Подложка */}
       <div style={CARD_STYLE}>
         <div style={{ fontSize: 11, color: "#888", marginBottom: 5, textTransform: "uppercase", letterSpacing: 0.5 }}>
           Подложка
         </div>
         <div style={PILL_WRAP_STYLE}>
-          <button
-            style={pillBtn(props.baseMap === "osm")}
-            onClick={() => props.onBaseMapChange("osm")}
-          >
-            OSM
-          </button>
-          <button
-            style={pillBtn(props.baseMap === "scheme")}
-            onClick={() => props.onBaseMapChange("scheme")}
-          >
-            Схема
-          </button>
-          <button
-            style={pillBtn(props.baseMap === "satellite")}
-            onClick={() => props.onBaseMapChange("satellite")}
-          >
-            Спутник
-          </button>
+          <button style={pillBtn(props.baseMap === "osm")}       onClick={() => props.onBaseMapChange("osm")}>OSM</button>
+          <button style={pillBtn(props.baseMap === "scheme")}    onClick={() => props.onBaseMapChange("scheme")}>Схема</button>
+          <button style={pillBtn(props.baseMap === "satellite")} onClick={() => props.onBaseMapChange("satellite")}>Спутник</button>
+          <button style={pillBtn(props.baseMap === "hybrid")}    onClick={() => props.onBaseMapChange("hybrid")}>Гибрид</button>
         </div>
       </div>
 
+      {/* Лесной слой + режим раскраски */}
       <div style={CARD_STYLE}>
-        <button
-          onClick={props.onForestToggle}
-          style={layerBtn(props.forestLoaded, props.forestVisible, "#2e7d32")}
-        >
-          {!props.forestLoaded
-            ? "Загрузить леса"
-            : props.forestVisible
-            ? "Леса: вкл"
-            : "Леса: выкл"}
+        <button onClick={props.onForestToggle} style={layerBtn(props.forestLoaded, props.forestVisible, "#2e7d32")}>
+          {!props.forestLoaded ? "Загрузить леса" : props.forestVisible ? "Леса: вкл" : "Леса: выкл"}
         </button>
+        {props.forestLoaded && (
+          <div style={{ ...PILL_WRAP_STYLE, marginTop: 6 }}>
+            {(["species", "bonitet", "age_group"] as ForestColorMode[]).map(mode => (
+              <button
+                key={mode}
+                style={pillBtn(props.forestColorMode === mode)}
+                onClick={() => props.onForestColorMode(mode)}
+              >
+                {FOREST_COLOR_MODE_LABELS[mode]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
+      {/* Водоохрана */}
       <div style={CARD_STYLE}>
-        <button
-          onClick={props.onWaterToggle}
-          style={layerBtn(props.waterLoaded, props.waterVisible, "#1565C0")}
-        >
+        <button onClick={props.onWaterToggle} style={layerBtn(props.waterLoaded, props.waterVisible, "#1565C0")}>
           {!props.waterLoaded ? "Водоохранные зоны" : props.waterVisible ? "Водоохрана: вкл" : "Водоохрана: выкл"}
         </button>
       </div>
 
+      {/* ООПТ */}
       <div style={CARD_STYLE}>
-        <button
-          onClick={props.onOoptToggle}
-          style={layerBtn(props.ooptLoaded, props.ooptVisible, "#b71c1c")}
-        >
+        <button onClick={props.onOoptToggle} style={layerBtn(props.ooptLoaded, props.ooptVisible, "#b71c1c")}>
           {!props.ooptLoaded ? "ООПТ" : props.ooptVisible ? "ООПТ: вкл" : "ООПТ: выкл"}
         </button>
       </div>
 
+      {/* Лесные дороги */}
+      <div style={CARD_STYLE}>
+        <button onClick={props.onRoadsToggle} style={layerBtn(props.roadsLoaded, props.roadsVisible, "#5d4037")}>
+          {!props.roadsLoaded ? "Лесные дороги" : props.roadsVisible ? "Дороги: вкл" : "Дороги: выкл"}
+        </button>
+      </div>
+
+      {/* Поделиться */}
       <div style={CARD_STYLE}>
         <button
-          onClick={props.onRoadsToggle}
-          style={layerBtn(props.roadsLoaded, props.roadsVisible, "#5d4037")}
+          onClick={props.onShare}
+          style={{ ...layerBtn(false, false, "#455a64"), border: "1.5px solid #455a64" }}
         >
-          {!props.roadsLoaded ? "Лесные дороги" : props.roadsVisible ? "Дороги: вкл" : "Дороги: выкл"}
+          Скопировать ссылку
         </button>
       </div>
     </div>

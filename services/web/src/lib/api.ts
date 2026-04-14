@@ -40,3 +40,44 @@ export async function fetchForestAt(lat: number, lon: number): Promise<ForestAtR
   if (!res.ok) throw new Error(`forest/at ${res.status}`);
   return res.json();
 }
+
+export interface SpeciesSearchResult {
+  slug: string;
+  name_ru: string;
+  name_lat?: string;
+  edibility?: string;
+  season_months?: number[];
+  forest_types: string[];
+}
+
+export async function searchSpecies(q: string, limit = 10): Promise<SpeciesSearchResult[]> {
+  if (!q.trim()) return [];
+  const url = `${API_BASE}/api/species/search?q=${encodeURIComponent(q)}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  return res.json();
+}
+
+export interface NominatimResult {
+  place_id: number;
+  display_name: string;
+  lat: string;
+  lon: string;
+  type: string;
+}
+
+export async function searchPlaces(q: string): Promise<NominatimResult[]> {
+  if (!q.trim()) return [];
+  const params = new URLSearchParams({
+    q,
+    format: "json",
+    limit: "5",
+    countrycodes: "ru",
+    "accept-language": "ru",
+  });
+  const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+    headers: { "User-Agent": "mushroom-map/1.0" },
+  });
+  if (!res.ok) return [];
+  return res.json();
+}

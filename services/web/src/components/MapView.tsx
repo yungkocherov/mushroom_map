@@ -3,9 +3,16 @@ import maplibregl, { Map } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 
-import { FOREST_LAYER_PAINT_COLOR } from "../lib/forestStyle";
+import {
+  FOREST_LAYER_PAINT_COLOR,
+  FOREST_LAYER_PAINT_BONITET,
+  FOREST_LAYER_PAINT_AGE_GROUP,
+  ForestColorMode,
+} from "../lib/forestStyle";
 import { fetchForestAt, ForestAtResponse } from "../lib/api";
 import { MapControls, BaseMapMode } from "./MapControls";
+import { Legend } from "./Legend";
+import { SearchBar } from "./SearchBar";
 
 // ─── PMTiles protocol ─────────────────────────────────────────────────────────
 const _protocol = new Protocol();
@@ -73,9 +80,10 @@ function buildPopupHtml(data: ForestAtResponse): string {
   const metaStr = metaBits.join(" · ");
 
   const speciesRows = data.species_theoretical
-    .slice(0, 8)
+    .slice(0, 12)
     .map((s) => {
       const style = EDIBILITY_STYLE[s.edibility ?? ""] ?? "color:#333";
+      const inSeason = (s.season_months ?? []).includes(curMonth);
       const months = (s.season_months ?? [])
         .map((m) =>
           m === curMonth
@@ -84,7 +92,7 @@ function buildPopupHtml(data: ForestAtResponse): string {
         )
         .join("&thinsp;");
       const aff = s.affinity ? Math.round(s.affinity * 100) : 0;
-      return `<tr>
+      return `<tr class="sp-row${inSeason ? " sp-season" : " sp-offseason"}" style="display:table-row">
         <td style="${style};padding:2px 6px 2px 0">${s.name_ru}</td>
         <td style="color:#aaa;font-size:10px;padding:2px 6px 2px 0;font-style:italic">${s.name_lat ?? ""}</td>
         <td style="font-size:10px;color:#555;padding:2px 6px 2px 0;white-space:nowrap">${months}</td>
@@ -100,18 +108,25 @@ function buildPopupHtml(data: ForestAtResponse): string {
       ${metaStr ? `<div style="font-size:11px;color:#888;margin-top:2px">${metaStr}</div>` : ""}
       <div style="font-size:10px;color:#bbb;margin-top:1px">${f.source} · уверенность ${Math.round(f.confidence * 100)}%</div>
     </div>
-    ${speciesRows
-      ? `<table style="width:100%;border-collapse:collapse">
-           <thead><tr style="font-size:10px;color:#aaa;border-bottom:1px solid #eee">
-             <th style="text-align:left;padding:0 6px 3px 0">Гриб</th>
-             <th></th>
-             <th style="text-align:left;padding:0 6px 3px 0">Сезон</th>
-             <th style="text-align:left">Афф.</th>
-           </tr></thead>
-           <tbody>${speciesRows}</tbody>
-         </table>`
-      : `<p style="color:#aaa;font-size:12px;margin:0">Нет данных о видах для этого типа леса</p>`
-    }
+    ${speciesRows ? `
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:11px;color:#888">Виды грибов</span>
+        <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
+          <input type="checkbox" id="sp-filter-cb" style="margin:0"
+            onchange="document.querySelectorAll('.sp-offseason').forEach(r => r.style.display = this.checked ? 'none' : 'table-row')">
+          только в сезоне
+        </label>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="font-size:10px;color:#aaa;border-bottom:1px solid #eee">
+          <th style="text-align:left;padding:0 6px 3px 0">Гриб</th>
+          <th></th>
+          <th style="text-align:left;padding:0 6px 3px 0">Сезон</th>
+          <th style="text-align:left">Афф.</th>
+        </tr></thead>
+        <tbody>${speciesRows}</tbody>
+      </table>`
+    : `<p style="color:#aaa;font-size:12px;margin:0">Нет данных о видах для этого типа леса</p>`}
   </div>`;
 }
 
@@ -280,6 +295,25 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
 
 const SCHEME_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
 
+/** Гибрид: спутник ESRI + метки из OpenFreeMap Bright (только symbol-слои). */
+async function buildHybridStyle(): Promise<maplibregl.StyleSpecification> {
+  const resp = await fetch(SCHEME_STYLE_URL);
+  const style = await resp.json() as maplibregl.StyleSpecification;
+  (style.sources as Record<string, unknown>)["esri-satellite"] = {
+    type: "raster",
+    tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+    tileSize: 256,
+    maxzoom: 19,
+    attribution: "Imagery © Esri, Maxar, Earthstar Geographics",
+  };
+  const labelLayers = style.layers.filter(l => l.type === "symbol");
+  style.layers = [
+    { id: "esri-satellite-layer", type: "raster", source: "esri-satellite" } as maplibregl.RasterLayerSpecification,
+    ...labelLayers,
+  ];
+  return style;
+}
+
 // ─── Компонент ────────────────────────────────────────────────────────────────
 
 function setForestVisibility(m: Map, visible: boolean) {
@@ -308,6 +342,10 @@ export function MapView() {
   const [baseMap, setBaseMap] = useState<BaseMapMode>("osm");
   const [forestVisible, setForestVisible] = useState(true);
   const [forestLoaded, setForestLoaded] = useState(false);
+  const [forestColorMode, setForestColorMode] = useState<ForestColorMode>("species");
+  const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
+  const [shareToast, setShareToast] = useState(false);
+  const [speciesFilterLabel, setSpeciesFilterLabel] = useState<string | null>(null);
   const [waterVisible, setWaterVisible] = useState(true);
   const [waterLoaded, setWaterLoaded] = useState(false);
   const [ooptVisible, setOoptVisible] = useState(true);
@@ -413,6 +451,47 @@ export function MapView() {
     }
   }, []);
 
+  const handleForestColorMode = useCallback((mode: ForestColorMode) => {
+    setForestColorMode(mode);
+    const m = map.current;
+    if (!m || !m.getLayer("forest-fill")) return;
+    const paint =
+      mode === "bonitet"   ? FOREST_LAYER_PAINT_BONITET["fill-color"] :
+      mode === "age_group" ? FOREST_LAYER_PAINT_AGE_GROUP["fill-color"] :
+      FOREST_LAYER_PAINT_COLOR["fill-color"];
+    m.setPaintProperty("forest-fill", "fill-color", paint);
+  }, []);
+
+  const handleShare = useCallback(() => {
+    const m = map.current;
+    if (!m) return;
+    const { lat, lng } = m.getCenter();
+    const z = Math.round(m.getZoom() * 10) / 10;
+    const url = new URL(window.location.href);
+    url.searchParams.set("lat", lat.toFixed(5));
+    url.searchParams.set("lon", lng.toFixed(5));
+    url.searchParams.set("z", String(z));
+    navigator.clipboard.writeText(url.toString()).then(() => {
+      setShareToast(true);
+      setTimeout(() => setShareToast(false), 2000);
+    });
+  }, []);
+
+  const handleFlyTo = useCallback((lat: number, lon: number, zoom = 13) => {
+    map.current?.flyTo({ center: [lon, lat], zoom, speed: 1.5 });
+  }, []);
+
+  const handleSpeciesFilter = useCallback((forestTypes: string[] | null, label: string | null) => {
+    const m = map.current;
+    setSpeciesFilterLabel(label);
+    if (!m || !m.getLayer("forest-fill")) return;
+    if (!forestTypes || forestTypes.length === 0) {
+      m.setFilter("forest-fill", null);
+    } else {
+      m.setFilter("forest-fill", ["in", ["get", "dominant_species"], ["literal", forestTypes]]);
+    }
+  }, []);
+
   const handleRoadsToggle = useCallback(() => {
     const m = map.current;
     if (!m) return;
@@ -431,11 +510,16 @@ export function MapView() {
   useEffect(() => {
     if (!mapRef.current || map.current) return;
 
+    const urlParams = new URLSearchParams(window.location.search);
+    const initLat = parseFloat(urlParams.get("lat") ?? "60.0");
+    const initLon = parseFloat(urlParams.get("lon") ?? "30.5");
+    const initZ   = parseFloat(urlParams.get("z")   ?? "8");
+
     map.current = new maplibregl.Map({
       container: mapRef.current,
       style: INLINE_STYLE,
-      center: [30.5, 60.0],
-      zoom: 8,
+      center: [isFinite(initLon) ? initLon : 30.5, isFinite(initLat) ? initLat : 60.0],
+      zoom: isFinite(initZ) ? initZ : 8,
     });
 
     const m = map.current;
@@ -471,6 +555,21 @@ export function MapView() {
       new maplibregl.AttributionControl({ compact: true }),
       "bottom-right",
     );
+
+    // Координаты под курсором
+    m.on("mousemove", (e) => setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng }));
+
+    // Синхронизация URL
+    const syncUrl = () => {
+      const { lat, lng } = m.getCenter();
+      const z = Math.round(m.getZoom() * 10) / 10;
+      const url = new URL(window.location.href);
+      url.searchParams.set("lat", lat.toFixed(5));
+      url.searchParams.set("lon", lng.toFixed(5));
+      url.searchParams.set("z", String(z));
+      history.replaceState(null, "", url.toString());
+    };
+    m.on("moveend", syncUrl);
 
     // ─── Popup по клику ───────────────────────────────────────────────────────
     m.on("click", "forest-fill", async (e) => {
@@ -513,11 +612,6 @@ export function MapView() {
     if (appliedBaseMap.current === baseMap) return;
     appliedBaseMap.current = baseMap;
 
-    const target =
-      baseMap === "scheme" ? SCHEME_STYLE_URL
-      : baseMap === "satellite" ? SATELLITE_STYLE
-      : INLINE_STYLE;
-
     let rafId = 0;
 
     const cleanup = () => {
@@ -532,8 +626,6 @@ export function MapView() {
       setupForestAndInteractions(m);
     };
 
-    // Если стиль упал с ошибкой (CDN недоступен) — откатываемся на OSM.
-    // Игнорируем ошибки после загрузки стиля (тайловые 404 и т.п.).
     const onError = (e: { error?: { message?: string } }) => {
       if (m.isStyleLoaded()) return;
       const msg = e.error?.message ?? "";
@@ -544,7 +636,6 @@ export function MapView() {
       }
     };
 
-    // Таймаут: 8 сек — если стиль так и не загрузился, откат на OSM
     const timer = setTimeout(() => {
       cleanup();
       setStyleSwitching(false);
@@ -554,23 +645,30 @@ export function MapView() {
       }
     }, 8000);
 
+    const startRafPoll = () => {
+      const check = () => { if (m.isStyleLoaded()) onStyleReady(); else rafId = requestAnimationFrame(check); };
+      rafId = requestAnimationFrame(check);
+    };
+
     m.on("error", onError as Parameters<typeof m.on>[1]);
 
-    // Оверлей только для внешнего CDN-стиля — inline-стили грузятся мгновенно
-    if (baseMap === "scheme") setStyleSwitching(true);
-    m.setStyle(target as maplibregl.StyleSpecification | string);
-
-    // Поллинг через rAF: ждём isStyleLoaded() = true.
-    // Нельзя полагаться на событие styledata — для CDN-стиля оно стреляет
-    // до загрузки спрайтов/глифов, а повторного события после их загрузки нет.
-    const checkLoaded = () => {
-      if (m.isStyleLoaded()) {
-        onStyleReady();
-      } else {
-        rafId = requestAnimationFrame(checkLoaded);
-      }
-    };
-    rafId = requestAnimationFrame(checkLoaded);
+    if (baseMap === "hybrid") {
+      setStyleSwitching(true);
+      buildHybridStyle()
+        .then(style => {
+          if (appliedBaseMap.current !== "hybrid") return;
+          m.setStyle(style);
+          startRafPoll();
+        })
+        .catch(() => { cleanup(); setStyleSwitching(false); setBaseMap("satellite"); });
+    } else {
+      const target =
+        baseMap === "scheme"    ? SCHEME_STYLE_URL :
+        baseMap === "satellite" ? SATELLITE_STYLE  : INLINE_STYLE;
+      if (baseMap === "scheme") setStyleSwitching(true);
+      m.setStyle(target as maplibregl.StyleSpecification | string);
+      startRafPoll();
+    }
 
     return cleanup;
   }, [baseMap, setupForestAndInteractions]);
@@ -578,6 +676,7 @@ export function MapView() {
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} className="map-root" />
+
       {styleSwitching && (
         <div style={{
           position: "absolute", inset: 0,
@@ -588,12 +687,15 @@ export function MapView() {
           Загружаю подложку…
         </div>
       )}
+
       <MapControls
         baseMap={baseMap}
         onBaseMapChange={setBaseMap}
         forestVisible={forestVisible}
         forestLoaded={forestLoaded}
         onForestToggle={handleForestToggle}
+        forestColorMode={forestColorMode}
+        onForestColorMode={handleForestColorMode}
         waterVisible={waterVisible}
         waterLoaded={waterLoaded}
         onWaterToggle={handleWaterToggle}
@@ -603,7 +705,49 @@ export function MapView() {
         roadsVisible={roadsVisible}
         roadsLoaded={roadsLoaded}
         onRoadsToggle={handleRoadsToggle}
+        onShare={handleShare}
       />
+
+      <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={handleSpeciesFilter} />
+
+      {forestLoaded && <Legend colorMode={forestColorMode} />}
+
+      {/* Координаты под курсором */}
+      {cursor && (
+        <div style={{
+          position: "absolute", bottom: 28, right: 50,
+          background: "rgba(255,255,255,0.85)", borderRadius: 4,
+          padding: "2px 7px", fontSize: 11, color: "#555",
+          fontFamily: "monospace", zIndex: 10,
+          pointerEvents: "none",
+        }}>
+          {cursor.lat.toFixed(5)}, {cursor.lon.toFixed(5)}
+        </div>
+      )}
+
+      {/* Тост «ссылка скопирована» */}
+      {shareToast && (
+        <div style={{
+          position: "absolute", bottom: 50, left: "50%", transform: "translateX(-50%)",
+          background: "#323232", color: "white", borderRadius: 6,
+          padding: "8px 16px", fontSize: 13, zIndex: 30,
+          fontFamily: "system-ui, sans-serif",
+        }}>
+          Ссылка скопирована
+        </div>
+      )}
+
+      {/* Баннер активного фильтра по виду */}
+      {speciesFilterLabel && (
+        <div style={{
+          position: "absolute", top: 56, left: "50%", transform: "translateX(-50%)",
+          background: "#e8f5e9", border: "1px solid #a5d6a7", borderRadius: 6,
+          padding: "5px 12px", fontSize: 12, color: "#2e7d32",
+          fontFamily: "system-ui, sans-serif", zIndex: 15,
+        }}>
+          Показаны леса для: <strong>{speciesFilterLabel}</strong>
+        </div>
+      )}
     </div>
   );
 }

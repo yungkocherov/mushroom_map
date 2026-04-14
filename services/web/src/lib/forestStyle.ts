@@ -124,3 +124,61 @@ export const FOREST_LAYER_PAINT_COLOR = {
 
 // Обратная совместимость — старое имя указывает на fallback-вариант
 export const FOREST_LAYER_PAINT = FOREST_LAYER_PAINT_COLOR;
+
+// ─── Режимы раскраски ─────────────────────────────────────────────────────────
+
+export type ForestColorMode = "species" | "bonitet" | "age_group";
+
+export const FOREST_COLOR_MODE_LABELS: Record<ForestColorMode, string> = {
+  species:   "Порода",
+  bonitet:   "Бонитет",
+  age_group: "Возраст",
+};
+
+/** Бонитет 1 (лучший) → зелёный, 5 (худший) → красный */
+export const FOREST_LAYER_PAINT_BONITET = {
+  "fill-color": [
+    "match", ["get", "bonitet"],
+    1, "#1b5e20",
+    2, "#66bb6a",
+    3, "#fdd835",
+    4, "#ef6c00",
+    5, "#b71c1c",
+    "#9e9e9e",
+  ],
+  "fill-opacity": 0.8,
+  "fill-antialias": false,
+} as const;
+
+export const BONITET_LEGEND: Array<{ label: string; color: string }> = [
+  { label: "I — высший",  color: "#1b5e20" },
+  { label: "II",          color: "#66bb6a" },
+  { label: "III",         color: "#fdd835" },
+  { label: "IV",          color: "#ef6c00" },
+  { label: "V — низший",  color: "#b71c1c" },
+  { label: "Нет данных",  color: "#9e9e9e" },
+];
+
+/** Возрастные группы Rosleshoz */
+export const FOREST_LAYER_PAINT_AGE_GROUP = {
+  "fill-color": [
+    "match", ["get", "age_group"],
+    "молодняки",        "#a5d6a7",
+    "средневозрастные", "#43a047",
+    "приспевающие",     "#2e7d32",
+    "спелые",           "#795548",
+    "перестойные",      "#4e342e",
+    "#9e9e9e",
+  ],
+  "fill-opacity": 0.8,
+  "fill-antialias": false,
+} as const;
+
+export const AGE_GROUP_LEGEND: Array<{ label: string; color: string }> = [
+  { label: "Молодняки",        color: "#a5d6a7" },
+  { label: "Средневозрастные", color: "#43a047" },
+  { label: "Приспевающие",     color: "#2e7d32" },
+  { label: "Спелые",           color: "#795548" },
+  { label: "Перестойные",      color: "#4e342e" },
+  { label: "Нет данных",       color: "#9e9e9e" },
+];
