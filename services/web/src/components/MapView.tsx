@@ -314,24 +314,52 @@ export function MapView() {
 
   // Смена базовой подложки — setStyle сбрасывает sources/layers,
   // ждём styledata и переadd'им forest.
+  // Если CDN не ответил за 8 сек или вернул ошибку — откат на OSM.
   useEffect(() => {
     const m = map.current;
     if (!m) return;
-    const loaded = m.loaded();
-    if (!loaded) return;
+    if (!m.loaded()) return;
 
     const target =
       baseMap === "scheme" ? SCHEME_STYLE_URL
       : baseMap === "satellite" ? SATELLITE_STYLE
       : INLINE_STYLE;
     m.setStyle(target as maplibregl.StyleSpecification | string);
+
+    const cleanup = () => {
+      m.off("styledata", onSwitch);
+      m.off("error", onError);
+      clearTimeout(timer);
+    };
+
     const onSwitch = () => {
       if (m.isStyleLoaded()) {
-        m.off("styledata", onSwitch);
+        cleanup();
         setupForestAndInteractions(m);
       }
     };
+
+    // Если стиль упал с ошибкой (CDN недоступен) — откатываемся на OSM
+    const onError = (e: { error?: { message?: string } }) => {
+      const msg = e.error?.message ?? "";
+      if (msg.includes("style") || msg.includes("openfreemap") || msg.includes("Failed to fetch")) {
+        cleanup();
+        setBaseMap("osm");
+      }
+    };
+
+    // Таймаут: 8 сек — если стиль так и не загрузился, откат на OSM
+    const timer = setTimeout(() => {
+      if (!m.isStyleLoaded()) {
+        cleanup();
+        setBaseMap("osm");
+      }
+    }, 8000);
+
     m.on("styledata", onSwitch);
+    m.on("error", onError as Parameters<typeof m.on>[1]);
+
+    return cleanup;
   }, [baseMap, setupForestAndInteractions]);
 
   // Видимость лесного слоя — дешёвая операция, не требует пересборки
