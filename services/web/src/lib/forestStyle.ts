@@ -117,7 +117,9 @@ export const FOREST_LAYER_PAINT_COLOR = {
   ],
   "fill-opacity": 0.8,
   "fill-outline-color": "rgba(0,0,0,0)",
-  "fill-antialias": true,
+  // false устраняет "прожилки" между соседними полигонами: при opacity<1 и
+  // antialias=true края каждого полигона слегка прозрачны → просвет на стыках.
+  "fill-antialias": false,
 } as const;
 
 // Обратная совместимость — старое имя указывает на fallback-вариант
