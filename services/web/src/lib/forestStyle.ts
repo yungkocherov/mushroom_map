@@ -1,37 +1,92 @@
 /**
- * Цветовая палитра для forest-слоя.
- * Slug'и синхронизированы с geodata.types.ForestTypeSlug (Python).
+ * Цвета и паттерны лесного слоя.
  *
- * Тёмно-зелёные — хвойные. Салатовые — лиственные. Серые — смешанные/неизвестно.
- * Подбор палитры — ок для лёгкой версии, профессионально отполируем в phase 2.
+ * Paint-режимы:
+ *   1. `FOREST_LAYER_PAINT_PATTERN` — fill-pattern с процедурными текстурами
+ *      коры (берёза = белая с штрихами, сосна = бороздки, дуб = кирпичная
+ *      кладка и т.д.). Текстуры загружаются через map.addImage() из
+ *      `/textures/forest/<slug>.png` на старте карты.
+ *   2. `FOREST_LAYER_PAINT_COLOR` — обычная однотонная заливка. Используется
+ *      как fallback если текстуры не загрузились.
+ *
+ * Slug'и синхронизированы с geodata.types.ForestTypeSlug (Python).
  */
-export const FOREST_COLORS = {
-  pine: "#2d5a27",
-  spruce: "#1e4a1e",
-  larch: "#5c7a3a",
-  fir: "#224d22",
-  cedar: "#335533",
 
-  birch: "#a8d96b",
-  aspen: "#b8d874",
-  alder: "#7fa65c",
-  oak: "#6b9342",
-  linden: "#96b964",
-  maple: "#8fad55",
+// ─── slug'и пород для загрузки текстур ────────────────────────────────────────
+export const FOREST_TEXTURE_SLUGS = [
+  "pine",
+  "spruce",
+  "larch",
+  "fir",
+  "cedar",
+  "birch",
+  "aspen",
+  "alder",
+  "oak",
+  "linden",
+  "maple",
+  "mixed_coniferous",
+  "mixed_broadleaved",
+  "mixed",
+  "unknown",
+] as const;
 
-  mixed_coniferous: "#3d6d38",
-  mixed_broadleaved: "#8db959",
-  mixed: "#6a9146",
+export type ForestSlug = (typeof FOREST_TEXTURE_SLUGS)[number];
 
+/** MapLibre image-name для каждого slug'а. */
+export const textureImageId = (slug: string): string => `forest-${slug}`;
+
+// ─── Цвета (fallback без текстур) ────────────────────────────────────────────
+// Примерно соответствуют усреднённому цвету текстуры коры.
+export const FOREST_COLORS: Record<ForestSlug, string> = {
+  pine: "#8b5a34",
+  spruce: "#3e2e1c",
+  larch: "#9a4626",
+  fir: "#56564e",
+  cedar: "#5c3a24",
+  birch: "#eee8da",
+  aspen: "#9ea48c",
+  alder: "#6c5844",
+  oak: "#5a3c20",
+  linden: "#a48c72",
+  maple: "#7e5638",
+  mixed_coniferous: "#463a22",
+  mixed_broadleaved: "#a0845a",
+  mixed: "#607244",
   unknown: "#9e9e9e",
+};
+
+/**
+ * Paint через fill-pattern. Требует чтобы `map.addImage("forest-<slug>", ...)`
+ * был вызван ДО применения paint'а. Иначе MapLibre тихо не покажет слой.
+ */
+export const FOREST_LAYER_PAINT_PATTERN = {
+  "fill-pattern": [
+    "match",
+    ["get", "dominant_species"],
+    "pine", textureImageId("pine"),
+    "spruce", textureImageId("spruce"),
+    "larch", textureImageId("larch"),
+    "fir", textureImageId("fir"),
+    "cedar", textureImageId("cedar"),
+    "birch", textureImageId("birch"),
+    "aspen", textureImageId("aspen"),
+    "alder", textureImageId("alder"),
+    "oak", textureImageId("oak"),
+    "linden", textureImageId("linden"),
+    "maple", textureImageId("maple"),
+    "mixed_coniferous", textureImageId("mixed_coniferous"),
+    "mixed_broadleaved", textureImageId("mixed_broadleaved"),
+    "mixed", textureImageId("mixed"),
+    textureImageId("unknown"),
+  ],
+  "fill-opacity": 0.88,
 } as const;
 
 /**
- * Paint-спецификация MapLibre для forest-слоя.
- * Ожидает feature property 'dominant_species' — совпадает с тем, что мы
- * пишем в Mapbox Vector Tile при генерации тайлов (см. services/geodata).
+ * Paint через fill-color — fallback если textures не загрузились.
  */
-export const FOREST_LAYER_PAINT = {
+export const FOREST_LAYER_PAINT_COLOR = {
   "fill-color": [
     "match",
     ["get", "dominant_species"],
@@ -51,5 +106,8 @@ export const FOREST_LAYER_PAINT = {
     "mixed", FOREST_COLORS.mixed,
     FOREST_COLORS.unknown,
   ],
-  "fill-opacity": 0.7,
+  "fill-opacity": 0.72,
 } as const;
+
+// Обратная совместимость — старое имя указывает на fallback-вариант
+export const FOREST_LAYER_PAINT = FOREST_LAYER_PAINT_COLOR;

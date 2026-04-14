@@ -1,0 +1,80 @@
+{
+  "size": 256,
+  "patterns": [
+    {
+      "slug": "pine",
+      "file": "pine.png",
+      "size": 256
+    },
+    {
+      "slug": "spruce",
+      "file": "spruce.png",
+      "size": 256
+    },
+    {
+      "slug": "larch",
+      "file": "larch.png",
+      "size": 256
+    },
+    {
+      "slug": "fir",
+      "file": "fir.png",
+      "size": 256
+    },
+    {
+      "slug": "cedar",
+      "file": "cedar.png",
+      "size": 256
+    },
+    {
+      "slug": "birch",
+      "file": "birch.png",
+      "size": 256
+    },
+    {
+      "slug": "aspen",
+      "file": "aspen.png",
+      "size": 256
+    },
+    {
+      "slug": "alder",
+      "file": "alder.png",
+      "size": 256
+    },
+    {
+      "slug": "oak",
+      "file": "oak.png",
+      "size": 256
+    },
+    {
+      "slug": "linden",
+      "file": "linden.png",
+      "size": 256
+    },
+    {
+      "slug": "maple",
+      "file": "maple.png",
+      "size": 256
+    },
+    {
+      "slug": "mixed_coniferous",
+      "file": "mixed_coniferous.png",
+      "size": 256
+    },
+    {
+      "slug": "mixed_broadleaved",
+      "file": "mixed_broadleaved.png",
+      "size": 256
+    },
+    {
+      "slug": "mixed",
+      "file": "mixed.png",
+      "size": 256
+    },
+    {
+      "slug": "unknown",
+      "file": "unknown.png",
+      "size": 256
+    }
+  ]
+}
