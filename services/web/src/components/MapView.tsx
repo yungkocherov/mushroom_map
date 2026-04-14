@@ -213,11 +213,14 @@ export function MapView() {
   const [baseMap, setBaseMap] = useState<BaseMapMode>("osm");
   const [forestVisible, setForestVisible] = useState(true);
   const [forestLoaded, setForestLoaded] = useState(false);
+  const [styleSwitching, setStyleSwitching] = useState(false);
 
   // Refs для доступа из стабильных колбэков без пересоздания
   const forestVisibleRef = useRef(forestVisible);
   forestVisibleRef.current = forestVisible;
   const forestLoadedRef = useRef(false);
+  // Пропускаем первый рендер эффекта смены стиля (карта уже создана с OSM)
+  const baseMapInitialized = useRef(false);
 
   // Вызывается при смене стиля — переaddит лесной слой только если он уже был загружен
   const setupForestAndInteractions = useCallback((m: Map) => {
@@ -318,12 +321,19 @@ export function MapView() {
   useEffect(() => {
     const m = map.current;
     if (!m) return;
-    if (!m.loaded()) return;
+
+    // Пропускаем первый запуск — карта уже инициализирована с нужным стилем
+    if (!baseMapInitialized.current) {
+      baseMapInitialized.current = true;
+      return;
+    }
 
     const target =
       baseMap === "scheme" ? SCHEME_STYLE_URL
       : baseMap === "satellite" ? SATELLITE_STYLE
       : INLINE_STYLE;
+
+    setStyleSwitching(true);
     m.setStyle(target as maplibregl.StyleSpecification | string);
 
     const cleanup = () => {
@@ -335,6 +345,7 @@ export function MapView() {
     const onSwitch = () => {
       if (m.isStyleLoaded()) {
         cleanup();
+        setStyleSwitching(false);
         setupForestAndInteractions(m);
       }
     };
@@ -342,16 +353,20 @@ export function MapView() {
     // Если стиль упал с ошибкой (CDN недоступен) — откатываемся на OSM
     const onError = (e: { error?: { message?: string } }) => {
       const msg = e.error?.message ?? "";
-      if (msg.includes("style") || msg.includes("openfreemap") || msg.includes("Failed to fetch")) {
+      if (msg.includes("style") || msg.includes("openfreemap") || msg.includes("Failed to fetch") || msg.includes("load")) {
         cleanup();
+        setStyleSwitching(false);
         setBaseMap("osm");
       }
     };
 
     // Таймаут: 8 сек — если стиль так и не загрузился, откат на OSM
     const timer = setTimeout(() => {
+      cleanup();
+      setStyleSwitching(false);
       if (!m.isStyleLoaded()) {
-        cleanup();
+        // Принудительно применяем OSM — setStyle всегда сработает
+        m.setStyle(INLINE_STYLE);
         setBaseMap("osm");
       }
     }, 8000);
@@ -372,6 +387,16 @@ export function MapView() {
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} className="map-root" />
+      {styleSwitching && (
+        <div style={{
+          position: "absolute", inset: 0,
+          background: "rgba(255,255,255,0.7)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          zIndex: 20, fontFamily: "system-ui, sans-serif", fontSize: 14, color: "#444",
+        }}>
+          Загружаю подложку…
+        </div>
+      )}
       <MapControls
         baseMap={baseMap}
         onBaseMapChange={setBaseMap}
