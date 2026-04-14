@@ -75,6 +75,10 @@ SPECIES_ABBR_TO_SLUG: Final[dict[str, ForestTypeSlug]] = {
     "олс":  "alder",        # ольха серая
     "олч":  "alder",        # ольха чёрная
     "ольха": "alder",
+    "ольха серая": "alder",
+    "ольха серая (белая)": "alder",
+    "ольха черная": "alder",
+    "ольха чёрная": "alder",
 
     # Широколиственные
     "д":    "oak",          # дуб (Quercus)
@@ -85,6 +89,33 @@ SPECIES_ABBR_TO_SLUG: Final[dict[str, ForestTypeSlug]] = {
     "клён": "maple",
     "клен": "maple",
 }
+
+
+def species_label_to_slug(label: str) -> ForestTypeSlug | None:
+    """Нормализует русскую метку породы ("Ель", "Ольха серая (белая)") в slug.
+
+    Используется для файлов, где у выдела записана только доминирующая
+    порода одним словом (ФГИС ЛК TAXATION_PIECE.tree_species), без
+    полноценной формулы типа «6Е3С1Б».
+    """
+    if not label:
+        return None
+    norm = " ".join(label.strip().lower().replace("ё", "е").split())
+    if norm in SPECIES_ABBR_TO_SLUG:
+        return SPECIES_ABBR_TO_SLUG[norm]
+    # убираем уточнения в скобках: "ольха серая (белая)" -> "ольха серая"
+    no_parens = " ".join(
+        word for word in norm.replace("(", " ").replace(")", " ").split()
+    )
+    if no_parens in SPECIES_ABBR_TO_SLUG:
+        return SPECIES_ABBR_TO_SLUG[no_parens]
+    # префикс-матч: "берёза повислая" -> "береза"
+    tokens = norm.split()
+    for i in range(len(tokens), 0, -1):
+        prefix = " ".join(tokens[:i])
+        if prefix in SPECIES_ABBR_TO_SLUG:
+            return SPECIES_ABBR_TO_SLUG[prefix]
+    return None
 
 # Дополнительные виды, которые парсим, но у нас нет slug'а — они уходят в
 # unmapped и не считаются в композиции. Перечислены чтобы отличать «неизвестное
@@ -175,14 +206,31 @@ def parse_species_formula(formula: str) -> FormulaParseResult:
     """
     Парсит таксационную формулу в композицию по slug'ам.
 
+    Поддерживает два формата:
+      1. «6Е3С1Б» (классический таксационный)
+      2. «Ель» / «Ольха серая (белая)» (plain label, ФГИС ЛК)
+
     Raises:
-        FormulaParseError — если формула совсем не распозналась и мы не
+        FormulaParseError — если метка совсем не распозналась и мы не
             можем вернуть даже одной породы.
     """
     raw = formula or ""
     text = raw.strip()
     if not text:
         raise FormulaParseError("пустая формула")
+
+    # Быстрый путь: plain label (без цифр) — одно слово / словосочетание
+    if not any(ch.isdigit() for ch in text):
+        slug = species_label_to_slug(text)
+        if slug is not None:
+            return FormulaParseResult(
+                composition={slug: 1.0},
+                unmapped=[],
+                unknown=[],
+                trace_fraction=0.0,
+                raw=raw,
+            )
+        raise FormulaParseError(f"plain label {raw!r} не маппится в slug")
 
     # сведение дубликатов пробелов; NB: не трогаем регистр, он нужен для регексов
     text_norm = re.sub(r"\s+", " ", text)

@@ -31,7 +31,12 @@ data/rosleshoz/*.prj
 data/rosleshoz/*.cpg
 data/rosleshoz/*.fgb
 data/rosleshoz/*.gdb/
+data/rosleshoz/fgislk_tiles/
+data/tmp/
 data/vk/
+
+# Claude Code session data
+.claude/
 
 # Env / secrets
 .env

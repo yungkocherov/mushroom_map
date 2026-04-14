@@ -64,6 +64,7 @@ from geodata.types import BoundingBox, NormalizedForestPolygon
 #: Поиск ведётся без учёта регистра.
 DEFAULT_FORMULA_FIELD_CANDIDATES: tuple[str, ...] = (
     "formula",
+    "tree_species",             # ФГИС ЛК: "Ель" / "Ольха серая (белая)"
     "species_formula",
     "species_comp",
     "порода",
@@ -75,7 +76,14 @@ DEFAULT_FORMULA_FIELD_CANDIDATES: tuple[str, ...] = (
 )
 
 DEFAULT_ID_FIELD_CANDIDATES: tuple[str, ...] = (
-    "id", "vydel_id", "gid", "objectid", "fid", "номер_выдела", "выдел",
+    "externalid",               # ФГИС ЛК MVT: "47:10:2:80:14"
+    "vydel_id",
+    "id",
+    "gid",
+    "objectid",
+    "fid",
+    "номер_выдела",
+    "выдел",
 )
 
 
