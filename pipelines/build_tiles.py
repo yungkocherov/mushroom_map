@@ -42,7 +42,7 @@ DEFAULT_LAYER = "forest"
 DEFAULT_MINZOOM = 7
 DEFAULT_MAXZOOM = 13  # z=14 в 4 раза больше тайлов, MapLibre отлично overzoom-ит с z=13
 DEFAULT_EXTENT = 4096
-DEFAULT_BUFFER = 256     # для красивых границ на стыках тайлов
+DEFAULT_BUFFER = 0       # 0 устраняет двойной рендер в buffer-зонах (иначе fill-pattern даёт видимые швы)
 DEFAULT_REGION = "lenoblast"
 
 # Порог area_m2 по зумам — на мелких масштабах выкидываем мелочь,
@@ -207,7 +207,7 @@ def main() -> None:
                 min_area_z = MIN_AREA_BY_ZOOM.get(z, 0.0)
                 print(
                     f"\n  z={z:<2d} x:{x_min}..{x_max} y:{y_min}..{y_max} "
-                    f"({n_tiles} tiles, min_area={min_area_z:.0f} m²)"
+                    f"({n_tiles} tiles, min_area={min_area_z:.0f} m2)"
                 )
 
                 z_ok = 0
