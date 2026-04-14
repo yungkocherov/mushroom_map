@@ -341,27 +341,24 @@ export function MapView() {
       : baseMap === "satellite" ? SATELLITE_STYLE
       : INLINE_STYLE;
 
+    let rafId = 0;
+
     const cleanup = () => {
-      m.off("styledata", onSwitch);
       m.off("error", onError);
       clearTimeout(timer);
+      cancelAnimationFrame(rafId);
     };
 
-    const onSwitch = () => {
-      // Для inline-стилей (osm/satellite) isStyleLoaded() может вернуть false
-      // в момент styledata — стиль применён без внешних ресурсов и достаточно
-      // самого события. Для CDN-схемы ждём полной загрузки (isStyleLoaded).
-      if (baseMap === "scheme" && !m.isStyleLoaded()) return;
+    const onStyleReady = () => {
       cleanup();
       setStyleSwitching(false);
       setupForestAndInteractions(m);
     };
 
     // Если стиль упал с ошибкой (CDN недоступен) — откатываемся на OSM.
-    // Проверяем isStyleLoaded(): если стиль уже загружен, ошибка относится к
-    // тайлам/ресурсам рендера (нормально), а не к загрузке самого style JSON.
+    // Игнорируем ошибки после загрузки стиля (тайловые 404 и т.п.).
     const onError = (e: { error?: { message?: string } }) => {
-      if (m.isStyleLoaded()) return; // тайловые ошибки после загрузки — не наше дело
+      if (m.isStyleLoaded()) return;
       const msg = e.error?.message ?? "";
       if (msg.includes("Failed to fetch") || msg.includes("style")) {
         cleanup();
@@ -375,22 +372,28 @@ export function MapView() {
       cleanup();
       setStyleSwitching(false);
       if (!m.isStyleLoaded()) {
-        // Принудительно применяем OSM — setStyle всегда сработает
         m.setStyle(INLINE_STYLE);
         setBaseMap("osm");
       }
     }, 8000);
 
-    // ВАЖНО: регистрируем слушатели ДО setStyle.
-    // Для inline-объектов (INLINE_STYLE, SATELLITE_STYLE) MapLibre вызывает
-    // styledata синхронно внутри setStyle — если зарегистрировать после, событие
-    // уже пропущено и onSwitch никогда не сработает.
-    m.on("styledata", onSwitch);
     m.on("error", onError as Parameters<typeof m.on>[1]);
 
     // Оверлей только для внешнего CDN-стиля — inline-стили грузятся мгновенно
     if (baseMap === "scheme") setStyleSwitching(true);
     m.setStyle(target as maplibregl.StyleSpecification | string);
+
+    // Поллинг через rAF: ждём isStyleLoaded() = true.
+    // Нельзя полагаться на событие styledata — для CDN-стиля оно стреляет
+    // до загрузки спрайтов/глифов, а повторного события после их загрузки нет.
+    const checkLoaded = () => {
+      if (m.isStyleLoaded()) {
+        onStyleReady();
+      } else {
+        rafId = requestAnimationFrame(checkLoaded);
+      }
+    };
+    rafId = requestAnimationFrame(checkLoaded);
 
     return cleanup;
   }, [baseMap, setupForestAndInteractions]);
