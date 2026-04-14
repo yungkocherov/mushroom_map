@@ -59,6 +59,11 @@ export const FOREST_COLORS: Record<ForestSlug, string> = {
 /**
  * Paint через fill-pattern. Требует чтобы `map.addImage("forest-<slug>", ...)`
  * был вызван ДО применения paint'а. Иначе MapLibre тихо не покажет слой.
+ *
+ * Opacity = 1.0 — принципиально. С opacity < 1 на стыках MVT-тайлов
+ * перекрытие buffer-зон соседних тайлов рендерится дважды → заметные
+ * более тёмные горизонтальные/вертикальные полосы. При opacity = 1
+ * повторное рисование поверх себя невидимо.
  */
 export const FOREST_LAYER_PAINT_PATTERN = {
   "fill-pattern": [
@@ -80,7 +85,8 @@ export const FOREST_LAYER_PAINT_PATTERN = {
     "mixed", textureImageId("mixed"),
     textureImageId("unknown"),
   ],
-  "fill-opacity": 0.88,
+  "fill-opacity": 1.0,
+  "fill-antialias": false,
 } as const;
 
 /**
@@ -106,7 +112,8 @@ export const FOREST_LAYER_PAINT_COLOR = {
     "mixed", FOREST_COLORS.mixed,
     FOREST_COLORS.unknown,
   ],
-  "fill-opacity": 0.72,
+  "fill-opacity": 1.0,
+  "fill-antialias": false,
 } as const;
 
 // Обратная совместимость — старое имя указывает на fallback-вариант

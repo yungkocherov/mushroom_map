@@ -180,8 +180,9 @@ function addForestLayer(m: Map) {
       type: "line",
       source: "forest",
       "source-layer": "forest",
-      paint: { "line-color": "#00000040", "line-width": 0.8 },
-      minzoom: 10,
+      // solid (opacity 1) чтобы не двоилось на стыках тайлов
+      paint: { "line-color": "#2a1f14", "line-width": 0.6, "line-opacity": 1 },
+      minzoom: 11,
     },
     beforeId,
   );
