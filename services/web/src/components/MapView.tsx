@@ -284,7 +284,10 @@ export function MapView() {
 
     const m = map.current;
 
-    m.on("load", () => setupForestAndInteractions(m));
+    // styledata стреляет как только стиль обработан — не ждём загрузки тайлов подложки.
+    // load ждёт первый visible рендер включая тайлы OpenFreeMap; если CDN завис — load
+    // никогда не стреляет и лесной слой не добавляется. styledata надёжнее.
+    m.once("styledata", () => setupForestAndInteractions(m));
 
     // Если внешний стиль не загрузился — fallback на inline (только в начальной загрузке)
     m.on("error", (e) => {
