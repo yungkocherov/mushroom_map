@@ -86,6 +86,7 @@ export const FOREST_LAYER_PAINT_PATTERN = {
     textureImageId("unknown"),
   ],
   "fill-opacity": 0.8,
+  "fill-outline-color": "rgba(0,0,0,0)",
   "fill-antialias": true,
 } as const;
 
@@ -115,6 +116,7 @@ export const FOREST_LAYER_PAINT_COLOR = {
     FOREST_COLORS.unknown,
   ],
   "fill-opacity": 0.8,
+  "fill-outline-color": "rgba(0,0,0,0)",
   "fill-antialias": true,
 } as const;
 
