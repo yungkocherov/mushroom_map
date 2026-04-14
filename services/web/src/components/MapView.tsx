@@ -219,8 +219,9 @@ export function MapView() {
   const forestVisibleRef = useRef(forestVisible);
   forestVisibleRef.current = forestVisible;
   const forestLoadedRef = useRef(false);
-  // Пропускаем первый рендер эффекта смены стиля (карта уже создана с OSM)
-  const baseMapInitialized = useRef(false);
+  // Отслеживаем уже применённый baseMap чтобы не вызывать setStyle зря
+  // (совпадает с начальным значением useState, чтобы первый рендер был no-op)
+  const appliedBaseMap = useRef<BaseMapMode>("osm");
 
   // Вызывается при смене стиля — переaddит лесной слой только если он уже был загружен
   const setupForestAndInteractions = useCallback((m: Map) => {
@@ -322,18 +323,17 @@ export function MapView() {
     const m = map.current;
     if (!m) return;
 
-    // Пропускаем первый запуск — карта уже инициализирована с нужным стилем
-    if (!baseMapInitialized.current) {
-      baseMapInitialized.current = true;
-      return;
-    }
+    // Нет реальной смены — пропускаем (защита от StrictMode двойного запуска)
+    if (appliedBaseMap.current === baseMap) return;
+    appliedBaseMap.current = baseMap;
 
     const target =
       baseMap === "scheme" ? SCHEME_STYLE_URL
       : baseMap === "satellite" ? SATELLITE_STYLE
       : INLINE_STYLE;
 
-    setStyleSwitching(true);
+    // Оверлей только для внешнего CDN-стиля — inline-стили грузятся мгновенно
+    if (baseMap === "scheme") setStyleSwitching(true);
     m.setStyle(target as maplibregl.StyleSpecification | string);
 
     const cleanup = () => {
