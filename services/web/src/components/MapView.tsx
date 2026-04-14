@@ -357,10 +357,13 @@ export function MapView() {
       setupForestAndInteractions(m);
     };
 
-    // Если стиль упал с ошибкой (CDN недоступен) — откатываемся на OSM
+    // Если стиль упал с ошибкой (CDN недоступен) — откатываемся на OSM.
+    // Проверяем isStyleLoaded(): если стиль уже загружен, ошибка относится к
+    // тайлам/ресурсам рендера (нормально), а не к загрузке самого style JSON.
     const onError = (e: { error?: { message?: string } }) => {
+      if (m.isStyleLoaded()) return; // тайловые ошибки после загрузки — не наше дело
       const msg = e.error?.message ?? "";
-      if (msg.includes("style") || msg.includes("openfreemap") || msg.includes("Failed to fetch") || msg.includes("load")) {
+      if (msg.includes("Failed to fetch") || msg.includes("style")) {
         cleanup();
         setStyleSwitching(false);
         setBaseMap("osm");
