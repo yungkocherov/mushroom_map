@@ -85,12 +85,14 @@ export const FOREST_LAYER_PAINT_PATTERN = {
     "mixed", textureImageId("mixed"),
     textureImageId("unknown"),
   ],
-  "fill-opacity": 1.0,
-  "fill-antialias": false,
+  "fill-opacity": 0.8,
+  "fill-antialias": true,
 } as const;
 
 /**
- * Paint через fill-color — fallback если textures не загрузились.
+ * Paint через fill-color.
+ * fill-opacity=0.8: надписи растровой подложки просвечивают сквозь лес.
+ * fill-antialias=true: безопасно т.к. buffer=0 (нет перекрывающихся зон тайлов).
  */
 export const FOREST_LAYER_PAINT_COLOR = {
   "fill-color": [
@@ -112,8 +114,8 @@ export const FOREST_LAYER_PAINT_COLOR = {
     "mixed", FOREST_COLORS.mixed,
     FOREST_COLORS.unknown,
   ],
-  "fill-opacity": 1.0,
-  "fill-antialias": false,
+  "fill-opacity": 0.8,
+  "fill-antialias": true,
 } as const;
 
 // Обратная совместимость — старое имя указывает на fallback-вариант

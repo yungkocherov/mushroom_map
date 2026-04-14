@@ -140,17 +140,8 @@ function addForestLayer(m: Map) {
     },
     beforeId,
   );
-  m.addLayer(
-    {
-      id: "forest-outline",
-      type: "line",
-      source: "forest",
-      "source-layer": "forest",
-      paint: { "line-color": "#2a1f14", "line-width": 0.6, "line-opacity": 1 },
-      minzoom: 11,
-    },
-    beforeId,
-  );
+  // outline убран: явные линии по каждому краю полигона дают "блочный" вид;
+  // цветовые переходы между породами и так видны на границах.
 }
 
 // ─── Встроенный стиль (fallback если внешний недоступен) ─────────────────────
@@ -200,7 +191,7 @@ const SCHEME_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
 
 function setForestVisibility(m: Map, visible: boolean) {
   const v = visible ? "visible" : "none";
-  for (const id of ["forest-fill", "forest-outline"]) {
+  for (const id of ["forest-fill"]) {
     if (m.getLayer(id)) {
       m.setLayoutProperty(id, "visibility", v);
     }
