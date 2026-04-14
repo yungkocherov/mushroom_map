@@ -122,12 +122,16 @@ function findFirstSymbolLayerId(m: Map): string | undefined {
  * Тайлы PMTiles подгружаются лениво по мере панорамирования/зума.
  */
 function addForestLayer(m: Map) {
-  if (m.getSource("forest")) return; // уже добавлен
+  if (m.getLayer("forest-fill")) return; // слой уже добавлен
 
-  m.addSource("forest", {
-    type: "vector",
-    url: FOREST_PMTILES_URL,
-  });
+  // Source может пережить setStyle (diff-режим), а слой — нет. Добавляем source
+  // только если его нет.
+  if (!m.getSource("forest")) {
+    m.addSource("forest", {
+      type: "vector",
+      url: FOREST_PMTILES_URL,
+    });
+  }
   const beforeId = findFirstSymbolLayerId(m);
 
   m.addLayer(
@@ -214,9 +218,14 @@ export function MapView() {
   // (совпадает с начальным значением useState, чтобы первый рендер был no-op)
   const appliedBaseMap = useRef<BaseMapMode>("osm");
 
-  // Вызывается при смене стиля — переaddит лесной слой только если он уже был загружен
+  // Вызывается при смене стиля — переaddит лесной слой только если он уже был загружен.
+  // Перед добавлением принудительно удаляем остатки предыдущего стиля: setStyle с
+  // diff=true может оставить source живым но снести layer, что приводит к тому что
+  // addForestLayer видит source и делает early-return не добавив layer.
   const setupForestAndInteractions = useCallback((m: Map) => {
     if (!forestLoadedRef.current) return;
+    if (m.getLayer("forest-fill")) m.removeLayer("forest-fill");
+    if (m.getSource("forest")) m.removeSource("forest");
     addForestLayer(m);
     setForestVisibility(m, forestVisibleRef.current);
   }, []);
@@ -332,10 +341,6 @@ export function MapView() {
       : baseMap === "satellite" ? SATELLITE_STYLE
       : INLINE_STYLE;
 
-    // Оверлей только для внешнего CDN-стиля — inline-стили грузятся мгновенно
-    if (baseMap === "scheme") setStyleSwitching(true);
-    m.setStyle(target as maplibregl.StyleSpecification | string);
-
     const cleanup = () => {
       m.off("styledata", onSwitch);
       m.off("error", onError);
@@ -371,8 +376,16 @@ export function MapView() {
       }
     }, 8000);
 
+    // ВАЖНО: регистрируем слушатели ДО setStyle.
+    // Для inline-объектов (INLINE_STYLE, SATELLITE_STYLE) MapLibre вызывает
+    // styledata синхронно внутри setStyle — если зарегистрировать после, событие
+    // уже пропущено и onSwitch никогда не сработает.
     m.on("styledata", onSwitch);
     m.on("error", onError as Parameters<typeof m.on>[1]);
+
+    // Оверлей только для внешнего CDN-стиля — inline-стили грузятся мгновенно
+    if (baseMap === "scheme") setStyleSwitching(true);
+    m.setStyle(target as maplibregl.StyleSpecification | string);
 
     return cleanup;
   }, [baseMap, setupForestAndInteractions]);
