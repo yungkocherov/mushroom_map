@@ -40,10 +40,22 @@ from pmtiles.writer import Writer
 
 DEFAULT_LAYER = "forest"
 DEFAULT_MINZOOM = 7
-DEFAULT_MAXZOOM = 14
+DEFAULT_MAXZOOM = 13  # z=14 в 4 раза больше тайлов, MapLibre отлично overzoom-ит с z=13
 DEFAULT_EXTENT = 4096
 DEFAULT_BUFFER = 256     # для красивых границ на стыках тайлов
 DEFAULT_REGION = "lenoblast"
+
+# Порог area_m2 по зумам — на мелких масштабах выкидываем мелочь,
+# которую всё равно не видно. Это кратно уменьшает размер PMTiles и
+# ускоряет парсинг тайлов в MapLibre.
+MIN_AREA_BY_ZOOM: dict[int, float] = {
+    7:  500_000.0,    # 50 га
+    8:  250_000.0,    # 25 га
+    9:   50_000.0,    # 5 га
+    10:  10_000.0,    # 1 га
+    11:   3_000.0,    # 0.3 га
+    # z=12+ — всё что есть в forest_unified
+}
 
 
 def _build_dsn() -> str:
@@ -109,10 +121,12 @@ def build_tile_bytes(
     layer: str,
     extent: int,
     buffer: int,
+    min_area: float,
 ) -> bytes | None:
     """Возвращает gzip-сжатые MVT-байты тайла или None если пусто.
 
     Требует предварительно вызванного prepare_projected_source(conn).
+    `min_area` — нижний порог area_m2 (для уменьшения файла на низких зумах).
     """
     row = conn.execute(
         """
@@ -125,7 +139,8 @@ def build_tile_bytes(
                 f.area_m2,
                 ST_AsMVTGeom(f.geom, ST_TileEnvelope(%s, %s, %s), %s, %s, true) AS geom
             FROM forest_3857 f
-            WHERE f.geom && ST_TileEnvelope(%s, %s, %s)
+            WHERE f.area_m2 >= %s
+              AND f.geom && ST_TileEnvelope(%s, %s, %s)
         )
         SELECT ST_AsMVT(mvt_src, %s, %s, 'geom')
         FROM mvt_src
@@ -133,6 +148,7 @@ def build_tile_bytes(
         """,
         (
             z, x, y, extent, buffer,    # ST_AsMVTGeom
+            min_area,                   # area filter
             z, x, y,                    # ST_TileEnvelope
             layer, extent,              # ST_AsMVT
         ),
@@ -188,9 +204,10 @@ def main() -> None:
                 x_min, x_max = min(x0, x1), max(x0, x1)
                 y_min, y_max = min(y0, y1), max(y0, y1)
                 n_tiles = (x_max - x_min + 1) * (y_max - y_min + 1)
+                min_area_z = MIN_AREA_BY_ZOOM.get(z, 0.0)
                 print(
                     f"\n  z={z:<2d} x:{x_min}..{x_max} y:{y_min}..{y_max} "
-                    f"({n_tiles} tiles)"
+                    f"({n_tiles} tiles, min_area={min_area_z:.0f} m²)"
                 )
 
                 z_ok = 0
@@ -206,6 +223,7 @@ def main() -> None:
                             layer=args.layer,
                             extent=args.extent,
                             buffer=args.buffer,
+                            min_area=min_area_z,
                         )
                         done_in_z += 1
                         if data is None:
