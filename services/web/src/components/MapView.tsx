@@ -381,7 +381,6 @@ export function MapView() {
   const [ooptLoaded, setOoptLoaded] = useState(false);
   const [roadsVisible, setRoadsVisible] = useState(true);
   const [roadsLoaded, setRoadsLoaded] = useState(false);
-  const [styleSwitching, setStyleSwitching] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Refs для доступа из стабильных колбэков без пересоздания
@@ -641,9 +640,9 @@ export function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Смена базовой подложки. Все 4 стиля — inline растровые, поэтому просто
-  // setStyle() + дождаться styledata + переadd'ить оверлеи. Никакого fetch/JSON-
-  // модификации/RAF-поллинга больше не нужно.
+  // Смена базовой подложки. Все 4 стиля — inline растровые, setStyle возвращает
+  // управление мгновенно, styledata выстрелит в том же тике. Никакого оверлея
+  // «Загружаю подложку» не нужно — тайлы подтягиваются лениво при панорамировании.
   useEffect(() => {
     const m = map.current;
     if (!m) return;
@@ -657,45 +656,21 @@ export function MapView() {
       baseMap === "satellite" ? SATELLITE_STYLE :
                                 INLINE_STYLE;
 
-    setStyleSwitching(true);
     m.setStyle(style);
 
     const onReady = () => {
       if (!m.isStyleLoaded()) return;
       m.off("styledata", onReady);
-      setStyleSwitching(false);
       setupForestAndInteractions(m);
     };
     m.on("styledata", onReady);
 
-    // Safety net: если через 8 сек стиль не загрузился (например тайлы не тянутся),
-    // всё равно убираем оверлей — карта уже что-то показывает.
-    const timer = setTimeout(() => {
-      m.off("styledata", onReady);
-      setStyleSwitching(false);
-      setupForestAndInteractions(m);
-    }, 8000);
-
-    return () => {
-      m.off("styledata", onReady);
-      clearTimeout(timer);
-    };
+    return () => { m.off("styledata", onReady); };
   }, [baseMap, setupForestAndInteractions]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} className="map-root" />
-
-      {styleSwitching && (
-        <div style={{
-          position: "absolute", inset: 0,
-          background: "rgba(255,255,255,0.7)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          zIndex: 20, fontFamily: "system-ui, sans-serif", fontSize: 14, color: "#444",
-        }}>
-          Загружаю подложку…
-        </div>
-      )}
 
       <MapControls
         baseMap={baseMap}
