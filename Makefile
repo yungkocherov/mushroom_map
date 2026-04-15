@@ -2,6 +2,7 @@
         install install-geodata install-api install-web \
         api-dev web-dev \
         ingest-forest ingest-vk extract-places build-tiles \
+        test test-geodata test-api \
         lint clean
 
 help:
@@ -24,6 +25,11 @@ help:
 	@echo "    make build-tiles REGION=lenoblast"
 	@echo "    make ingest-vk REGION=lenoblast"
 	@echo "    make extract-places REGION=lenoblast"
+	@echo ""
+	@echo "  Тесты:"
+	@echo "    make test             обе test-suite'ы (geodata + api)"
+	@echo "    make test-geodata     только formula parser (pure python)"
+	@echo "    make test-api         smoke против живого API (docker up)"
 
 # ─── Docker ───────────────────────────────────────────────
 up:
@@ -78,6 +84,18 @@ extract-places:
 
 build-tiles:
 	python pipelines/build_tiles.py --region $(REGION)
+
+# ─── Tests ────────────────────────────────────────────────
+# Гоняем раздельно, потому что у каждого сервиса свой pyproject.toml и
+# pytest ругается на дубликаты tests/__init__.py если запустить из корня.
+
+test: test-geodata test-api
+
+test-geodata:
+	PYTHONPATH=services/geodata/src python -m pytest services/geodata/tests/ -v
+
+test-api:
+	cd services/api && PYTHONPATH=src python -m pytest tests/ -v
 
 # ─── Dev ──────────────────────────────────────────────────
 lint:
