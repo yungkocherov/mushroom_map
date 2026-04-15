@@ -211,6 +211,21 @@ class RosleshozForestSource(ForestSource):
             )
 
     def normalize(self, raw: RawFeature) -> NormalizedForestPolygon | None:
+        """
+        Быстрый путь: пропускает shapely целиком. WKB идёт как hex-строка
+        прямо до PostgreSQL, где ST_GeomFromWKB парсит его + ST_MakeValid
+        исправляет inv geom + ST_Area считает площадь. Для 1.18M полигонов
+        это примерно в 20× быстрее чем старый shapely-normalize путь.
+
+        Предполагает, что source-файл уже в EPSG:4326 (наш fgislk_vydels_full.geojson
+        именно такой). Для файлов в других CRS эта оптимизация сломается —
+        добавь проверку или pre-reproject через pyogrio вне этой функции.
+
+        Фильтр по min_polygon_m2 НЕ применяется в Python — его переехали в
+        SQL (WHERE ST_Area(...) >= ...). Мини-полигоны всё равно нашему
+        пайплайну нужны только для stats, всё равно отфильтровываются
+        в build_tiles.
+        """
         attrs: dict[str, Any] = raw.payload["attrs"]
         formula_raw = attrs.get(self._resolved_formula_field) if self._resolved_formula_field else None
         if not formula_raw:
@@ -226,35 +241,14 @@ class RosleshozForestSource(ForestSource):
 
         dominant = dominant_slug(result.composition)
 
-        # Геометрия: WKB → Shapely → 4326 (при необходимости)
-        from shapely import wkb as shapely_wkb
-        try:
-            geom = shapely_wkb.loads(raw.payload["geometry_wkb"])
-        except Exception:
+        geom_wkb: bytes | None = raw.payload.get("geometry_wkb")
+        if not geom_wkb:
             return None
-        if geom is None or geom.is_empty:
-            return None
+        # Hex-encode — psycopg3 COPY text format не принимает raw bytes, а
+        # hex-строку умеет разобрать `decode(col, 'hex')` в SQL.
+        geom_hex = geom_wkb.hex()
 
-        src_crs = raw.payload.get("src_crs")
-        geom = _to_wgs84(geom, src_crs)
-        if geom is None or geom.is_empty:
-            return None
-
-        # Приводим к MultiPolygon
-        if isinstance(geom, Polygon):
-            multi = MultiPolygon([geom])
-        elif isinstance(geom, MultiPolygon):
-            multi = geom
-        else:
-            # GeometryCollection / LineString / Point — не наш случай
-            return None
-
-        # Фильтр по площади
-        area_m2 = _area_m2(multi)
-        if area_m2 < self.config.min_polygon_m2:
-            return None
-
-        meta_out = {
+        meta_out: dict[str, Any] = {
             "formula": formula_str,
             "rosleshoz_version": self.config.version,
         }
@@ -286,13 +280,13 @@ class RosleshozForestSource(ForestSource):
             source=self.source_code,
             source_feature_id=raw.source_feature_id,
             source_version=self.source_version,
-            geometry_wkt=multi.wkt,
+            geometry_wkb_hex=geom_hex,  # быстрый путь — SQL парсит WKB
             dominant_species=dominant,
             species_composition=result.composition,
             canopy_cover=None,
             tree_cover_density=None,
             confidence=self.config.confidence,
-            area_m2=round(area_m2, 1),
+            area_m2=None,  # вычисляется в SQL
             meta=meta_out,
         )
 

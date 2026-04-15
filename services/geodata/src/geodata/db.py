@@ -1,25 +1,29 @@
 """
 Запись нормализованных полигонов в таблицу forest_polygon через COPY FROM STDIN.
 
-Идея: для больших батчей (сотни тысяч полигонов) executemany() медленный —
-каждая строка гоняется как отдельный параметризованный запрос. COPY FROM STDIN
-стримит всё пачкой в одну команду и даёт в 5-10× ускорение.
+Ключевое решение: вместо ON CONFLICT DO UPDATE (дорогой для UPDATE-heavy
+нагрузки — для каждой строки надо проверить уникальный индекс, потом
+пометить старый tuple мёртвым, записать новый, обновить все индексы и
+двойной WAL) — делаем **DELETE old → INSERT new в одной транзакции**:
 
-Алгоритм:
-    1. Создаём temp-таблицу `_forest_polygon_stage` с теми же колонками, что
-       в forest_polygon, но с geometry как text (WKT) — так COPY может писать
-       плоский текст, а геометрию распарсит ST_GeomFromText в финальном INSERT.
-    2. Копим batch строк в памяти (BATCH=50k — в 25× больше чем прежние 2k).
-    3. При flush: TRUNCATE stage → COPY batch-строки → INSERT ... SELECT
-       ... FROM stage ON CONFLICT DO UPDATE.
-    4. DISTINCT ON в SELECT защищает от дублей в batch'е с одинаковым ключом
-       (иначе PostgreSQL ругается "ON CONFLICT DO UPDATE command cannot affect
-       row a second time").
+    1. DELETE FROM forest_polygon WHERE source=X AND source_version=Y
+       — единственный BTREE-range удаляет тысячи строк за миллисекунды.
+    2. COPY FROM STDIN в stage-таблицу — чистый streaming, никаких
+       индексов/constraint'ов по пути.
+    3. INSERT ... SELECT из stage в forest_polygon — без ON CONFLICT,
+       чистый bulk-insert, индексы обновляются батчем.
+
+Семантика: полный reimport всех строк для (source, version). Если в
+source-файле чего-то не хватает что раньше было — оно удалится. Для
+нашего use-case (periodic full export из ФГИС ЛК) это правильно.
+
+Альтернатива (не реализована): UPSERT с ON CONFLICT. Работает, но в
+UPDATE-heavy режиме не даёт выигрыша от COPY — нормализация в Python и
+update-стоимость доминируют.
 """
 
 from __future__ import annotations
 
-import json
 from typing import Iterable
 
 import psycopg
@@ -27,21 +31,20 @@ from psycopg.types.json import Jsonb
 
 from geodata.types import NormalizedForestPolygon
 
-#: Размер batch'а для flush. 50 000 — компромисс: крупнее → реже коммиты и
-#: выше throughput, но дольше первый прогресс-принт и больше памяти для stage.
-BATCH = 50_000
+#: Размер buffer'а для flush. 100 000 — достаточно большой, чтобы
+#: latency COPY-протокола амортизировалась, и достаточно маленький,
+#: чтобы прогресс был видимым каждую минуту.
+BATCH = 100_000
 
-#: DDL stage-таблицы. Колонки совпадают с forest_polygon кроме:
-#:   - id / ingested_at → автогенерируются в финальной таблице, не копируются
-#:   - geometry → text (WKT) в stage, geometry в finale, ST_GeomFromText в SELECT
 _STAGE_DDL = """
     CREATE TEMP TABLE IF NOT EXISTS _forest_polygon_stage (
         region_id           integer,
         source              text,
         source_feature_id   text,
         source_version      text,
-        geometry_wkt        text,
-        area_m2             double precision,
+        geometry_wkt        text,     -- old path (OSM/Copernicus)
+        geometry_wkb_hex    text,     -- fast path (Rosleshoz via pyogrio)
+        area_m2             double precision,   -- null → computed in SQL
         dominant_species    text,
         species_composition jsonb,
         canopy_cover        double precision,
@@ -54,15 +57,38 @@ _STAGE_DDL = """
 _COPY_SQL = """
     COPY _forest_polygon_stage (
         region_id, source, source_feature_id, source_version,
-        geometry_wkt, area_m2,
+        geometry_wkt, geometry_wkb_hex, area_m2,
         dominant_species, species_composition,
         canopy_cover, tree_cover_density, confidence, meta
     ) FROM STDIN
 """
 
-#: INSERT из stage в forest_polygon. DISTINCT ON защищает от batch-дублей.
-#: ST_Multi + ST_SetSRID(ST_GeomFromText(...), 4326) собирает финальную геометрию.
-_UPSERT_SQL = """
+#: INSERT из stage в forest_polygon. Без ON CONFLICT — caller удалил старые
+#: строки для этого (source, source_version) в flush(). DISTINCT ON защищает
+#: от дублей в input-потоке.
+#:
+#: Геометрия: COALESCE(WKB fast path, WKT slow path). Оба варианта проходят
+#: через ST_SetSRID(4326) + ST_MakeValid + ST_Multi. ST_MakeValid нужен
+#: потому что raw WKB из pyogrio может иметь self-intersections.
+#:
+#: area_m2: если источник прислал — берём его; иначе считаем в SQL через
+#: ST_Area(ST_Transform(..., 3857)). Это ещё один проход по координатам,
+#: но C-код PostGIS сильно быстрее shapely.
+_INSERT_SQL = """
+    WITH parsed AS (
+        SELECT
+            region_id, source, source_feature_id, source_version,
+            ST_Multi(ST_MakeValid(ST_SetSRID(
+                COALESCE(
+                    ST_GeomFromWKB(decode(geometry_wkb_hex, 'hex')),
+                    ST_GeomFromText(geometry_wkt)
+                ),
+                4326
+            ))) AS geom,
+            area_m2, dominant_species, species_composition,
+            canopy_cover, tree_cover_density, confidence, meta
+        FROM _forest_polygon_stage
+    )
     INSERT INTO forest_polygon (
         region_id, source, source_feature_id, source_version,
         geometry, area_m2,
@@ -71,22 +97,13 @@ _UPSERT_SQL = """
     )
     SELECT DISTINCT ON (source, source_feature_id, source_version)
         region_id, source, source_feature_id, source_version,
-        ST_Multi(ST_SetSRID(ST_GeomFromText(geometry_wkt), 4326)),
-        area_m2, dominant_species, species_composition,
+        geom,
+        COALESCE(area_m2, ST_Area(ST_Transform(geom, 3857))),
+        dominant_species, species_composition,
         canopy_cover, tree_cover_density, confidence, meta
-    FROM _forest_polygon_stage
+    FROM parsed
+    WHERE NOT ST_IsEmpty(geom)
     ORDER BY source, source_feature_id, source_version
-    ON CONFLICT (source, source_feature_id, source_version) DO UPDATE SET
-        region_id           = EXCLUDED.region_id,
-        geometry            = EXCLUDED.geometry,
-        area_m2             = EXCLUDED.area_m2,
-        dominant_species    = EXCLUDED.dominant_species,
-        species_composition = EXCLUDED.species_composition,
-        canopy_cover        = EXCLUDED.canopy_cover,
-        tree_cover_density  = EXCLUDED.tree_cover_density,
-        confidence          = EXCLUDED.confidence,
-        meta                = EXCLUDED.meta,
-        ingested_at         = now()
 """
 
 
@@ -98,25 +115,36 @@ def upsert_forest_polygons(
     verbose: bool = True,
 ) -> int:
     """
-    Батч-загрузка полигонов через COPY FROM STDIN + INSERT ... ON CONFLICT.
-    Идемпотентно: ON CONFLICT (source, source_feature_id, source_version) UPDATE.
-    Возвращает количество вставленных/обновлённых строк.
+    Загружает polygons в forest_polygon через DELETE старых + COPY+INSERT новых.
+    Идемпотентно: полное замещение всех строк с тем же (source, source_version).
+    Возвращает количество вставленных строк.
+
+    ВАЖНО: caller (например ingest_forest.py) может оставить conn в implicit
+    транзакции после get_region_id(). Мы явно коммитим в начале, чтобы
+    subsequent `with conn.transaction()` начинали настоящую транзакцию, а не
+    savepoint внутри outer-txn (psycopg3 RELEASE SAVEPOINT не пишет данные
+    в storage — весь ингест теряется на закрытии соединения).
     """
-    # Создаём stage-таблицу один раз за сессию (session-level temp)
+    conn.commit()
     with conn.cursor() as cur:
         cur.execute(_STAGE_DDL)
+    conn.commit()
 
+    # Мы удалим old-rows при первом flush, когда узнаем (source, source_version)
+    # из первого poly. Отслеживаем уже очищенные ключи, чтобы не дёргать DELETE
+    # каждый batch.
+    deleted_keys: set[tuple[str, str]] = set()
     total = 0
     batch: list[tuple] = []
 
     def to_row(poly: NormalizedForestPolygon) -> tuple:
-        """NormalizedForestPolygon → tuple для cur.copy().write_row()."""
         return (
             region_id,
             poly.source,
             poly.source_feature_id,
             poly.source_version,
             poly.geometry_wkt,
+            poly.geometry_wkb_hex,
             poly.area_m2,
             poly.dominant_species,
             Jsonb(poly.species_composition) if poly.species_composition else None,
@@ -130,19 +158,33 @@ def upsert_forest_polygons(
         nonlocal total
         if not batch:
             return
+        # Какие (source, version) ключи появились впервые — их надо очистить
+        keys_in_batch = {(row[1], row[3]) for row in batch}
+        new_keys = keys_in_batch - deleted_keys
         with conn.transaction():
             with conn.cursor() as cur:
-                # TRUNCATE быстрее чем DELETE для temp-таблицы
+                # Первый раз видим эти (source, version) — вычищаем старое.
+                # Для 913k строк одного source_version это одна index-range
+                # операция, занимает доли секунды.
+                for src, ver in new_keys:
+                    if verbose:
+                        print(f"  -> DELETE old rows for source={src!r} version={ver!r}...", flush=True)
+                    cur.execute(
+                        "DELETE FROM forest_polygon WHERE source = %s AND source_version = %s",
+                        (src, ver),
+                    )
+                    if verbose:
+                        print(f"     deleted {cur.rowcount}", flush=True)
+                    deleted_keys.add((src, ver))
+                # Stage clean before each flush (иначе INSERT дублирует)
                 cur.execute("TRUNCATE _forest_polygon_stage")
-                # COPY batch в stage
                 with cur.copy(_COPY_SQL) as cp:
                     for row in batch:
                         cp.write_row(row)
-                # Переливаем в forest_polygon с ON CONFLICT
-                cur.execute(_UPSERT_SQL)
+                cur.execute(_INSERT_SQL)
         total += len(batch)
         if verbose:
-            print(f"  -> загружено {total} полигонов...")
+            print(f"  -> загружено {total} полигонов...", flush=True)
         batch.clear()
 
     for poly in polygons:

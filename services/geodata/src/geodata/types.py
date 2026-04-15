@@ -55,24 +55,40 @@ class NormalizedForestPolygon:
     Унифицированное представление лесного полигона, независимо от источника.
 
     Это выходной формат ForestSource.normalize() и входной формат для БД.
+
+    Геометрия: одно из двух обязательно (оба не обязательно):
+        - geometry_wkt: WKT MULTIPOLYGON в EPSG:4326 (медленный путь через
+          shapely.wkt, нужен для источников типа OSM, где мы всё равно делаем
+          shapely-фильтрацию)
+        - geometry_wkb_hex: hex-encoded WKB в EPSG:4326 (быстрый путь —
+          используется rosleshoz/pyogrio, обходит shapely целиком. Hex потому
+          что psycopg3 COPY text format не любит сырые bytes)
+
+    area_m2: если None, вычисляется в SQL через ST_Area(ST_Transform(geom, 3857))
+    в момент INSERT'а. Это позволяет источникам вообще не парсить геометрию.
     """
     source: str                                 # 'osm' | 'copernicus' | 'rosleshoz'
     source_feature_id: str                      # id в исходной системе
     source_version: str                         # версия датасета
-    geometry_wkt: str                            # WKT геометрии (MULTIPOLYGON, EPSG:4326)
     dominant_species: ForestTypeSlug
-    species_composition: Optional[dict[str, float]] = None   # {"pine":0.6,"spruce":0.3,...} или None
+    geometry_wkt: Optional[str] = None          # медленный путь
+    geometry_wkb_hex: Optional[str] = None      # быстрый путь (обходит shapely)
+    species_composition: Optional[dict[str, float]] = None
     canopy_cover: Optional[float] = None        # 0..1
     tree_cover_density: Optional[float] = None  # 0..1
     confidence: float = 0.5                     # 0..1, надёжность классификации
-    area_m2: Optional[float] = None             # если посчитан заранее
-    meta: dict = field(default_factory=dict)    # произвольные поля от источника
+    area_m2: Optional[float] = None             # None = посчитать в SQL
+    meta: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if self.dominant_species not in FOREST_TYPE_SLUGS:
             raise ValueError(
                 f"dominant_species={self.dominant_species!r} не из канонических slug'ов. "
                 f"Допустимы: {FOREST_TYPE_SLUGS}"
+            )
+        if self.geometry_wkt is None and self.geometry_wkb_hex is None:
+            raise ValueError(
+                "NormalizedForestPolygon requires either geometry_wkt or geometry_wkb_hex"
             )
         if self.species_composition:
             total = sum(self.species_composition.values())
