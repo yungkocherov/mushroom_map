@@ -290,10 +290,60 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
 };
 
-// ─── Схема — Versatiles Colorful, подгружается MapLibre'ом напрямую ──────────
-// URL стиля, MapLibre фетчит JSON + glyphs + sprites + tiles с tiles.versatiles.org.
-// После загрузки увеличиваем text-size в finishSetup ниже.
-const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful.json";
+// ─── Схема — Versatiles Colorful (векторный стиль, ретина-чёткие подписи) ────
+// Правильный путь — через /assets/styles/colorful/style.json (не просто
+// colorful.json — тот отдаёт 404).
+const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful/style.json";
+
+const LABEL_SCALE = 1.6;
+
+/**
+ * Фетчит Versatiles Colorful, патчит под MapLibre 4.5 и увеличивает подписи.
+ *
+ * 1. sprite приходит массивом `[{id, url}]` (MapLibre 5.x multi-sprite format) —
+ *    для 4.x нужна строка, берём первый url.
+ * 2. text-size в 23 из 30 symbol-слоёв — legacy-формат `{stops: [[z, v], ...]}`,
+ *    который нельзя обернуть в ["*", k, expr]. Мутируем stops напрямую.
+ *    Остальные — плоский number, умножаем в лоб.
+ */
+async function buildSchemeStyle(): Promise<maplibregl.StyleSpecification> {
+  const resp = await fetch(SCHEME_STYLE_URL);
+  if (!resp.ok) throw new Error(`versatiles ${resp.status}`);
+  // Патчим сырой JSON, потом кастуем — MapLibre принимает и mutated объект.
+  const style = await resp.json() as {
+    sprite?: string | Array<{ id: string; url: string }>;
+    sources: Record<string, unknown>;
+    layers: Array<{ type: string; layout?: Record<string, unknown>; [k: string]: unknown }>;
+    [k: string]: unknown;
+  };
+
+  // (1) Нормализуем sprite в строку — MapLibre 4.x не понимает массив.
+  if (Array.isArray(style.sprite) && style.sprite.length > 0) {
+    style.sprite = style.sprite[0].url;
+  }
+
+  // (2) Увеличиваем text-size во всех symbol-слоях.
+  for (const layer of style.layers) {
+    if (layer.type !== "symbol" || !layer.layout) continue;
+    const ts = layer.layout["text-size"];
+    if (ts == null) continue;
+    if (typeof ts === "number") {
+      layer.layout["text-size"] = ts * LABEL_SCALE;
+    } else if (typeof ts === "object" && !Array.isArray(ts) && Array.isArray((ts as { stops?: unknown }).stops)) {
+      // Legacy: {stops: [[zoom, value], ...]}
+      const stops = (ts as { stops: Array<[number, number]> }).stops;
+      layer.layout["text-size"] = {
+        ...(ts as object),
+        stops: stops.map(([z, v]) => [z, v * LABEL_SCALE] as [number, number]),
+      };
+    } else if (Array.isArray(ts)) {
+      // Modern expression — оборачиваем в умножение.
+      layer.layout["text-size"] = ["*", LABEL_SCALE, ts];
+    }
+  }
+
+  return style as unknown as maplibregl.StyleSpecification;
+}
 
 const SCHEME_STYLE_FALLBACK: maplibregl.StyleSpecification = {
   version: 8,
@@ -313,14 +363,12 @@ const SCHEME_STYLE_FALLBACK: maplibregl.StyleSpecification = {
 };
 
 // ─── Гибрид — ESRI спутник + векторные подписи Versatiles ────────────────────
-// Берём Versatiles Colorful, оставляем только symbol-слои (подписи),
-// инжектим ESRI satellite raster как самый нижний слой. Подписи векторные →
-// на retina чёткие и масштабируемые.
+// Переиспользуем buildSchemeStyle (уже пропатченный sprite + увеличенные labels),
+// инжектим ESRI satellite как самый нижний raster-слой, и оставляем только
+// line-слои (дороги) + symbol-слои (подписи) — fill-слои из Versatiles
+// (land cover, water, building) закроют спутник.
 async function buildHybridStyle(): Promise<maplibregl.StyleSpecification> {
-  const resp = await fetch(SCHEME_STYLE_URL);
-  if (!resp.ok) throw new Error(`Versatiles style fetch failed: ${resp.status}`);
-  const style = await resp.json() as maplibregl.StyleSpecification;
-  // Добавляем ESRI satellite как новый source
+  const style = await buildSchemeStyle();
   (style.sources as Record<string, unknown>)["esri-satellite"] = {
     type: "raster",
     tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
@@ -328,11 +376,10 @@ async function buildHybridStyle(): Promise<maplibregl.StyleSpecification> {
     maxzoom: 19,
     attribution: "Imagery © Esri, Maxar",
   };
-  // Оставляем только symbol-слои (подписи/иконки) + satellite как первый слой
-  const symbolLayers = style.layers.filter(l => l.type === "symbol");
+  const kept = style.layers.filter(l => l.type === "symbol" || l.type === "line");
   style.layers = [
     { id: "esri-satellite-layer", type: "raster", source: "esri-satellite" } as maplibregl.RasterLayerSpecification,
-    ...symbolLayers,
+    ...kept,
   ];
   return style;
 }
@@ -675,62 +722,31 @@ export function MapView() {
     appliedBaseMap.current = baseMap;
 
     let cancelled = false;
+    const apply = (style: maplibregl.StyleSpecification) => {
+      if (cancelled || appliedBaseMap.current !== baseMap) return;
+      m.setStyle(style);
+    };
 
-    // После загрузки стиля: увеличиваем text-size во всех symbol-слоях через
-    // MapLibre API (надёжнее чем пре-обработка JSON), плюс ставим лесные слои.
-    const LABEL_SCALE = 1.8;
-    const finishSetup = () => {
-      if (cancelled) return;
+    // scheme/hybrid — async builders (fetch Versatiles → патч sprite +
+    // увеличение text-size). На ошибку — откат на ESRI растр.
+    if (baseMap === "scheme") {
+      buildSchemeStyle().then(apply).catch(() => apply(SCHEME_STYLE_FALLBACK));
+    } else if (baseMap === "hybrid") {
+      buildHybridStyle().then(apply).catch(() => apply(HYBRID_STYLE_FALLBACK));
+    } else {
+      apply(baseMap === "satellite" ? SATELLITE_STYLE : INLINE_STYLE);
+    }
+
+    const onReady = () => {
       if (!m.isStyleLoaded()) return;
-      m.off("styledata", finishSetup);
-      for (const layer of m.getStyle().layers) {
-        if (layer.type !== "symbol") continue;
-        try {
-          const cur = m.getLayoutProperty(layer.id, "text-size");
-          if (cur == null) continue;
-          if (typeof cur === "number") {
-            m.setLayoutProperty(layer.id, "text-size", cur * LABEL_SCALE);
-          } else {
-            // expression → wrap in ["*", factor, expr]
-            m.setLayoutProperty(layer.id, "text-size", ["*", LABEL_SCALE, cur] as unknown as number);
-          }
-        } catch { /* data-driven / missing prop */ }
-      }
+      m.off("styledata", onReady);
       setupForestAndInteractions(m);
     };
-
-    const applyStyle = (style: maplibregl.StyleSpecification | string) => {
-      if (cancelled || appliedBaseMap.current !== baseMap) return;
-      m.on("styledata", finishSetup);
-      m.setStyle(style as maplibregl.StyleSpecification);
-    };
-
-    if (baseMap === "scheme") {
-      // URL-based load — MapLibre сам фетчит JSON + glyphs/sprites + tiles
-      applyStyle(SCHEME_STYLE_URL);
-      // Fallback: если за 5 сек стиль не загрузился — ESRI Topo raster
-      const fbTimer = setTimeout(() => {
-        if (!cancelled && !m.isStyleLoaded() && appliedBaseMap.current === "scheme") {
-          m.off("styledata", finishSetup);
-          applyStyle(SCHEME_STYLE_FALLBACK);
-        }
-      }, 5000);
-      return () => {
-        cancelled = true;
-        clearTimeout(fbTimer);
-        m.off("styledata", finishSetup);
-      };
-    } else if (baseMap === "hybrid") {
-      buildHybridStyle()
-        .then(applyStyle)
-        .catch(() => applyStyle(HYBRID_STYLE_FALLBACK));
-    } else {
-      applyStyle(baseMap === "satellite" ? SATELLITE_STYLE : INLINE_STYLE);
-    }
+    m.on("styledata", onReady);
 
     return () => {
       cancelled = true;
-      m.off("styledata", finishSetup);
+      m.off("styledata", onReady);
     };
   }, [baseMap, setupForestAndInteractions]);
 

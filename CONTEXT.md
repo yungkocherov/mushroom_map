@@ -26,7 +26,7 @@
 | Компонент | Статус |
 |-----------|--------|
 | PostGIS схема (13 миграций) | ✅ готово |
-| 111 559 полигонов Rosleshoz/ФГИСЛК (Карельский перешеек) | ✅ загружено |
+| 913 327 полигонов Rosleshoz/ФГИСЛК (запад + центр Ленобласти) | ✅ загружено |
 | 47 000 полигонов OSM Ленобласть (88% unknown) | ✅ загружено |
 | PMTiles лесной слой (73.8 МБ) | ✅ сгенерировано |
 | `forest_unified` VIEW — Rosleshoz + OSM с приоритетами | ✅ работает |
@@ -58,6 +58,10 @@
 - **Vite + Docker + Windows**: hot-reload требует `watch: { usePolling: true, interval: 300 }` в `vite.config.ts` — уже настроено.
 - **localhost → IPv6 на Windows**: прокси в `vite.config.ts` использует `http://127.0.0.1:8000`.
 - **ООПТ и дороги**: PMTiles файлы (`oopt.pmtiles`, `roads.pmtiles`) ещё не сгенерированы — нет исходных данных. Кнопки показывают ошибку при нажатии.
+- **Векторные подложки (схема/гибрид)** — CDN'ы ненадёжны для этого юзера: `tiles.openfreemap.org` рвёт соединение на glyph/sprite, `basemaps.cartocdn.com/rastertiles/voyager` возвращает 404, `tile.openstreetmap.de` не доступен. Рабочая комбинация:
+  - **Схема**: Versatiles Colorful (`tiles.versatiles.org/assets/styles/colorful/style.json`) с in-app патчем: sprite-массив → строка (MapLibre 4.5 не поддерживает multi-sprite), все `text-size` × 1.6 для читаемости на retina (legacy `{stops: [...]}` формат обрабатывается отдельно от number/expression).
+  - **Гибрид**: тот же Versatiles + инжект ESRI World_Imagery как bottom raster-layer, фильтрация слоёв до `line + symbol`.
+  - **Fallback**: ESRI World_Topo_Map raster (для схемы) / ESRI World_Imagery + Reference labels (для гибрида).
 
 ### Что нужно сделать
 
@@ -107,7 +111,7 @@ mixed_coniferous, mixed_broadleaved, mixed, unknown
 | OSM (Overpass API) | 10 | ✅ 47 000 полигонов (88% unknown) |
 | TerraNorte RLC | 45 | 📋 пайплайн готов, данные не загружены |
 | Copernicus HRL | 50 | 📋 инфраструктура готова |
-| Rosleshoz/ФГИСЛК | 60 | ✅ 111 559 полигонов (Карельский перешеек) |
+| Rosleshoz/ФГИСЛК | 60 | ✅ 913 327 полигонов (запад + центр Ленобласти, до 32.3°E) |
 
 ### Стек
 
