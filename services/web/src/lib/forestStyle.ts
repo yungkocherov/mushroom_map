@@ -91,17 +91,27 @@ export const FOREST_LAYER_PAINT_PATTERN = {
 } as const;
 
 /**
- * Paint через fill-color.
- * fill-opacity=1.0 + fill-antialias=true: полигоны полностью непрозрачны,
- * антиалиасинг сглаживает края без просвета (при opacity<1 антиалиас
- * даёт видимые "прожилки" на стыках — basemap просвечивает).
- * fill-outline-color=transparent: явные линии по краям не рисуем.
+ * Paint через fill-color с zoom-dependent opacity:
+ *   - zoom ≤ 8:  opacity 0.9 (почти непрозрачно) — скрывает "прожилки"
+ *     от tippecanoe-симплификации на низких зумах
+ *   - zoom 9–10: opacity 0.8 (plавный переход)
+ *   - zoom ≥ 11: opacity 0.6 (видно подложку: дороги, реки, деревни)
  *
- * В схеме/гибриде (векторные стили) подписи рендерятся ПОВЕРХ леса в
- * отдельных symbol-слоях, так что opacity=1 их не прячет. В растровых
- * подложках (OSM/satellite) подписи подложки закрываются — это ок,
- * на forest view подписи не самое важное.
+ * Zoom-based expression решает конфликт между двумя требованиями:
+ *   1. на выезде (zoom 7-9) хочется sharp раскрашенный лес без артефактов
+ *   2. при работе с выделом (zoom 11+) хочется видеть basemap под лесом
+ *
+ * antialias=true с opacity<1 может дать видимые края на стыках, но при
+ * buffer=0 в тайлах и fill-antialias=false это заметно только на ярких
+ * цветах. Оставляем antialias=false для чистоты.
  */
+const FOREST_OPACITY_EXPR = [
+  "interpolate", ["linear"], ["zoom"],
+  7, 0.9,
+  9, 0.85,
+  11, 0.6,
+];
+
 export const FOREST_LAYER_PAINT_COLOR = {
   "fill-color": [
     "match",
@@ -122,9 +132,9 @@ export const FOREST_LAYER_PAINT_COLOR = {
     "mixed", FOREST_COLORS.mixed,
     FOREST_COLORS.unknown,
   ],
-  "fill-opacity": 1.0,
+  "fill-opacity": FOREST_OPACITY_EXPR,
   "fill-outline-color": "rgba(0,0,0,0)",
-  "fill-antialias": true,
+  "fill-antialias": false,
 } as const;
 
 // Обратная совместимость — старое имя указывает на fallback-вариант
@@ -151,9 +161,9 @@ export const FOREST_LAYER_PAINT_BONITET = {
     5, "#b71c1c",
     "#9e9e9e",
   ],
-  "fill-opacity": 1.0,
+  "fill-opacity": FOREST_OPACITY_EXPR,
   "fill-outline-color": "rgba(0,0,0,0)",
-  "fill-antialias": true,
+  "fill-antialias": false,
 } as const;
 
 export const BONITET_LEGEND: Array<{ label: string; color: string }> = [
@@ -176,9 +186,9 @@ export const FOREST_LAYER_PAINT_AGE_GROUP = {
     "перестойные",      "#4e342e",
     "#9e9e9e",
   ],
-  "fill-opacity": 1.0,
+  "fill-opacity": FOREST_OPACITY_EXPR,
   "fill-outline-color": "rgba(0,0,0,0)",
-  "fill-antialias": true,
+  "fill-antialias": false,
 } as const;
 
 export const AGE_GROUP_LEGEND: Array<{ label: string; color: string }> = [

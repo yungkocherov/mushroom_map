@@ -298,6 +298,23 @@ const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful/st
 const LABEL_SCALE = 1.6;
 
 /**
+ * Насколько раньше (на сколько уровней зума) показываем каждый класс поселения.
+ * Versatiles показывает village только с zoom 11 — для грибника это слишком поздно.
+ * Сдвигаем на 2-3 уровня назад, чтобы увидеть деревню даже с zoom ~8.
+ */
+const LABEL_MINZOOM_OVERRIDES: Record<string, number> = {
+  "label-place-capital":       4,   // 5 → 4
+  "label-place-statecapital":  5,   // 6 → 5
+  "label-place-city":          6,   // 7 → 6
+  "label-place-town":          7,   // 9 → 7
+  "label-place-village":       8,   // 11 → 8  (главное для грибника)
+  "label-place-hamlet":       10,   // 13 → 10
+  "label-place-suburb":        9,   // 11 → 9
+  "label-place-quarter":      11,   // 13 → 11
+  "label-place-neighbourhood": 12,  // 14 → 12
+};
+
+/**
  * Фетчит Versatiles Colorful, патчит под MapLibre 4.5 и увеличивает подписи.
  *
  * 1. sprite приходит массивом `[{id, url}]` (MapLibre 5.x multi-sprite format) —
@@ -305,40 +322,54 @@ const LABEL_SCALE = 1.6;
  * 2. text-size в 23 из 30 symbol-слоёв — legacy-формат `{stops: [[z, v], ...]}`,
  *    который нельзя обернуть в ["*", k, expr]. Мутируем stops напрямую.
  *    Остальные — плоский number, умножаем в лоб.
+ * 3. minzoom для label-place-* уменьшаем согласно LABEL_MINZOOM_OVERRIDES —
+ *    хотим видеть деревни и посёлки при отдалённом просмотре.
  */
 async function buildSchemeStyle(): Promise<maplibregl.StyleSpecification> {
   const resp = await fetch(SCHEME_STYLE_URL);
   if (!resp.ok) throw new Error(`versatiles ${resp.status}`);
-  // Патчим сырой JSON, потом кастуем — MapLibre принимает и mutated объект.
   const style = await resp.json() as {
     sprite?: string | Array<{ id: string; url: string }>;
     sources: Record<string, unknown>;
-    layers: Array<{ type: string; layout?: Record<string, unknown>; [k: string]: unknown }>;
+    layers: Array<{
+      id?: string;
+      type: string;
+      minzoom?: number;
+      layout?: Record<string, unknown>;
+      [k: string]: unknown;
+    }>;
     [k: string]: unknown;
   };
 
-  // (1) Нормализуем sprite в строку — MapLibre 4.x не понимает массив.
+  // (1) sprite → строка
   if (Array.isArray(style.sprite) && style.sprite.length > 0) {
     style.sprite = style.sprite[0].url;
   }
 
-  // (2) Увеличиваем text-size во всех symbol-слоях.
   for (const layer of style.layers) {
-    if (layer.type !== "symbol" || !layer.layout) continue;
-    const ts = layer.layout["text-size"];
-    if (ts == null) continue;
-    if (typeof ts === "number") {
-      layer.layout["text-size"] = ts * LABEL_SCALE;
-    } else if (typeof ts === "object" && !Array.isArray(ts) && Array.isArray((ts as { stops?: unknown }).stops)) {
-      // Legacy: {stops: [[zoom, value], ...]}
-      const stops = (ts as { stops: Array<[number, number]> }).stops;
-      layer.layout["text-size"] = {
-        ...(ts as object),
-        stops: stops.map(([z, v]) => [z, v * LABEL_SCALE] as [number, number]),
-      };
-    } else if (Array.isArray(ts)) {
-      // Modern expression — оборачиваем в умножение.
-      layer.layout["text-size"] = ["*", LABEL_SCALE, ts];
+    if (layer.type !== "symbol") continue;
+
+    // (2) Увеличиваем text-size во всех symbol-слоях.
+    if (layer.layout) {
+      const ts = layer.layout["text-size"];
+      if (ts != null) {
+        if (typeof ts === "number") {
+          layer.layout["text-size"] = ts * LABEL_SCALE;
+        } else if (typeof ts === "object" && !Array.isArray(ts) && Array.isArray((ts as { stops?: unknown }).stops)) {
+          const stops = (ts as { stops: Array<[number, number]> }).stops;
+          layer.layout["text-size"] = {
+            ...(ts as object),
+            stops: stops.map(([z, v]) => [z, v * LABEL_SCALE] as [number, number]),
+          };
+        } else if (Array.isArray(ts)) {
+          layer.layout["text-size"] = ["*", LABEL_SCALE, ts];
+        }
+      }
+    }
+
+    // (3) minzoom override для label-place-* чтобы показать деревни раньше
+    if (layer.id && layer.id in LABEL_MINZOOM_OVERRIDES) {
+      layer.minzoom = LABEL_MINZOOM_OVERRIDES[layer.id];
     }
   }
 
@@ -719,24 +750,48 @@ export function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Смена базовой подложки. Все 4 стиля — inline растровые, setStyle возвращает
-  // управление мгновенно, styledata выстрелит в том же тике. Никакого оверлея
-  // «Загружаю подложку» не нужно — тайлы подтягиваются лениво при панорамировании.
+  // Смена базовой подложки.
+  //
+  // Исторически было 2 бага:
+  //   Task 1: `appliedBaseMap.current = baseMap` ставилось В НАЧАЛЕ effect'а →
+  //   в React StrictMode при double-invocation второй раз ref уже совпадал с
+  //   baseMap и effect возвращался раньше, реальный setStyle никогда не
+  //   вызывался на scheme как дефолтной подложке. Стартовая OSM оставалась.
+  //
+  //   Task 2: styledata + isStyleLoaded() иногда промахивается — listener
+  //   регистрируется до setStyle, но первый styledata firing может прийти
+  //   с isStyleLoaded=false, а второй не приходит потому что внешняя загрузка
+  //   зависла → setupForestAndInteractions никогда не вызывается → после
+  //   смены basemap forest-fill layer не восстанавливается.
+  //
+  // Фикс: RAF-polling `isStyleLoaded()` вместо styledata listener'а; запись
+  // appliedBaseMap происходит ПОСЛЕ успешного m.setStyle.
   useEffect(() => {
     const m = map.current;
     if (!m) return;
-
     if (appliedBaseMap.current === baseMap) return;
-    appliedBaseMap.current = baseMap;
 
     let cancelled = false;
+
     const apply = (style: maplibregl.StyleSpecification) => {
-      if (cancelled || appliedBaseMap.current !== baseMap) return;
+      if (cancelled) return;
       m.setStyle(style);
+      appliedBaseMap.current = baseMap;
+
+      // RAF-poll до готовности стиля, потом восстанавливаем оверлейные слои
+      // (forest/water/oopt/roads). Надёжнее styledata т.к. не зависит от
+      // частоты событий MapLibre.
+      const poll = () => {
+        if (cancelled) return;
+        if (m.isStyleLoaded()) {
+          setupForestAndInteractions(m);
+        } else {
+          requestAnimationFrame(poll);
+        }
+      };
+      requestAnimationFrame(poll);
     };
 
-    // scheme/hybrid — async builders (fetch Versatiles → патч sprite +
-    // увеличение text-size). На ошибку — откат на ESRI растр.
     if (baseMap === "scheme") {
       buildSchemeStyle().then(apply).catch(() => apply(SCHEME_STYLE_FALLBACK));
     } else if (baseMap === "hybrid") {
@@ -745,17 +800,7 @@ export function MapView() {
       apply(baseMap === "satellite" ? SATELLITE_STYLE : INLINE_STYLE);
     }
 
-    const onReady = () => {
-      if (!m.isStyleLoaded()) return;
-      m.off("styledata", onReady);
-      setupForestAndInteractions(m);
-    };
-    m.on("styledata", onReady);
-
-    return () => {
-      cancelled = true;
-      m.off("styledata", onReady);
-    };
+    return () => { cancelled = true; };
   }, [baseMap, setupForestAndInteractions]);
 
   return (
