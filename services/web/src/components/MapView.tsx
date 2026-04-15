@@ -290,26 +290,24 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
 };
 
-// ─── Схема — растровый OpenStreetMap DE (чистая чёткая схема) ────────────────
-// Альтернативы: tile.openstreetmap.org (стандарт, но серее),
-// a.tile.opentopomap.org (топография). CARTO rastertiles похоже зарубили
-// доступ, OpenFreeMap ненадёжен.
+// ─── Схема — ESRI World Street Map (тот же сервер что и спутник) ─────────────
+// Раньше пробовали tile.openstreetmap.de, CARTO, OpenFreeMap — все либо
+// блокируются, либо зависают. ESRI server.arcgisonline.com точно работает,
+// потому что спутник с того же хоста грузится нормально.
 const SCHEME_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    osm_de: {
+    esri_streets: {
       type: "raster",
       tiles: [
-        "https://a.tile.openstreetmap.de/{z}/{x}/{y}.png",
-        "https://b.tile.openstreetmap.de/{z}/{x}/{y}.png",
-        "https://c.tile.openstreetmap.de/{z}/{x}/{y}.png",
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
       ],
       tileSize: 256,
       maxzoom: 19,
-      attribution: "© OpenStreetMap contributors (DE style)",
+      attribution: "© Esri, DeLorme, NAVTEQ",
     },
   },
-  layers: [{ id: "osm_de", type: "raster", source: "osm_de" }],
+  layers: [{ id: "esri_streets", type: "raster", source: "esri_streets" }],
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
 };
 
