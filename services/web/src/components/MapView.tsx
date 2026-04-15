@@ -290,12 +290,34 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
 };
 
-// ─── Схема — Versatiles Colorful (векторные OSM-тайлы, retina-чёткие) ────────
-// URL стиля загружается через setStyle(string), MapLibre сам парсит JSON
-// и подтягивает glyphs/sprites/tiles с тех же хостов versatiles.org.
-// Если versatiles окажется недоступен — можно вернуться на ESRI World Topo
-// (раньше тут был именно он, но 256px растр мылится на retina).
+// ─── Схема — Versatiles Colorful с увеличенными подписями ────────────────────
+// URL стиля грузим вручную через fetch, умножаем все text-size × 1.6,
+// получаем читаемые подписи на retina-дисплее. Без модификации подписи
+// в Versatiles маленькие (~10-12px), на HiDPI это почти нечитаемо.
 const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful.json";
+
+/** Умножает text-size во всех symbol-слоях на factor. */
+function enlargeLabelSizes(style: maplibregl.StyleSpecification, factor: number): maplibregl.StyleSpecification {
+  for (const layer of style.layers) {
+    if (layer.type !== "symbol") continue;
+    const layout = (layer as maplibregl.SymbolLayerSpecification).layout;
+    if (!layout) continue;
+    const size = layout["text-size"];
+    if (size === undefined) continue;
+    // number → number * factor; expression → ["*", factor, expression]
+    layout["text-size"] = typeof size === "number"
+      ? size * factor
+      : (["*", factor, size] as unknown as typeof size);
+  }
+  return style;
+}
+
+async function buildSchemeStyle(): Promise<maplibregl.StyleSpecification> {
+  const resp = await fetch(SCHEME_STYLE_URL);
+  if (!resp.ok) throw new Error(`Versatiles style fetch failed: ${resp.status}`);
+  const style = await resp.json() as maplibregl.StyleSpecification;
+  return enlargeLabelSizes(style, 1.6);
+}
 
 const SCHEME_STYLE_FALLBACK: maplibregl.StyleSpecification = {
   version: 8,
@@ -314,10 +336,33 @@ const SCHEME_STYLE_FALLBACK: maplibregl.StyleSpecification = {
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
 };
 
-// ─── Гибрид — спутник ESRI + ESRI Reference labels ───────────────────────────
-// Оба источника с одного сервера arcgisonline, гарантированно работают вместе.
-// Reference даёт прозрачные тайлы с подписями городов, стран, улиц.
-const HYBRID_STYLE: maplibregl.StyleSpecification = {
+// ─── Гибрид — ESRI спутник + векторные подписи Versatiles ────────────────────
+// Берём Versatiles Colorful, оставляем только symbol-слои (подписи),
+// инжектим ESRI satellite raster как самый нижний слой. Подписи векторные →
+// на retina чёткие и масштабируемые.
+async function buildHybridStyle(): Promise<maplibregl.StyleSpecification> {
+  const resp = await fetch(SCHEME_STYLE_URL);
+  if (!resp.ok) throw new Error(`Versatiles style fetch failed: ${resp.status}`);
+  const style = await resp.json() as maplibregl.StyleSpecification;
+  // Добавляем ESRI satellite как новый source
+  (style.sources as Record<string, unknown>)["esri-satellite"] = {
+    type: "raster",
+    tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+    tileSize: 256,
+    maxzoom: 19,
+    attribution: "Imagery © Esri, Maxar",
+  };
+  // Оставляем только symbol-слои (подписи/иконки) + satellite как первый слой
+  const symbolLayers = style.layers.filter(l => l.type === "symbol");
+  style.layers = [
+    { id: "esri-satellite-layer", type: "raster", source: "esri-satellite" } as maplibregl.RasterLayerSpecification,
+    ...symbolLayers,
+  ];
+  return enlargeLabelSizes(style, 1.6);
+}
+
+// ─── Гибрид фоллбэк — ESRI спутник + ESRI Reference labels ───────────────────
+const HYBRID_STYLE_FALLBACK: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     satellite: {
@@ -653,14 +698,24 @@ export function MapView() {
     if (appliedBaseMap.current === baseMap) return;
     appliedBaseMap.current = baseMap;
 
-    // Scheme — векторный URL-стиль (Versatiles), остальные — inline растры.
+    let cancelled = false;
+    const applyStyle = (style: maplibregl.StyleSpecification) => {
+      if (cancelled || appliedBaseMap.current !== baseMap) return;
+      m.setStyle(style);
+    };
+
+    // Scheme и hybrid — async builders (fetch Versatiles → увеличить text-size).
+    // Остальные — inline растровые стили, ставим мгновенно.
     if (baseMap === "scheme") {
-      m.setStyle(SCHEME_STYLE_URL);
+      buildSchemeStyle()
+        .then(applyStyle)
+        .catch(() => applyStyle(SCHEME_STYLE_FALLBACK));
+    } else if (baseMap === "hybrid") {
+      buildHybridStyle()
+        .then(applyStyle)
+        .catch(() => applyStyle(HYBRID_STYLE_FALLBACK));
     } else {
-      const style =
-        baseMap === "hybrid"    ? HYBRID_STYLE    :
-        baseMap === "satellite" ? SATELLITE_STYLE :
-                                  INLINE_STYLE;
+      const style = baseMap === "satellite" ? SATELLITE_STYLE : INLINE_STYLE;
       m.setStyle(style);
     }
 
@@ -671,20 +726,9 @@ export function MapView() {
     };
     m.on("styledata", onReady);
 
-    // Fallback для scheme: если векторный Versatiles не загрузился за 6 сек,
-    // перекидываем на ESRI Topo.
-    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
-    if (baseMap === "scheme") {
-      fallbackTimer = setTimeout(() => {
-        if (!m.isStyleLoaded() && appliedBaseMap.current === "scheme") {
-          m.setStyle(SCHEME_STYLE_FALLBACK);
-        }
-      }, 6000);
-    }
-
     return () => {
+      cancelled = true;
       m.off("styledata", onReady);
-      if (fallbackTimer) clearTimeout(fallbackTimer);
     };
   }, [baseMap, setupForestAndInteractions]);
 
