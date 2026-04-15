@@ -269,7 +269,6 @@ const INLINE_STYLE: maplibregl.StyleSpecification = {
   },
   layers: [{ id: "osm", type: "raster", source: "osm" }],
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-  sprite: "",
 };
 
 // ─── Спутниковый стиль (ESRI World Imagery, бесплатно, без ключа) ────────────
@@ -289,37 +288,34 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   },
   layers: [{ id: "esri", type: "raster", source: "esri" }],
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-  sprite: "",
 };
 
-// ─── Схема — растровый CARTO Voyager (CloudFront, очень стабильно) ───────────
-// Раньше пробовали векторный стиль tiles.openfreemap.org и CARTO vector,
-// но оба капризничают с glyph-шрифтами и рвут соединение. Растр работает
-// везде где работает fetch().
+// ─── Схема — растровый OpenStreetMap DE (чистая чёткая схема) ────────────────
+// Альтернативы: tile.openstreetmap.org (стандарт, но серее),
+// a.tile.opentopomap.org (топография). CARTO rastertiles похоже зарубили
+// доступ, OpenFreeMap ненадёжен.
 const SCHEME_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    carto: {
+    osm_de: {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://a.tile.openstreetmap.de/{z}/{x}/{y}.png",
+        "https://b.tile.openstreetmap.de/{z}/{x}/{y}.png",
+        "https://c.tile.openstreetmap.de/{z}/{x}/{y}.png",
       ],
       tileSize: 256,
       maxzoom: 19,
-      attribution: "© OpenStreetMap contributors © CARTO",
+      attribution: "© OpenStreetMap contributors (DE style)",
     },
   },
-  layers: [{ id: "carto", type: "raster", source: "carto" }],
+  layers: [{ id: "osm_de", type: "raster", source: "osm_de" }],
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-  sprite: "",
 };
 
-// ─── Гибрид — спутник ESRI + растровый overlay с подписями из CARTO ──────────
-// Полностью растровый подход. Никаких fill-слоёв, никаких injection-трюков —
-// просто два raster-источника друг над другом.
+// ─── Гибрид — спутник ESRI + ESRI Reference labels ───────────────────────────
+// Оба источника с одного сервера arcgisonline, гарантированно работают вместе.
+// Reference даёт прозрачные тайлы с подписями городов, стран, улиц.
 const HYBRID_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -335,14 +331,11 @@ const HYBRID_STYLE: maplibregl.StyleSpecification = {
     labels: {
       type: "raster",
       tiles: [
-        "https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png",
-        "https://c.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png",
-        "https://d.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png",
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
       ],
       tileSize: 256,
-      maxzoom: 19,
-      attribution: "© OpenStreetMap contributors © CARTO",
+      maxzoom: 14,
+      attribution: "Labels © Esri",
     },
   },
   layers: [
@@ -350,7 +343,6 @@ const HYBRID_STYLE: maplibregl.StyleSpecification = {
     { id: "labels", type: "raster", source: "labels" },
   ],
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-  sprite: "",
 };
 
 // ─── Компонент ────────────────────────────────────────────────────────────────
