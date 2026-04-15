@@ -89,6 +89,23 @@ docker compose logs --tail 50 api
   `services/api/.env:TILES_DIR=../../data/tiles`. Browser fetches with
   HTTP Range. Do not break this.
 
+## Adding a new data layer (pattern)
+
+1. **Migration** `db/migrations/NNN_<name>.sql` — table + GIST index.
+2. **Downloader** in `scripts/download_<name>_overpass.py` (or similar).
+   If the bbox is big, split into grid + dedupe. Save to `data/<name>/`.
+3. **Ingest** `pipelines/ingest_<name>.py` — reads GeoJSON, writes DB.
+   Idempotent by (source, source_version). For 100k+ rows use
+   `services/geodata/src/geodata/db.py` COPY+DELETE pattern.
+4. **Tile build** `pipelines/build_<name>_tiles.py` — PostGIS → MVT →
+   `data/tiles/<name>.pmtiles`. Use `build_water_tiles.py` as template.
+5. **Frontend** — `MapView.tsx` adds source + layer in `add<Name>Layer`,
+   `handle<Name>Toggle` with HEAD check on `/tiles/<name>.pmtiles` before
+   loading (graceful error if tiles not built yet).
+
+Python normalize must stay thin. If profiling shows shapely/wkt/area in
+the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
+
 ## Rules of engagement for changes
 
 - **Verify root cause before iterating.** Last session I rewrote the

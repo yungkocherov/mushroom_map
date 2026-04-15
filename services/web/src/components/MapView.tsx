@@ -298,20 +298,25 @@ const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful/st
 const LABEL_SCALE = 1.6;
 
 /**
- * Насколько раньше (на сколько уровней зума) показываем каждый класс поселения.
- * Versatiles показывает village только с zoom 11 — для грибника это слишком поздно.
- * Сдвигаем на 2-3 уровня назад, чтобы увидеть деревню даже с zoom ~8.
+ * Для грибника важно видеть деревни и посёлки издалека, поэтому мы
+ * агрессивно снижаем minzoom для всех label-place-* слоёв на 4-6 уровней
+ * ниже дефолта Versatiles. Деревни теперь видны с zoom 6 (= вся область
+ * в экране), хутора с zoom 9.
+ *
+ * Побочка — при сильном зуме-out подписи могут налезать друг на друга.
+ * MapLibre сам их фильтрует через collision detection, так что "лишних"
+ * не показывает, но важные города/посёлки выигрывают приоритет.
  */
 const LABEL_MINZOOM_OVERRIDES: Record<string, number> = {
-  "label-place-capital":       4,   // 5 → 4
-  "label-place-statecapital":  5,   // 6 → 5
-  "label-place-city":          6,   // 7 → 6
-  "label-place-town":          7,   // 9 → 7
-  "label-place-village":       8,   // 11 → 8  (главное для грибника)
-  "label-place-hamlet":       10,   // 13 → 10
-  "label-place-suburb":        9,   // 11 → 9
-  "label-place-quarter":      11,   // 13 → 11
-  "label-place-neighbourhood": 12,  // 14 → 12
+  "label-place-capital":       3,   // было 5
+  "label-place-statecapital":  4,   // было 6
+  "label-place-city":          5,   // было 7
+  "label-place-town":          6,   // было 9
+  "label-place-village":       6,   // было 11 — для грибника ГЛАВНОЕ
+  "label-place-hamlet":        9,   // было 13 — хутора видны сразу
+  "label-place-suburb":        8,   // было 11
+  "label-place-quarter":      10,   // было 13
+  "label-place-neighbourhood": 11,  // было 14
 };
 
 /**
