@@ -136,7 +136,7 @@ Hybrid basemap реализован через:
 
 ## Дальнейшие улучшения
 
-- **Copernicus HRL**: инструкция в `docs/copernicus_migration.md`
+- **Copernicus HRL**: остался как `ForestSource`-реализация с приоритетом 50, не используется (упёрлись в границу EEA39 — см. `docs/forest_sources_analysis.md`)
 - **ООПТ**: скачать с oopt.aari.ru, инструкция в `docs/oopt_download.md`
 - **Лесные дороги**: скачать PBF с Geofabrik, инструкция в `docs/osm_roads_download.md`
 - **Болота**: OSM `natural=wetland` — аналогично водоохранным зонам

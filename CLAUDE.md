@@ -1,8 +1,9 @@
 # CLAUDE.md — project context for Claude Code sessions
 
 This file is auto-loaded at the start of every session. It contains the
-durable conventions, commands, and known gotchas. For deeper context
-(current ingest state, roadmap) see `CONTEXT.md`.
+durable conventions, commands, and known gotchas. For architecture see
+`docs/architecture.md`; for roadmap see `docs/roadmap_content_ideas.md`;
+for why we ended up with Rosleshoz see `docs/forest_sources_analysis.md`.
 
 ## One-line summary
 
