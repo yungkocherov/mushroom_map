@@ -290,24 +290,26 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
 };
 
-// ─── Схема — ESRI World Street Map (тот же сервер что и спутник) ─────────────
-// Раньше пробовали tile.openstreetmap.de, CARTO, OpenFreeMap — все либо
-// блокируются, либо зависают. ESRI server.arcgisonline.com точно работает,
-// потому что спутник с того же хоста грузится нормально.
+// ─── Схема — ESRI World Topo Map (тот же сервер что и спутник) ───────────────
+// Топографический стиль: рельеф, леса зелёные, реки синие, дороги чёрные.
+// Визуально подходит для грибной карты лучше чем street map.
+// Альтернативы с того же хоста: NatGeo_World_Map (тёплые цвета),
+// World_Street_Map (плоский). CARTO/openfreemap/OSM DE у этого юзера
+// не загружаются.
 const SCHEME_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
-    esri_streets: {
+    esri_topo: {
       type: "raster",
       tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
       ],
       tileSize: 256,
       maxzoom: 19,
-      attribution: "© Esri, DeLorme, NAVTEQ",
+      attribution: "© Esri, USGS, NOAA",
     },
   },
-  layers: [{ id: "esri_streets", type: "raster", source: "esri_streets" }],
+  layers: [{ id: "esri_topo", type: "raster", source: "esri_topo" }],
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
 };
 
