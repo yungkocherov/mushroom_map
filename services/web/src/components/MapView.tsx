@@ -290,34 +290,10 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
 };
 
-// ─── Схема — Versatiles Colorful с увеличенными подписями ────────────────────
-// URL стиля грузим вручную через fetch, умножаем все text-size × 1.6,
-// получаем читаемые подписи на retina-дисплее. Без модификации подписи
-// в Versatiles маленькие (~10-12px), на HiDPI это почти нечитаемо.
+// ─── Схема — Versatiles Colorful, подгружается MapLibre'ом напрямую ──────────
+// URL стиля, MapLibre фетчит JSON + glyphs + sprites + tiles с tiles.versatiles.org.
+// После загрузки увеличиваем text-size в finishSetup ниже.
 const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful.json";
-
-/** Умножает text-size во всех symbol-слоях на factor. */
-function enlargeLabelSizes(style: maplibregl.StyleSpecification, factor: number): maplibregl.StyleSpecification {
-  for (const layer of style.layers) {
-    if (layer.type !== "symbol") continue;
-    const layout = (layer as maplibregl.SymbolLayerSpecification).layout;
-    if (!layout) continue;
-    const size = layout["text-size"];
-    if (size === undefined) continue;
-    // number → number * factor; expression → ["*", factor, expression]
-    layout["text-size"] = typeof size === "number"
-      ? size * factor
-      : (["*", factor, size] as unknown as typeof size);
-  }
-  return style;
-}
-
-async function buildSchemeStyle(): Promise<maplibregl.StyleSpecification> {
-  const resp = await fetch(SCHEME_STYLE_URL);
-  if (!resp.ok) throw new Error(`Versatiles style fetch failed: ${resp.status}`);
-  const style = await resp.json() as maplibregl.StyleSpecification;
-  return enlargeLabelSizes(style, 1.6);
-}
 
 const SCHEME_STYLE_FALLBACK: maplibregl.StyleSpecification = {
   version: 8,
@@ -358,7 +334,7 @@ async function buildHybridStyle(): Promise<maplibregl.StyleSpecification> {
     { id: "esri-satellite-layer", type: "raster", source: "esri-satellite" } as maplibregl.RasterLayerSpecification,
     ...symbolLayers,
   ];
-  return enlargeLabelSizes(style, 1.6);
+  return style;
 }
 
 // ─── Гибрид фоллбэк — ESRI спутник + ESRI Reference labels ───────────────────
@@ -699,36 +675,62 @@ export function MapView() {
     appliedBaseMap.current = baseMap;
 
     let cancelled = false;
-    const applyStyle = (style: maplibregl.StyleSpecification) => {
-      if (cancelled || appliedBaseMap.current !== baseMap) return;
-      m.setStyle(style);
+
+    // После загрузки стиля: увеличиваем text-size во всех symbol-слоях через
+    // MapLibre API (надёжнее чем пре-обработка JSON), плюс ставим лесные слои.
+    const LABEL_SCALE = 1.8;
+    const finishSetup = () => {
+      if (cancelled) return;
+      if (!m.isStyleLoaded()) return;
+      m.off("styledata", finishSetup);
+      for (const layer of m.getStyle().layers) {
+        if (layer.type !== "symbol") continue;
+        try {
+          const cur = m.getLayoutProperty(layer.id, "text-size");
+          if (cur == null) continue;
+          if (typeof cur === "number") {
+            m.setLayoutProperty(layer.id, "text-size", cur * LABEL_SCALE);
+          } else {
+            // expression → wrap in ["*", factor, expr]
+            m.setLayoutProperty(layer.id, "text-size", ["*", LABEL_SCALE, cur] as unknown as number);
+          }
+        } catch { /* data-driven / missing prop */ }
+      }
+      setupForestAndInteractions(m);
     };
 
-    // Scheme и hybrid — async builders (fetch Versatiles → увеличить text-size).
-    // Остальные — inline растровые стили, ставим мгновенно.
+    const applyStyle = (style: maplibregl.StyleSpecification | string) => {
+      if (cancelled || appliedBaseMap.current !== baseMap) return;
+      m.on("styledata", finishSetup);
+      m.setStyle(style as maplibregl.StyleSpecification);
+    };
+
     if (baseMap === "scheme") {
-      buildSchemeStyle()
-        .then(applyStyle)
-        .catch(() => applyStyle(SCHEME_STYLE_FALLBACK));
+      // URL-based load — MapLibre сам фетчит JSON + glyphs/sprites + tiles
+      applyStyle(SCHEME_STYLE_URL);
+      // Fallback: если за 5 сек стиль не загрузился — ESRI Topo raster
+      const fbTimer = setTimeout(() => {
+        if (!cancelled && !m.isStyleLoaded() && appliedBaseMap.current === "scheme") {
+          m.off("styledata", finishSetup);
+          applyStyle(SCHEME_STYLE_FALLBACK);
+        }
+      }, 5000);
+      return () => {
+        cancelled = true;
+        clearTimeout(fbTimer);
+        m.off("styledata", finishSetup);
+      };
     } else if (baseMap === "hybrid") {
       buildHybridStyle()
         .then(applyStyle)
         .catch(() => applyStyle(HYBRID_STYLE_FALLBACK));
     } else {
-      const style = baseMap === "satellite" ? SATELLITE_STYLE : INLINE_STYLE;
-      m.setStyle(style);
+      applyStyle(baseMap === "satellite" ? SATELLITE_STYLE : INLINE_STYLE);
     }
-
-    const onReady = () => {
-      if (!m.isStyleLoaded()) return;
-      m.off("styledata", onReady);
-      setupForestAndInteractions(m);
-    };
-    m.on("styledata", onReady);
 
     return () => {
       cancelled = true;
-      m.off("styledata", onReady);
+      m.off("styledata", finishSetup);
     };
   }, [baseMap, setupForestAndInteractions]);
 
