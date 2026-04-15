@@ -273,7 +273,6 @@ const INLINE_STYLE: maplibregl.StyleSpecification = {
 };
 
 // ─── Спутниковый стиль (ESRI World Imagery, бесплатно, без ключа) ────────────
-// Качество хорошее для России, атрибуция Esri (требуется лицензией).
 const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
@@ -293,10 +292,66 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   sprite: "",
 };
 
-// CARTO Voyager — векторный стиль, хостится на CloudFront CDN (AWS),
-// очень стабильный. Альтернативы: basemaps.cartocdn.com/gl/positron-gl-style/style.json
-// (светлый, без цветов), tiles.openfreemap.org/styles/bright (часто рвёт соединение).
-const SCHEME_STYLE_URL = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+// ─── Схема — растровый CARTO Voyager (CloudFront, очень стабильно) ───────────
+// Раньше пробовали векторный стиль tiles.openfreemap.org и CARTO vector,
+// но оба капризничают с glyph-шрифтами и рвут соединение. Растр работает
+// везде где работает fetch().
+const SCHEME_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    carto: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: "© OpenStreetMap contributors © CARTO",
+    },
+  },
+  layers: [{ id: "carto", type: "raster", source: "carto" }],
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+  sprite: "",
+};
+
+// ─── Гибрид — спутник ESRI + растровый overlay с подписями из CARTO ──────────
+// Полностью растровый подход. Никаких fill-слоёв, никаких injection-трюков —
+// просто два raster-источника друг над другом.
+const HYBRID_STYLE: maplibregl.StyleSpecification = {
+  version: 8,
+  sources: {
+    satellite: {
+      type: "raster",
+      tiles: [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: "Imagery © Esri, Maxar",
+    },
+    labels: {
+      type: "raster",
+      tiles: [
+        "https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png",
+        "https://b.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png",
+        "https://c.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png",
+        "https://d.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}.png",
+      ],
+      tileSize: 256,
+      maxzoom: 19,
+      attribution: "© OpenStreetMap contributors © CARTO",
+    },
+  },
+  layers: [
+    { id: "satellite", type: "raster", source: "satellite" },
+    { id: "labels", type: "raster", source: "labels" },
+  ],
+  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+  sprite: "",
+};
 
 // ─── Компонент ────────────────────────────────────────────────────────────────
 
@@ -545,20 +600,6 @@ export function MapView() {
     };
     m.on("styledata", onStyleReady);
 
-    // Если внешний стиль не загрузился — fallback на inline (только в начальной загрузке)
-    m.on("error", (e) => {
-      if (
-        typeof e.error?.message === "string" &&
-        (e.error.message.includes("style") ||
-          e.error.message.includes("tiles.openfreemap"))
-      ) {
-        if (baseMap === "scheme") {
-          m.setStyle(INLINE_STYLE);
-          m.once("styledata", () => setupForestAndInteractions(m));
-        }
-      }
-    });
-
     m.addControl(new maplibregl.NavigationControl(), "top-right");
     m.addControl(
       new maplibregl.AttributionControl({ compact: true }),
@@ -610,109 +651,45 @@ export function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Смена базовой подложки — setStyle сбрасывает sources/layers,
-  // ждём styledata и переadd'им forest.
-  // Если CDN не ответил за 8 сек или вернул ошибку — откат на OSM.
+  // Смена базовой подложки. Все 4 стиля — inline растровые, поэтому просто
+  // setStyle() + дождаться styledata + переadd'ить оверлеи. Никакого fetch/JSON-
+  // модификации/RAF-поллинга больше не нужно.
   useEffect(() => {
     const m = map.current;
     if (!m) return;
 
-    // Нет реальной смены — пропускаем (защита от StrictMode двойного запуска)
     if (appliedBaseMap.current === baseMap) return;
     appliedBaseMap.current = baseMap;
 
-    let rafId = 0;
+    const style =
+      baseMap === "hybrid"    ? HYBRID_STYLE    :
+      baseMap === "scheme"    ? SCHEME_STYLE    :
+      baseMap === "satellite" ? SATELLITE_STYLE :
+                                INLINE_STYLE;
 
-    const cleanup = () => {
-      m.off("error", onError);
-      clearTimeout(timer);
-      cancelAnimationFrame(rafId);
-    };
+    setStyleSwitching(true);
+    m.setStyle(style);
 
-    const onStyleReady = () => {
-      cleanup();
+    const onReady = () => {
+      if (!m.isStyleLoaded()) return;
+      m.off("styledata", onReady);
       setStyleSwitching(false);
       setupForestAndInteractions(m);
     };
+    m.on("styledata", onReady);
 
-    const onError = (e: { error?: { message?: string } }) => {
-      if (m.isStyleLoaded()) return;
-      const msg = e.error?.message ?? "";
-      if (msg.includes("Failed to fetch") || msg.includes("style")) {
-        cleanup();
-        setStyleSwitching(false);
-        setBaseMap("osm");
-      }
-    };
-
+    // Safety net: если через 8 сек стиль не загрузился (например тайлы не тянутся),
+    // всё равно убираем оверлей — карта уже что-то показывает.
     const timer = setTimeout(() => {
-      cleanup();
+      m.off("styledata", onReady);
       setStyleSwitching(false);
-      if (!m.isStyleLoaded()) {
-        m.setStyle(INLINE_STYLE);
-        setBaseMap("osm");
-      }
+      setupForestAndInteractions(m);
     }, 8000);
 
-    const startRafPoll = () => {
-      const check = () => { if (m.isStyleLoaded()) onStyleReady(); else rafId = requestAnimationFrame(check); };
-      rafId = requestAnimationFrame(check);
+    return () => {
+      m.off("styledata", onReady);
+      clearTimeout(timer);
     };
-
-    m.on("error", onError as Parameters<typeof m.on>[1]);
-
-    if (baseMap === "hybrid") {
-      // Load Bright scheme first, then inject ESRI satellite raster as the bottom layer
-      // and hide all fill/background layers (landcover, landuse, water fills) so the
-      // satellite imagery is actually visible through. Keep line (roads) and symbol
-      // (labels) layers — that's the whole point of a hybrid map.
-      setStyleSwitching(true);
-      m.setStyle(SCHEME_STYLE_URL);
-      const injectSatellite = () => {
-        if (!m.isStyleLoaded()) { rafId = requestAnimationFrame(injectSatellite); return; }
-        if (!m.getSource("esri-satellite")) {
-          m.addSource("esri-satellite", {
-            type: "raster",
-            tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-            tileSize: 256,
-            maxzoom: 19,
-            attribution: "Imagery © Esri, Maxar",
-          });
-        }
-        const firstLayerId = m.getStyle().layers[0]?.id;
-        if (!m.getLayer("esri-satellite-layer")) {
-          m.addLayer(
-            { id: "esri-satellite-layer", type: "raster", source: "esri-satellite" } as maplibregl.RasterLayerSpecification,
-            firstLayerId,
-          );
-        }
-        // Hide all fill/background layers so satellite shows through.
-        // Keep line (roads, boundaries) and symbol (labels) layers as-is.
-        for (const layer of m.getStyle().layers) {
-          if (layer.id === "esri-satellite-layer") continue;
-          try {
-            if (layer.type === "background") {
-              m.setPaintProperty(layer.id, "background-opacity", 0);
-            } else if (layer.type === "fill") {
-              m.setPaintProperty(layer.id, "fill-opacity", 0);
-            } else if (layer.type === "fill-extrusion") {
-              m.setPaintProperty(layer.id, "fill-extrusion-opacity", 0);
-            }
-          } catch { /* layer property may be data-driven */ }
-        }
-        onStyleReady();
-      };
-      rafId = requestAnimationFrame(injectSatellite);
-    } else {
-      const target =
-        baseMap === "scheme"    ? SCHEME_STYLE_URL :
-        baseMap === "satellite" ? SATELLITE_STYLE  : INLINE_STYLE;
-      if (baseMap === "scheme") setStyleSwitching(true);
-      m.setStyle(target as maplibregl.StyleSpecification | string);
-      startRafPoll();
-    }
-
-    return cleanup;
   }, [baseMap, setupForestAndInteractions]);
 
   return (
