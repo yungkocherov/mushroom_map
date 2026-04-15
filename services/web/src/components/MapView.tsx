@@ -659,14 +659,14 @@ export function MapView() {
     m.on("error", onError as Parameters<typeof m.on>[1]);
 
     if (baseMap === "hybrid") {
-      // Load Bright scheme first, then inject ESRI satellite raster as the bottom layer.
-      // This avoids a separate async JSON fetch+modify step and reuses the same
-      // code path we know works for "scheme".
+      // Load Bright scheme first, then inject ESRI satellite raster as the bottom layer
+      // and hide all fill/background layers (landcover, landuse, water fills) so the
+      // satellite imagery is actually visible through. Keep line (roads) and symbol
+      // (labels) layers — that's the whole point of a hybrid map.
       setStyleSwitching(true);
       m.setStyle(SCHEME_STYLE_URL);
       const injectSatellite = () => {
         if (!m.isStyleLoaded()) { rafId = requestAnimationFrame(injectSatellite); return; }
-        // Add ESRI satellite source + layer at the very bottom (before all vector layers)
         if (!m.getSource("esri-satellite")) {
           m.addSource("esri-satellite", {
             type: "raster",
@@ -683,8 +683,20 @@ export function MapView() {
             firstLayerId,
           );
         }
-        // Make background transparent so satellite shows through
-        try { m.setPaintProperty("background", "background-opacity", 0); } catch { /* layer may not exist */ }
+        // Hide all fill/background layers so satellite shows through.
+        // Keep line (roads, boundaries) and symbol (labels) layers as-is.
+        for (const layer of m.getStyle().layers) {
+          if (layer.id === "esri-satellite-layer") continue;
+          try {
+            if (layer.type === "background") {
+              m.setPaintProperty(layer.id, "background-opacity", 0);
+            } else if (layer.type === "fill") {
+              m.setPaintProperty(layer.id, "fill-opacity", 0);
+            } else if (layer.type === "fill-extrusion") {
+              m.setPaintProperty(layer.id, "fill-extrusion-opacity", 0);
+            }
+          } catch { /* layer property may be data-driven */ }
+        }
         onStyleReady();
       };
       rafId = requestAnimationFrame(injectSatellite);
