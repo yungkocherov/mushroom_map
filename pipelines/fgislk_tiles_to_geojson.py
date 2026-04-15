@@ -28,8 +28,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -383,6 +385,78 @@ def iter_pbf_files(root: Path) -> list[tuple[Path, int, int, int]]:
     return out
 
 
+# ─── Multiprocessing: параллельная обработка по X-директориям ────────────────
+
+def process_chunk(tiles: list[tuple[str, int, int, int]]) -> tuple[dict[str, VydelRecord], dict[str, WaterZoneRecord], Stats]:
+    """
+    Воркер: обрабатывает список тайлов, возвращает локальные records/water/stats.
+    Тайлы передаются как (str_path, z, x, y) т.к. Path не всегда pickleable
+    через Windows-spawn.
+    """
+    records: dict[str, VydelRecord] = {}
+    water_records: dict[str, WaterZoneRecord] = {}
+    stats = Stats(tiles_total=len(tiles))
+    for path_str, z, x, y in tiles:
+        try:
+            pbf_bytes = Path(path_str).read_bytes()
+        except Exception:
+            continue
+        if len(pbf_bytes) == 0:
+            continue
+        process_tile(pbf_bytes, z, x, y, records, water_records, stats)
+        stats.tiles_ok += 1
+    return records, water_records, stats
+
+
+def merge_vydel_records(dst: dict[str, VydelRecord], src: dict[str, VydelRecord]) -> None:
+    """
+    Мерджит src в dst с учётом правила zoom reconciliation:
+        - если у dst записи не было → копируем
+        - если у src более детальный zoom → заменяем полностью
+        - если у src тот же zoom → докидываем polygon_parts (соседние тайлы)
+        - если у dst более детальный zoom → игнорируем src
+    Бонитет/timber_stock не перетираем (берём первый не-None, чтобы разные
+    тайлы для одного выдела не конфликтовали).
+    """
+    for eid, sr in src.items():
+        dr = dst.get(eid)
+        if dr is None:
+            dst[eid] = sr
+            continue
+        if sr.zoom > dr.zoom:
+            # src детальнее — полная замена полигонов, но атрибуты оставляем best-of
+            sr.bonitet = sr.bonitet if sr.bonitet is not None else dr.bonitet
+            sr.timber_stock = sr.timber_stock if sr.timber_stock is not None else dr.timber_stock
+            dst[eid] = sr
+        elif sr.zoom == dr.zoom:
+            dr.polygon_parts.extend(sr.polygon_parts)
+            if dr.bonitet is None:
+                dr.bonitet = sr.bonitet
+            if dr.timber_stock is None:
+                dr.timber_stock = sr.timber_stock
+
+
+def merge_water_records(dst: dict[str, WaterZoneRecord], src: dict[str, WaterZoneRecord]) -> None:
+    """Аналогично merge_vydel_records, но для водоохранных зон."""
+    for eid, sr in src.items():
+        dr = dst.get(eid)
+        if dr is None:
+            dst[eid] = sr
+            continue
+        if sr.zoom > dr.zoom:
+            dst[eid] = sr
+        elif sr.zoom == dr.zoom:
+            dr.polygon_parts.extend(sr.polygon_parts)
+
+
+def merge_stats(dst: Stats, src: Stats) -> None:
+    dst.tiles_ok += src.tiles_ok
+    dst.tiles_empty_pvs += src.tiles_empty_pvs
+    dst.features_seen += src.features_seen
+    for sp, n in src.unknown_species.items():
+        dst.unknown_species[sp] = dst.unknown_species.get(sp, 0) + n
+
+
 def build_geojson(records: dict[str, VydelRecord], stats: Stats) -> dict:
     features: list[dict] = []
     for externalid, rec in records.items():
@@ -478,6 +552,8 @@ def main() -> None:
                     help="Куда сохранить финальный GeoJSON")
     ap.add_argument("--out-water", default="data/rosleshoz/fgislk_water_zones.geojson",
                     help="Куда сохранить водоохранные зоны")
+    ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 4) - 1),
+                    help="Количество параллельных процессов (default: CPU - 1)")
     args = ap.parse_args()
 
     in_root = Path(args.inp)
@@ -485,8 +561,8 @@ def main() -> None:
         raise SystemExit(f"нет директории {in_root}. Сначала запусти download_fgislk_tiles.py")
 
     tiles = iter_pbf_files(in_root)
-    # Сортируем по зуму — сначала грубые, потом детальные.
-    # Так при встрече выдела на более детальном зуме мы сбросим грубую геометрию.
+    # Сортируем по зуму — сначала грубые, потом детальные. Так при встрече выдела
+    # на более детальном зуме сбросим грубую геометрию.
     tiles.sort(key=lambda t: t[1])
     print(f"Найдено pbf-файлов: {len(tiles)}, зумы: {sorted(set(t[1] for t in tiles))}")
     if not tiles:
@@ -496,17 +572,51 @@ def main() -> None:
     water_records: dict[str, WaterZoneRecord] = {}
     stats = Stats(tiles_total=len(tiles))
 
-    for i, (pbf_path, z, x, y) in enumerate(tiles):
-        try:
-            pbf_bytes = pbf_path.read_bytes()
-        except Exception:
-            continue
-        if len(pbf_bytes) == 0:
-            continue
-        process_tile(pbf_bytes, z, x, y, records, water_records, stats)
-        stats.tiles_ok += 1
-        if (i + 1) % 200 == 0 or i == len(tiles) - 1:
-            print(f"  {i+1}/{len(tiles)} tiles  unique_vydels={len(records)}  water_zones={len(water_records)}")
+    if args.workers <= 1:
+        # Serial путь (для дебага или если CPU=1)
+        print(f"Работаем в 1 процесс (serial)")
+        for i, (pbf_path, z, x, y) in enumerate(tiles):
+            try:
+                pbf_bytes = pbf_path.read_bytes()
+            except Exception:
+                continue
+            if len(pbf_bytes) == 0:
+                continue
+            process_tile(pbf_bytes, z, x, y, records, water_records, stats)
+            stats.tiles_ok += 1
+            if (i + 1) % 500 == 0 or i == len(tiles) - 1:
+                print(f"  {i+1}/{len(tiles)} tiles  vydels={len(records)}  water={len(water_records)}", flush=True)
+    else:
+        # Parallel путь — чанкуем по X-директории (тайлы в одной X-колонке обычно
+        # относятся к одной области, так что дубли по externalid минимальны
+        # внутри чанка и попадают в master-merge).
+        by_x: dict[tuple[int, int], list[tuple[str, int, int, int]]] = {}
+        for pbf_path, z, x, y in tiles:
+            by_x.setdefault((z, x), []).append((str(pbf_path), z, x, y))
+        x_chunks = list(by_x.values())
+        # Группируем X-колонки в ровно N_WORKERS батчей, чтобы минимизировать
+        # spawn-overhead и число pickle-раундтрипов.
+        n_workers = args.workers
+        per_worker = max(1, len(x_chunks) // n_workers)
+        worker_batches: list[list[tuple[str, int, int, int]]] = []
+        for i in range(0, len(x_chunks), per_worker):
+            flat: list[tuple[str, int, int, int]] = []
+            for chunk in x_chunks[i:i + per_worker]:
+                flat.extend(chunk)
+            if flat:
+                worker_batches.append(flat)
+        print(f"Работаем в {n_workers} процессов, {len(worker_batches)} батчей по ~{per_worker} X-колонок")
+
+        done_tiles = 0
+        with ProcessPoolExecutor(max_workers=n_workers) as ex:
+            futures = {ex.submit(process_chunk, b): len(b) for b in worker_batches}
+            for fut in as_completed(futures):
+                local_records, local_water, local_stats = fut.result()
+                merge_vydel_records(records, local_records)
+                merge_water_records(water_records, local_water)
+                merge_stats(stats, local_stats)
+                done_tiles += futures[fut]
+                print(f"  {done_tiles}/{len(tiles)} tiles  vydels={len(records)}  water={len(water_records)}", flush=True)
 
     geojson = build_geojson(records, stats)
 
