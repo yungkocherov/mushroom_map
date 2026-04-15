@@ -290,13 +290,14 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
 };
 
-// ─── Схема — ESRI World Topo Map (тот же сервер что и спутник) ───────────────
-// Топографический стиль: рельеф, леса зелёные, реки синие, дороги чёрные.
-// Визуально подходит для грибной карты лучше чем street map.
-// Альтернативы с того же хоста: NatGeo_World_Map (тёплые цвета),
-// World_Street_Map (плоский). CARTO/openfreemap/OSM DE у этого юзера
-// не загружаются.
-const SCHEME_STYLE: maplibregl.StyleSpecification = {
+// ─── Схема — Versatiles Colorful (векторные OSM-тайлы, retina-чёткие) ────────
+// URL стиля загружается через setStyle(string), MapLibre сам парсит JSON
+// и подтягивает glyphs/sprites/tiles с тех же хостов versatiles.org.
+// Если versatiles окажется недоступен — можно вернуться на ESRI World Topo
+// (раньше тут был именно он, но 256px растр мылится на retina).
+const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful.json";
+
+const SCHEME_STYLE_FALLBACK: maplibregl.StyleSpecification = {
   version: 8,
   sources: {
     esri_topo: {
@@ -652,13 +653,16 @@ export function MapView() {
     if (appliedBaseMap.current === baseMap) return;
     appliedBaseMap.current = baseMap;
 
-    const style =
-      baseMap === "hybrid"    ? HYBRID_STYLE    :
-      baseMap === "scheme"    ? SCHEME_STYLE    :
-      baseMap === "satellite" ? SATELLITE_STYLE :
-                                INLINE_STYLE;
-
-    m.setStyle(style);
+    // Scheme — векторный URL-стиль (Versatiles), остальные — inline растры.
+    if (baseMap === "scheme") {
+      m.setStyle(SCHEME_STYLE_URL);
+    } else {
+      const style =
+        baseMap === "hybrid"    ? HYBRID_STYLE    :
+        baseMap === "satellite" ? SATELLITE_STYLE :
+                                  INLINE_STYLE;
+      m.setStyle(style);
+    }
 
     const onReady = () => {
       if (!m.isStyleLoaded()) return;
@@ -667,7 +671,21 @@ export function MapView() {
     };
     m.on("styledata", onReady);
 
-    return () => { m.off("styledata", onReady); };
+    // Fallback для scheme: если векторный Versatiles не загрузился за 6 сек,
+    // перекидываем на ESRI Topo.
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+    if (baseMap === "scheme") {
+      fallbackTimer = setTimeout(() => {
+        if (!m.isStyleLoaded() && appliedBaseMap.current === "scheme") {
+          m.setStyle(SCHEME_STYLE_FALLBACK);
+        }
+      }, 6000);
+    }
+
+    return () => {
+      m.off("styledata", onReady);
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
   }, [baseMap, setupForestAndInteractions]);
 
   return (
