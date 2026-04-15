@@ -2,130 +2,143 @@
 
 ## Цели
 
-1. **Интерактивная карта**, где леса раскрашены по доминирующей породе, а при hover'е видно виды грибов.
+1. **Интерактивная карта**, где леса раскрашены по доминирующей породе, а при клике виден список грибов с бонитетом и запасом.
 2. **Две линии данных**:
-   - *теоретическая* — справочник "вид ↔ тип леса" (работает даже без наблюдений)
-   - *эмпирическая* — агрегация упоминаний видов в региональных ВК-группах, привязанных к H3-ячейкам через NER топонимов
-3. **Масштабирование**: новые территории, новые виды, новые источники данных встраиваются без переписывания.
-4. **Путь к точности**: переход с OSM на Copernicus HRL Tree Species без изменения API и фронта — см. [copernicus_migration.md](copernicus_migration.md).
-5. **Монетизация в перспективе**: чистые слои данных и API позволяют добавить premium-функции (уведомления, исторические хитмапы, персональные маршруты).
+   - *Теоретическая* — справочник «вид ↔ тип леса» (работает без наблюдений)
+   - *Эмпирическая* — агрегация упоминаний видов в ВК-группах, привязанных к H3-ячейкам через NER топонимов
+3. **Масштабирование**: новые территории, виды, источники встраиваются без переписывания.
+4. **Путь к точности**: смена источника леса (OSM → Rosleshoz → Copernicus) без изменения API и фронта.
 
 ## Модули
 
 ```
 mushroom-map/
-├── db/                    # PostgreSQL + PostGIS миграции и сиды
+├── db/                    # PostgreSQL + PostGIS миграции (001..013) и сиды
 │
 ├── services/
 │   ├── geodata/           # ForestSource абстракция → OSM, Copernicus, Rosleshoz
-│   │                      # + генерация PMTiles через Tippecanoe
+│   │                      # + нормализация в forest_polygon
 │   │
 │   ├── placenames/        # Natasha NER + газеттир Ленобласти
-│   │                      # (извлечение топонимов из VK-постов → point/h3)
+│   │                      # (заготовка — не запускалась)
 │   │
-│   ├── species_registry/  # справочник видов грибов, связь species↔forest_type
-│   │                      # (seed: species_registry.yaml)
+│   ├── species_registry/  # конвертер species_registry.yaml → SQL
 │   │
-│   ├── api/               # FastAPI: тайлы, species, regions, observations
+│   ├── api/               # FastAPI: /api/forest/at, /api/species/search, /tiles/
 │   │
-│   └── web/               # React + TypeScript + Vite + MapLibre GL
+│   └── web/               # React + TypeScript + Vite 5 + MapLibre GL
 │
-├── pipelines/             # ETL-оркестрация (self-contained скрипты)
-│   ├── ingest_vk.py       # wrapper над существующим парсером ВК
-│   ├── ingest_forest.py   # geodata ForestSource.run
-│   ├── extract_places.py  # placenames NER → observation.point/h3
-│   └── build_tiles.py     # PMTiles генерация
+├── pipelines/             # ETL-скрипты (ingest_*, build_*_tiles, fgislk_tiles_to_geojson)
 │
 └── docs/
+```
+
+## Схема базы данных
+
+```sql
+-- Лесные данные
+forest_source           -- источники: osm(10), terranorte(45), copernicus(50), rosleshoz(60)
+forest_polygon          -- полигоны: source, dominant_species, species_composition,
+                        --           bonitet, timber_stock, age_group в meta JSONB,
+                        --           geometry MULTIPOLYGON 4326
+forest_unified          -- VIEW: DISTINCT ON (geometry hash) с MAX(priority)
+
+-- Справочник видов
+species                 -- slug, name_ru, name_lat, edibility, season_months
+species_forest_affinity -- species_id, forest_type, affinity 0..1
+
+-- Дополнительные слои
+water_zone              -- водоохранные зоны (geometry POLYGON/MULTIPOLYGON 4326)
+protected_area          -- ООПТ: oopt_category, federal, area_m2, geometry MULTIPOLYGON
+osm_road                -- лесные дороги: highway, name, geometry LINESTRING 4326
+
+-- Наблюдения (VK)
+observation             -- h3_index, species_id, observed_at, point, meta
+region                  -- регионы: code, bbox, geometry
+
+-- Газеттир (заготовка)
+gazetteer_entry         -- топонимы с геометрией и типом
+admin_area              -- административные районы Ленобласти
 ```
 
 ## Поток данных
 
 ```
-┌─────────────────┐      ┌────────────────┐      ┌─────────────────┐
-│  VK группы      │      │  OSM / Coper-  │      │ species_registry│
-│  (grib_spb ...) │      │  nicus / Rosl. │      │  .yaml          │
-└────────┬────────┘      └───────┬────────┘      └────────┬────────┘
-         │                       │                        │
-         ▼                       ▼                        ▼
-  ingest_vk.py           ingest_forest.py          seed_species.py
-         │                       │                        │
-         ▼                       ▼                        ▼
-   raw_posts CSV        forest_polygon          species + species_forest_affinity
-         │                       │
-         ▼                       ▼
- extract_places.py        build_tiles.py
-         │                       │
-         ▼                       ▼
-   observation table        data/tiles/forest.pmtiles
-         │                       │
-         └───────────┬───────────┘
-                     ▼
-               FastAPI (services/api)
-                     │
-                     ▼
-           MapLibre GL (services/web)
+ФГИС ЛК GeoJSON ──→ ingest_forest.py ──→ forest_polygon ──→ build_tiles.py ──→ forest.pmtiles
+                                                 │
+                                         forest_unified VIEW
+                                                 │
+                                     GET /api/forest/at?lat=&lon=
+                                                 │
+                                     MapLibre GL popup
+                                   (бонитет, виды, сезон)
+
+species_registry.yaml ──→ species + species_forest_affinity ──────────────────┘
+
+VK-посты ──→ ingest_vk.py ──→ observation ──→ (пока пустой: species_empirical=[])
+                │
+          Gemma 3 12B
+          (LM Studio)
 ```
 
 ## Ключевые решения
 
 ### 1. PostGIS — единственный источник истины
-Все данные (виды, леса, наблюдения, газеттир, регионы) в одной геобазе. Это даёт:
-- пространственные join'ы (observation ↔ forest_polygon) в одном SQL
-- транзакционность при переингесте
-- типизацию и ограничения (CHECK, FK)
+Все данные в одной геобазе. Пространственные join'ы, транзакционность при переингесте, FK и CHECK-ограничения.
 
-### 2. H3 как пространственная ячейка для эмпирики
-Agregация наблюдений по [H3 Uber hexagons](https://h3geo.org) ресолюшн 7 (~5 км²). Плюсы:
-- стабильная и быстрая сетка, не зависит от админ-границ
-- ресолюшн меняется (более крупная зум → res 6, детальнее → res 8)
-- H3-индекс это короткая строка — хранить дёшево
-- переносимо между регионами, странами
+### 2. ForestSource абстракция
+Каждый источник реализует `fetch() + normalize()`, пишет в общую `forest_polygon(source=...)`. `forest_unified` VIEW автоматически выбирает полигон с наивысшим приоритетом. Смена источника — одна SQL-миграция + перезапуск пайплайна.
 
-### 3. Абстракция источников лесов — `ForestSource`
-Каждый источник реализует `fetch() + normalize()`, пишет в общую `forest_polygon(source=...)`. View `forest_unified` приоритезирует лучший источник. См. [copernicus_migration.md](copernicus_migration.md).
+### 3. PMTiles — без тайлового сервера
+Один файл, HTTP Range requests. Браузер через PMTiles-библиотеку + MapLibre GL скачивает только нужные тайлы. API отдаёт файл через StaticFiles (FastAPI).
 
-### 4. Два слоя видовой информации
-- **Теоретический**: `species_forest_affinity` — "в сосняке обычно ожидать X, Y, Z" — работает даже в нулевой день, без наблюдений
-- **Эмпирический**: `observation_h3_species_stats` — "в этой ячейке за 2020-2026 люди чаще всего фотографировали X, Y, Z" — уточняется с каждым новым запуском пайплайна
+### 4. Bonitet/timber_stock/age_group в meta JSONB
+Таксационные атрибуты хранятся в `meta JSONB` полигона, а не в отдельных колонках. API читает их при click-запросе и отдаёт в попап.
 
-Фронт показывает оба слоя в одном попапе, помечая источник.
+### 5. Типы леса (слаги) — стабильный контракт
+`dominant_species` в `forest_polygon` использует тот же словарь, что `species_forest_affinity.forest_type`. Менять slug'и нельзя — только добавлять.
 
-### 5. Стабильные slug'и типов леса
-`dominant_species` в `forest_polygon` использует тот же словарь, что `species_forest_affinity.forest_type`. Это ключевое связующее звено и единственный контракт между geodata и species_registry.
-
-Словарь (v1):
 ```
-pine                — сосна
-spruce              — ель
-larch               — лиственница
-fir                 — пихта
-cedar               — кедр / сибирская сосна
-birch               — берёза
-aspen               — осина
-alder               — ольха
-oak                 — дуб
-linden              — липа
-maple               — клён
-mixed_coniferous    — смешанный хвойный (без породной детализации, напр. OSM needleleaved)
-mixed_broadleaved   — смешанный лиственный
-mixed               — смешанный (хвойные + лиственные)
-unknown             — лес есть, порода неизвестна
+pine, spruce, larch, fir, cedar,
+birch, aspen, alder, oak, linden, maple,
+mixed_coniferous, mixed_broadleaved, mixed, unknown
 ```
 
-Словарь расширяется — менять slug'и нельзя, можно только добавлять.
+### 6. H3 для агрегации наблюдений
+Гексагональная сетка Uber resolution 7 (~5 км²). Observation хранит `h3_index`, агрегация «сколько раз в этой клетке нашли вид X» — один `GROUP BY`. Стабильно при расширении на новые регионы.
 
-### 6. NER + газеттир — раздельные компоненты
-- **Газеттир** (`gazetteer_entry`) — надёжный словарь: точное совпадение → точка. Главный источник точности.
-- **NER** (Natasha) — fallback: находит незнакомые географические сущности в тексте, отдаёт их на ручную доразметку или дешёвое геокодирование.
+### 7. Гибридная карта — injection approach
+Hybrid basemap реализован через:
+1. `m.setStyle(SCHEME_STYLE_URL)` — загрузка Bright схемы
+2. После `isStyleLoaded()` — добавление ESRI satellite raster как самого нижнего слоя
+3. `setPaintProperty("background", "background-opacity", 0)` — прозрачный фон
 
-Стратегия: сначала точное совпадение с газеттиром (с учётом морфологии через `unaccent` + `pg_trgm`), потом NER, потом "не нашли → без привязки".
+Это надёжнее async fetch+modify, так как переиспользует тот же code path, что работает для "Схема".
 
-## Дальнейшие улучшения (после MVP)
+## API endpoints
 
-- **Интеграция ML-предсказаний**: подтянуть панельные модели из существующего парсера, показывать "сезон начался" хитмапу
-- **Copernicus ingest** (см. `copernicus_migration.md`)
-- **UGC**: форма добавления наблюдения пользователем с верификацией
-- **Уведомления**: "в вашем районе пошли белые"
-- **Мультирегион**: Московская, Тверская, Псковская области
-- **API для партнёров**
+| Method | Path | Описание |
+|--------|------|----------|
+| GET | `/api/forest/at?lat=&lon=` | Полигон + виды по клику |
+| GET | `/api/species/search?q=&limit=` | Поиск грибов по имени |
+| GET | `/api/species/{slug}/forests` | Типы леса для вида |
+| GET | `/api/regions/` | Список регионов |
+| GET | `/tiles/{filename}` | PMTiles файлы (StaticFiles) |
+
+## Источники лесных данных
+
+| Источник | Priority | Покрытие | Статус |
+|----------|----------|----------|--------|
+| OSM (Overpass API) | 10 | Вся Ленобласть | ✅ 47 000 полигонов (88% unknown) |
+| TerraNorte RLC | 45 | Россия | 📋 пайплайн готов, данные не загружены |
+| Copernicus HRL | 50 | Европа | 📋 инфраструктура готова |
+| Rosleshoz/ФГИСЛК | 60 | Карельский перешеек | ✅ 111 559 полигонов |
+
+## Дальнейшие улучшения
+
+- **Copernicus HRL**: инструкция в `docs/copernicus_migration.md`
+- **ООПТ**: скачать с oopt.aari.ru, инструкция в `docs/oopt_download.md`
+- **Лесные дороги**: скачать PBF с Geofabrik, инструкция в `docs/osm_roads_download.md`
+- **Болота**: OSM `natural=wetland` — аналогично водоохранным зонам
+- **Тепловая карта H3**: данные `observation_h3_species_stats` уже есть в схеме
+- **VK-наблюдения**: `pipelines/ingest_vk.py` готов, нужен VK_TOKEN + LM Studio
