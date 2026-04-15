@@ -92,8 +92,15 @@ export const FOREST_LAYER_PAINT_PATTERN = {
 
 /**
  * Paint через fill-color.
- * fill-opacity=0.8: надписи растровой подложки просвечивают сквозь лес.
- * fill-antialias=true: безопасно т.к. buffer=0 (нет перекрывающихся зон тайлов).
+ * fill-opacity=1.0 + fill-antialias=true: полигоны полностью непрозрачны,
+ * антиалиасинг сглаживает края без просвета (при opacity<1 антиалиас
+ * даёт видимые "прожилки" на стыках — basemap просвечивает).
+ * fill-outline-color=transparent: явные линии по краям не рисуем.
+ *
+ * В схеме/гибриде (векторные стили) подписи рендерятся ПОВЕРХ леса в
+ * отдельных symbol-слоях, так что opacity=1 их не прячет. В растровых
+ * подложках (OSM/satellite) подписи подложки закрываются — это ок,
+ * на forest view подписи не самое важное.
  */
 export const FOREST_LAYER_PAINT_COLOR = {
   "fill-color": [
@@ -115,11 +122,9 @@ export const FOREST_LAYER_PAINT_COLOR = {
     "mixed", FOREST_COLORS.mixed,
     FOREST_COLORS.unknown,
   ],
-  "fill-opacity": 0.8,
+  "fill-opacity": 1.0,
   "fill-outline-color": "rgba(0,0,0,0)",
-  // false устраняет "прожилки" между соседними полигонами: при opacity<1 и
-  // antialias=true края каждого полигона слегка прозрачны → просвет на стыках.
-  "fill-antialias": false,
+  "fill-antialias": true,
 } as const;
 
 // Обратная совместимость — старое имя указывает на fallback-вариант
@@ -146,8 +151,9 @@ export const FOREST_LAYER_PAINT_BONITET = {
     5, "#b71c1c",
     "#9e9e9e",
   ],
-  "fill-opacity": 0.8,
-  "fill-antialias": false,
+  "fill-opacity": 1.0,
+  "fill-outline-color": "rgba(0,0,0,0)",
+  "fill-antialias": true,
 } as const;
 
 export const BONITET_LEGEND: Array<{ label: string; color: string }> = [
@@ -170,8 +176,9 @@ export const FOREST_LAYER_PAINT_AGE_GROUP = {
     "перестойные",      "#4e342e",
     "#9e9e9e",
   ],
-  "fill-opacity": 0.8,
-  "fill-antialias": false,
+  "fill-opacity": 1.0,
+  "fill-outline-color": "rgba(0,0,0,0)",
+  "fill-antialias": true,
 } as const;
 
 export const AGE_GROUP_LEGEND: Array<{ label: string; color: string }> = [

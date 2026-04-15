@@ -147,34 +147,34 @@ function findFirstSymbolLayerId(m: Map): string | undefined {
 }
 
 /**
- * Добавляет лесной слой с flat-цветами. Синхронно, без лишних сетевых запросов.
- * Тайлы PMTiles подгружаются лениво по мере панорамирования/зума.
+ * Добавляет лесной слой с flat-цветами. Тайлы PMTiles подгружаются лениво.
+ * Если findFirstSymbolLayerId вернёт undefined (в стиле вообще нет символов),
+ * слой вставляется в самый верх — он всё равно будет виден.
  */
 function addForestLayer(m: Map) {
-  if (m.getLayer("forest-fill")) return; // слой уже добавлен
-
-  // Source может пережить setStyle (diff-режим), а слой — нет. Добавляем source
-  // только если его нет.
-  if (!m.getSource("forest")) {
-    m.addSource("forest", {
-      type: "vector",
-      url: FOREST_PMTILES_URL,
-    });
+  if (m.getLayer("forest-fill")) return;
+  try {
+    if (!m.getSource("forest")) {
+      m.addSource("forest", {
+        type: "vector",
+        url: FOREST_PMTILES_URL,
+      });
+    }
+    const beforeId = findFirstSymbolLayerId(m);
+    m.addLayer(
+      {
+        id: "forest-fill",
+        type: "fill",
+        source: "forest",
+        "source-layer": "forest",
+        paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
+      },
+      beforeId,
+    );
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error("[forest] addLayer failed:", e);
   }
-  const beforeId = findFirstSymbolLayerId(m);
-
-  m.addLayer(
-    {
-      id: "forest-fill",
-      type: "fill",
-      source: "forest",
-      "source-layer": "forest",
-      paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
-    },
-    beforeId,
-  );
-  // outline убран: явные линии по каждому краю полигона дают "блочный" вид;
-  // цветовые переходы между породами и так видны на границах.
 }
 
 function addOoptLayer(m: Map) {
@@ -439,7 +439,7 @@ function setRoadsVisibility(m: Map, visible: boolean) {
 export function MapView() {
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
-  const [baseMap, setBaseMap] = useState<BaseMapMode>("osm");
+  const [baseMap, setBaseMap] = useState<BaseMapMode>("scheme");
   const [forestVisible, setForestVisible] = useState(true);
   const [forestLoaded, setForestLoaded] = useState(false);
   const [forestColorMode, setForestColorMode] = useState<ForestColorMode>("species");
@@ -467,8 +467,9 @@ export function MapView() {
   const roadsVisibleRef = useRef(roadsVisible);
   roadsVisibleRef.current = roadsVisible;
   const roadsLoadedRef = useRef(false);
-  // Отслеживаем уже применённый baseMap чтобы не вызывать setStyle зря
-  // (совпадает с начальным значением useState, чтобы первый рендер был no-op)
+  // Отслеживаем уже применённый baseMap. Изначально — INLINE_STYLE (osm),
+  // а useState инициализируется как "scheme", поэтому первый раз useEffect
+  // сработает и переключит с osm на scheme.
   const appliedBaseMap = useRef<BaseMapMode>("osm");
 
   // Вызывается при смене стиля — переaddит лесной и водоохранный слои если они загружены.
@@ -502,17 +503,23 @@ export function MapView() {
     }
   }, []);
 
-  // Единый обработчик кнопки: первый клик — загружает, последующие — тоглят
+  // Единый обработчик кнопки: первый клик — загружает, последующие — тоглят.
+  // Если стиль ещё переключается (buildHybridStyle в полёте) — откладываем
+  // addForestLayer до события idle, иначе MapLibre сотрёт наш layer при setStyle.
   const handleForestToggle = useCallback(() => {
     const m = map.current;
     if (!m) return;
     if (!forestLoadedRef.current) {
       forestLoadedRef.current = true;
       setForestLoaded(true);
-      addForestLayer(m);
       forestVisibleRef.current = true;
       setForestVisible(true);
-      setForestVisibility(m, true);
+      const doAdd = () => {
+        addForestLayer(m);
+        setForestVisibility(m, true);
+      };
+      if (m.isStyleLoaded()) doAdd();
+      else m.once("idle", doAdd);
     } else {
       const next = !forestVisibleRef.current;
       forestVisibleRef.current = next;
@@ -526,9 +533,10 @@ export function MapView() {
     if (!m) return;
     if (!waterLoadedRef.current) {
       waterLoadedRef.current = true; setWaterLoaded(true);
-      addWaterLayer(m);
       waterVisibleRef.current = true; setWaterVisible(true);
-      setWaterVisibility(m, true);
+      const doAdd = () => { addWaterLayer(m); setWaterVisibility(m, true); };
+      if (m.isStyleLoaded()) doAdd();
+      else m.once("idle", doAdd);
     } else {
       const next = !waterVisibleRef.current;
       waterVisibleRef.current = next; setWaterVisible(next);
