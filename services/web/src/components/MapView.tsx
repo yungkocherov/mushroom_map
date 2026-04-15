@@ -27,6 +27,9 @@ const FOREST_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/forest.pmtiles`;
 const WATER_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/water.pmtiles`;
 const OOPT_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/oopt.pmtiles`;
 const ROADS_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/roads.pmtiles`;
+const WETLANDS_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/wetlands.pmtiles`;
+const FELLING_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/felling.pmtiles`;
+const PROTECTIVE_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/protective.pmtiles`;
 
 // ─── Отображение типов леса ───────────────────────────────────────────────────
 const FOREST_NAMES: Record<string, string> = {
@@ -252,6 +255,81 @@ function addWaterLayer(m: Map) {
   );
 }
 
+function addWetlandLayer(m: Map) {
+  if (m.getLayer("wetland-fill")) return;
+  if (!m.getSource("wetland")) {
+    m.addSource("wetland", { type: "vector", url: WETLANDS_PMTILES_URL });
+  }
+  const beforeId = findFirstSymbolLayerId(m);
+  m.addLayer(
+    {
+      id: "wetland-fill",
+      type: "fill",
+      source: "wetland",
+      "source-layer": "wetland",
+      paint: {
+        // Тёмно-коричневый (цвет торфа) с высокой прозрачностью —
+        // болота видно, но не доминируют
+        "fill-color": "#795548",
+        "fill-opacity": 0.4,
+        "fill-antialias": false,
+      } as unknown as maplibregl.FillLayerSpecification["paint"],
+    },
+    beforeId,
+  );
+}
+
+function addFellingLayer(m: Map) {
+  if (m.getLayer("felling-fill")) return;
+  if (!m.getSource("felling")) {
+    m.addSource("felling", { type: "vector", url: FELLING_PMTILES_URL });
+  }
+  const beforeId = findFirstSymbolLayerId(m);
+  m.addLayer(
+    {
+      id: "felling-fill",
+      type: "fill",
+      source: "felling",
+      "source-layer": "felling",
+      paint: {
+        // Оранжево-красный — вырубки/гари выделяются как "особая экология"
+        "fill-color": [
+          "match", ["get", "area_type"],
+          "Вырубка", "#ff5722",
+          "Гарь", "#b71c1c",
+          "Погибшее насаждение", "#5d4037",
+          "#bf360c",  // default: тёмно-оранжевый
+        ],
+        "fill-opacity": 0.5,
+        "fill-antialias": false,
+      } as unknown as maplibregl.FillLayerSpecification["paint"],
+    },
+    beforeId,
+  );
+}
+
+function addProtectiveLayer(m: Map) {
+  if (m.getLayer("protective-fill")) return;
+  if (!m.getSource("protective")) {
+    m.addSource("protective", { type: "vector", url: PROTECTIVE_PMTILES_URL });
+  }
+  const beforeId = findFirstSymbolLayerId(m);
+  m.addLayer(
+    {
+      id: "protective-fill",
+      type: "fill",
+      source: "protective",
+      "source-layer": "protective",
+      paint: {
+        "fill-color": "#6a1b9a",  // фиолетовый — "юридический" слой
+        "fill-opacity": 0.25,
+        "fill-antialias": false,
+      } as unknown as maplibregl.FillLayerSpecification["paint"],
+    },
+    beforeId,
+  );
+}
+
 // ─── Встроенный стиль (fallback если внешний недоступен) ─────────────────────
 const INLINE_STYLE: maplibregl.StyleSpecification = {
   version: 8,
@@ -467,6 +545,21 @@ function setOoptVisibility(m: Map, visible: boolean) {
     m.setLayoutProperty("oopt-fill", "visibility", visible ? "visible" : "none");
 }
 
+function setWetlandVisibility(m: Map, visible: boolean) {
+  if (m.getLayer("wetland-fill"))
+    m.setLayoutProperty("wetland-fill", "visibility", visible ? "visible" : "none");
+}
+
+function setFellingVisibility(m: Map, visible: boolean) {
+  if (m.getLayer("felling-fill"))
+    m.setLayoutProperty("felling-fill", "visibility", visible ? "visible" : "none");
+}
+
+function setProtectiveVisibility(m: Map, visible: boolean) {
+  if (m.getLayer("protective-fill"))
+    m.setLayoutProperty("protective-fill", "visibility", visible ? "visible" : "none");
+}
+
 function setRoadsVisibility(m: Map, visible: boolean) {
   if (m.getLayer("roads-line"))
     m.setLayoutProperty("roads-line", "visibility", visible ? "visible" : "none");
@@ -488,6 +581,12 @@ export function MapView() {
   const [ooptLoaded, setOoptLoaded] = useState(false);
   const [roadsVisible, setRoadsVisible] = useState(true);
   const [roadsLoaded, setRoadsLoaded] = useState(false);
+  const [wetlandVisible, setWetlandVisible] = useState(true);
+  const [wetlandLoaded, setWetlandLoaded] = useState(false);
+  const [fellingVisible, setFellingVisible] = useState(true);
+  const [fellingLoaded, setFellingLoaded] = useState(false);
+  const [protectiveVisible, setProtectiveVisible] = useState(true);
+  const [protectiveLoaded, setProtectiveLoaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Refs для доступа из стабильных колбэков без пересоздания
@@ -503,6 +602,15 @@ export function MapView() {
   const roadsVisibleRef = useRef(roadsVisible);
   roadsVisibleRef.current = roadsVisible;
   const roadsLoadedRef = useRef(false);
+  const wetlandVisibleRef = useRef(wetlandVisible);
+  wetlandVisibleRef.current = wetlandVisible;
+  const wetlandLoadedRef = useRef(false);
+  const fellingVisibleRef = useRef(fellingVisible);
+  fellingVisibleRef.current = fellingVisible;
+  const fellingLoadedRef = useRef(false);
+  const protectiveVisibleRef = useRef(protectiveVisible);
+  protectiveVisibleRef.current = protectiveVisible;
+  const protectiveLoadedRef = useRef(false);
   // Отслеживаем уже применённый baseMap. Изначально — INLINE_STYLE (osm),
   // а useState инициализируется как "scheme", поэтому первый раз useEffect
   // сработает и переключит с osm на scheme.
@@ -536,6 +644,24 @@ export function MapView() {
       if (m.getSource("roads")) m.removeSource("roads");
       addRoadsLayer(m);
       setRoadsVisibility(m, roadsVisibleRef.current);
+    }
+    if (wetlandLoadedRef.current) {
+      if (m.getLayer("wetland-fill")) m.removeLayer("wetland-fill");
+      if (m.getSource("wetland")) m.removeSource("wetland");
+      addWetlandLayer(m);
+      setWetlandVisibility(m, wetlandVisibleRef.current);
+    }
+    if (fellingLoadedRef.current) {
+      if (m.getLayer("felling-fill")) m.removeLayer("felling-fill");
+      if (m.getSource("felling")) m.removeSource("felling");
+      addFellingLayer(m);
+      setFellingVisibility(m, fellingVisibleRef.current);
+    }
+    if (protectiveLoadedRef.current) {
+      if (m.getLayer("protective-fill")) m.removeLayer("protective-fill");
+      if (m.getSource("protective")) m.removeSource("protective");
+      addProtectiveLayer(m);
+      setProtectiveVisibility(m, protectiveVisibleRef.current);
     }
   }, []);
 
@@ -606,6 +732,80 @@ export function MapView() {
       setOoptVisibility(m, next);
     }
   }, []);
+
+  // Generic toggle handler для слоёв с HEAD-проверкой pmtiles-файла
+  const toggleLayerWithCheck = useCallback(
+    async (
+      pmtilesName: string,
+      notFoundMsg: string,
+      loadedRef: React.MutableRefObject<boolean>,
+      visibleRef: React.MutableRefObject<boolean>,
+      setLoaded: (v: boolean) => void,
+      setVisible: (v: boolean) => void,
+      addLayer: (m: Map) => void,
+      setVisibility: (m: Map, v: boolean) => void,
+    ) => {
+      const m = map.current;
+      if (!m) return;
+      if (!loadedRef.current) {
+        try {
+          const resp = await fetch(`${API_ORIGIN}/tiles/${pmtilesName}`, { method: "HEAD" });
+          if (!resp.ok) {
+            setErrorMsg(notFoundMsg);
+            setTimeout(() => setErrorMsg(null), 5000);
+            return;
+          }
+        } catch {
+          setErrorMsg(`Не удалось проверить ${pmtilesName}`);
+          setTimeout(() => setErrorMsg(null), 4000);
+          return;
+        }
+        loadedRef.current = true; setLoaded(true);
+        visibleRef.current = true; setVisible(true);
+        const doAdd = () => { addLayer(m); setVisibility(m, true); };
+        if (m.isStyleLoaded()) doAdd();
+        else m.once("idle", doAdd);
+      } else {
+        const next = !visibleRef.current;
+        visibleRef.current = next; setVisible(next);
+        setVisibility(m, next);
+      }
+    },
+    [],
+  );
+
+  const handleWetlandToggle = useCallback(
+    () => toggleLayerWithCheck(
+      "wetlands.pmtiles",
+      "Данные болот не загружены — запустите ingest_wetlands.py и build_wetlands_tiles.py",
+      wetlandLoadedRef, wetlandVisibleRef,
+      setWetlandLoaded, setWetlandVisible,
+      addWetlandLayer, setWetlandVisibility,
+    ),
+    [toggleLayerWithCheck],
+  );
+
+  const handleFellingToggle = useCallback(
+    () => toggleLayerWithCheck(
+      "felling.pmtiles",
+      "Данные вырубок не загружены — запустите ingest_felling.py и build_felling_tiles.py",
+      fellingLoadedRef, fellingVisibleRef,
+      setFellingLoaded, setFellingVisible,
+      addFellingLayer, setFellingVisibility,
+    ),
+    [toggleLayerWithCheck],
+  );
+
+  const handleProtectiveToggle = useCallback(
+    () => toggleLayerWithCheck(
+      "protective.pmtiles",
+      "Данные защитных лесов не загружены — запустите ingest_protective.py и build_protective_tiles.py",
+      protectiveLoadedRef, protectiveVisibleRef,
+      setProtectiveLoaded, setProtectiveVisible,
+      addProtectiveLayer, setProtectiveVisibility,
+    ),
+    [toggleLayerWithCheck],
+  );
 
   const handleForestColorMode = useCallback((mode: ForestColorMode) => {
     setForestColorMode(mode);
@@ -829,6 +1029,15 @@ export function MapView() {
         roadsVisible={roadsVisible}
         roadsLoaded={roadsLoaded}
         onRoadsToggle={handleRoadsToggle}
+        wetlandVisible={wetlandVisible}
+        wetlandLoaded={wetlandLoaded}
+        onWetlandToggle={handleWetlandToggle}
+        fellingVisible={fellingVisible}
+        fellingLoaded={fellingLoaded}
+        onFellingToggle={handleFellingToggle}
+        protectiveVisible={protectiveVisible}
+        protectiveLoaded={protectiveLoaded}
+        onProtectiveToggle={handleProtectiveToggle}
         onShare={handleShare}
       />
 

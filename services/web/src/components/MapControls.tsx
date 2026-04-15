@@ -22,6 +22,15 @@ interface Props {
   roadsVisible: boolean;
   roadsLoaded: boolean;
   onRoadsToggle: () => void;
+  wetlandVisible: boolean;
+  wetlandLoaded: boolean;
+  onWetlandToggle: () => void;
+  fellingVisible: boolean;
+  fellingLoaded: boolean;
+  onFellingToggle: () => void;
+  protectiveVisible: boolean;
+  protectiveLoaded: boolean;
+  onProtectiveToggle: () => void;
   onShare: () => void;
 }
 
@@ -134,6 +143,27 @@ export function MapControls(props: Props) {
       <div style={CARD_STYLE}>
         <button onClick={props.onRoadsToggle} style={layerBtn(props.roadsLoaded, props.roadsVisible, "#5d4037")}>
           {!props.roadsLoaded ? "Лесные дороги" : props.roadsVisible ? "Дороги: вкл" : "Дороги: выкл"}
+        </button>
+      </div>
+
+      {/* Болота */}
+      <div style={CARD_STYLE}>
+        <button onClick={props.onWetlandToggle} style={layerBtn(props.wetlandLoaded, props.wetlandVisible, "#795548")}>
+          {!props.wetlandLoaded ? "Болота" : props.wetlandVisible ? "Болота: вкл" : "Болота: выкл"}
+        </button>
+      </div>
+
+      {/* Вырубки / гари */}
+      <div style={CARD_STYLE}>
+        <button onClick={props.onFellingToggle} style={layerBtn(props.fellingLoaded, props.fellingVisible, "#bf360c")}>
+          {!props.fellingLoaded ? "Вырубки и гари" : props.fellingVisible ? "Вырубки: вкл" : "Вырубки: выкл"}
+        </button>
+      </div>
+
+      {/* Защитные леса */}
+      <div style={CARD_STYLE}>
+        <button onClick={props.onProtectiveToggle} style={layerBtn(props.protectiveLoaded, props.protectiveVisible, "#6a1b9a")}>
+          {!props.protectiveLoaded ? "Защитные леса" : props.protectiveVisible ? "Защитные: вкл" : "Защитные: выкл"}
         </button>
       </div>
 
