@@ -293,7 +293,10 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
   sprite: "",
 };
 
-const SCHEME_STYLE_URL = "https://tiles.openfreemap.org/styles/bright";
+// CARTO Voyager — векторный стиль, хостится на CloudFront CDN (AWS),
+// очень стабильный. Альтернативы: basemaps.cartocdn.com/gl/positron-gl-style/style.json
+// (светлый, без цветов), tiles.openfreemap.org/styles/bright (часто рвёт соединение).
+const SCHEME_STYLE_URL = "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
 
 // ─── Компонент ────────────────────────────────────────────────────────────────
 
