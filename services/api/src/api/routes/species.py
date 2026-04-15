@@ -42,10 +42,11 @@ def search_species(
 
             forest_type_rows = conn.execute(
                 """
-                SELECT DISTINCT forest_type
+                SELECT forest_type
                 FROM species_forest_affinity
                 WHERE species_id = %s
-                ORDER BY affinity DESC
+                GROUP BY forest_type
+                ORDER BY MAX(affinity) DESC
                 LIMIT 5
                 """,
                 (species_id,),
