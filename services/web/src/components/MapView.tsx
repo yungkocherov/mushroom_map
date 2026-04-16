@@ -24,6 +24,11 @@ const API_ORIGIN = import.meta.env.DEV
   ? (import.meta.env.VITE_API_URL ?? "http://localhost:8000")
   : window.location.origin;
 const FOREST_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/forest.pmtiles`;
+// GeoJSON с населёнными пунктами ЛО из OSM. Маленький файл (~300 KB),
+// загружается один раз. Нужен потому что Versatiles тайлы не содержат
+// place=village/hamlet в тайлах ниже zoom 12 — layer.minzoom не помогает,
+// если в самих .pbf тайлах данных нет.
+const PLACES_URL = `${API_ORIGIN}/tiles/places.geojson`;
 const WATER_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/water.pmtiles`;
 const OOPT_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/oopt.pmtiles`;
 const ROADS_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/roads.pmtiles`;
@@ -331,6 +336,44 @@ function addFellingLayer(m: Map) {
     },
     beforeId,
   );
+}
+
+/**
+ * Слой подписей населённых пунктов из нашего OSM GeoJSON.
+ * Показывается только на Схеме и Гибриде — на OSM-растре подписи уже запечены,
+ * на Спутнике не нужны.
+ *
+ * Источник: data/tiles/places.geojson, скачанный из Overpass.
+ * Все деревни/хутора видны с zoom 6 — мы сами контролируем данные
+ * и не зависим от ограничений Versatiles тайлов.
+ */
+function addPlaceLabelsLayer(m: Map) {
+  if (m.getLayer("places-text")) return;
+  if (!m.getSource("places")) {
+    m.addSource("places", { type: "geojson", data: PLACES_URL });
+  }
+  m.addLayer({
+    id: "places-text",
+    type: "symbol",
+    source: "places",
+    minzoom: 4,
+    layout: {
+      "text-field": ["get", "name"],
+      "text-size": ["interpolate", ["linear"], ["zoom"], 5, 9, 8, 11, 10, 12, 14, 14],
+      "text-font": ["Noto Sans Regular", "Arial Unicode MS Regular"],
+      "text-anchor": "center",
+      "text-max-width": 8,
+      "text-allow-overlap": false,
+      "text-padding": 2,
+      // priority=0 (city) отображается поверх priority=4 (hamlet)
+      "symbol-sort-key": ["get", "priority"],
+    },
+    paint: {
+      "text-color": ["match", ["get", "place"], "city", "#111", "town", "#222", "#444"],
+      "text-halo-color": "rgba(255,255,255,0.95)",
+      "text-halo-width": 1.5,
+    },
+  } as unknown as maplibregl.SymbolLayerSpecification);
 }
 
 function addProtectiveLayer(m: Map) {
@@ -665,6 +708,14 @@ export function MapView() {
   // diff=true может оставить source живым но снести layer, что приводит к тому что
   // addForestLayer видит source и делает early-return не добавив layer.
   const setupForestAndInteractions = useCallback((m: Map) => {
+    // Подписи населённых пунктов: только для Схемы и Гибрида.
+    // На OSM-растре подписи уже в тайлах, на Спутнике не нужны.
+    if (m.getLayer("places-text")) m.removeLayer("places-text");
+    if (m.getSource("places"))    m.removeSource("places");
+    if (appliedBaseMap.current === "scheme" || appliedBaseMap.current === "hybrid") {
+      addPlaceLabelsLayer(m);
+    }
+
     if (forestLoadedRef.current) {
       if (m.getLayer("forest-fill")) m.removeLayer("forest-fill");
       if (m.getSource("forest")) m.removeSource("forest");
