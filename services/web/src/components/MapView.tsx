@@ -398,31 +398,36 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
 // colorful.json — тот отдаёт 404).
 const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful/style.json";
 
-const LABEL_SCALE = 1.6;
+// Масштаб текста по типу слоя.
+//
+// КЛЮЧЕВОЕ ПРАВИЛО: мелкие населённые пункты (village/hamlet/...) НЕ увеличиваем.
+// Чем крупнее текст деревни — тем меньше деревень MapLibre показывает,
+// потому что collision detection убирает перекрывающиеся надписи.
+// Оригинальный Versatiles-размер (~10-12px) оптимален для показа сотен деревень
+// на одном экране. Дороги и POI можно увеличить — их меньше.
+const ROAD_POI_LABEL_SCALE  = 1.5;   // дороги, POI, прочие символы
+const LARGE_PLACE_SCALE     = 1.3;   // города, посёлки городского типа
+const SMALL_PLACE_SCALE     = 1.0;   // деревни, хутора, сёла — НЕ трогаем
 
-/**
- * Для грибника важно видеть деревни и посёлки издалека, поэтому мы
- * агрессивно снижаем minzoom для всех label-place-* слоёв на 4-6 уровней
- * ниже дефолта Versatiles. Деревни теперь видны с zoom 6 (= вся область
- * в экране), хутора с zoom 9.
- *
- * Побочка — при сильном зуме-out подписи могут налезать друг на друга.
- * MapLibre сам их фильтрует через collision detection, так что "лишних"
- * не показывает, но важные города/посёлки выигрывают приоритет.
- */
+// Regex для категорий мест
+const SMALL_PLACE_RE = /^label-place-(village|hamlet|suburb|quarter|neighbourhood|locality|farm|isolated_dwelling)$/;
+const LARGE_PLACE_RE = /^label-place-(city|town|capital|statecapital)$/;
+
+// minzoom: явные переопределения. Для незнакомых label-place-* применяем
+// catchall в buildSchemeStyle (-5 от дефолта).
 const LABEL_MINZOOM_OVERRIDES: Record<string, number> = {
-  "label-place-capital":            3,   // было 5
-  "label-place-statecapital":       4,   // было 6
-  "label-place-city":               5,   // было 7
-  "label-place-town":               6,   // было 9
-  "label-place-village":            6,   // было 11 — для грибника ГЛАВНОЕ
-  "label-place-hamlet":             7,   // было 13 — хутора видны раньше
-  "label-place-suburb":             7,   // было 11
-  "label-place-quarter":            9,   // было 13
-  "label-place-neighbourhood":     10,   // было 14
-  "label-place-locality":           8,   // малые населённые пункты
-  "label-place-isolated_dwelling":  9,   // отдельно стоящие дома/фермы
-  "label-place-farm":               8,   // деревня / хутор
+  "label-place-capital":            3,
+  "label-place-statecapital":       4,
+  "label-place-city":               5,
+  "label-place-town":               6,
+  "label-place-village":            6,   // ГЛАВНОЕ — деревни с zoom 6
+  "label-place-hamlet":             7,
+  "label-place-suburb":             7,
+  "label-place-quarter":            9,
+  "label-place-neighbourhood":     10,
+  "label-place-locality":           7,
+  "label-place-isolated_dwelling":  8,
+  "label-place-farm":               7,
 };
 
 /**
@@ -459,28 +464,39 @@ async function buildSchemeStyle(): Promise<maplibregl.StyleSpecification> {
 
   for (const layer of style.layers) {
     if (layer.type !== "symbol") continue;
+    const layerId = layer.id ?? "";
 
-    // (2) Увеличиваем text-size во всех symbol-слоях.
-    if (layer.layout) {
+    // (2) text-size: разный масштаб для разных типов слоёв.
+    // Деревни/хутора — scale=1.0 (не трогаем), города — 1.3, остальное — 1.5.
+    const scale = SMALL_PLACE_RE.test(layerId) ? SMALL_PLACE_SCALE
+                : LARGE_PLACE_RE.test(layerId) ? LARGE_PLACE_SCALE
+                : ROAD_POI_LABEL_SCALE;
+
+    if (scale !== 1.0 && layer.layout) {
       const ts = layer.layout["text-size"];
       if (ts != null) {
         if (typeof ts === "number") {
-          layer.layout["text-size"] = ts * LABEL_SCALE;
+          layer.layout["text-size"] = ts * scale;
         } else if (typeof ts === "object" && !Array.isArray(ts) && Array.isArray((ts as { stops?: unknown }).stops)) {
           const stops = (ts as { stops: Array<[number, number]> }).stops;
           layer.layout["text-size"] = {
             ...(ts as object),
-            stops: stops.map(([z, v]) => [z, v * LABEL_SCALE] as [number, number]),
+            stops: stops.map(([z, v]) => [z, v * scale] as [number, number]),
           };
         } else if (Array.isArray(ts)) {
-          layer.layout["text-size"] = ["*", LABEL_SCALE, ts];
+          layer.layout["text-size"] = ["*", scale, ts];
         }
       }
     }
 
-    // (3) minzoom override для label-place-* чтобы показать деревни раньше
-    if (layer.id && layer.id in LABEL_MINZOOM_OVERRIDES) {
-      layer.minzoom = LABEL_MINZOOM_OVERRIDES[layer.id];
+    // (3) minzoom: явные overrides + catchall для любых label-place-* слоёв.
+    if (layerId.startsWith("label-place-")) {
+      if (layerId in LABEL_MINZOOM_OVERRIDES) {
+        layer.minzoom = LABEL_MINZOOM_OVERRIDES[layerId];
+      } else {
+        // Неизвестный тип места — снижаем minzoom на 5 от дефолта Versatiles
+        layer.minzoom = Math.max(0, (layer.minzoom ?? 12) - 5);
+      }
     }
   }
 
