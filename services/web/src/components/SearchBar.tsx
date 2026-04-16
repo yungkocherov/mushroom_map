@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { searchSpecies, searchPlaces, SpeciesSearchResult, NominatimResult } from "../lib/api";
+import { useIsMobile } from "../lib/useIsMobile";
 
 interface Props {
   onFlyTo: (lat: number, lon: number, zoom?: number) => void;
@@ -18,15 +19,16 @@ const EDIBILITY_COLOR: Record<string, string> = {
   deadly:               "#b71c1c",
 };
 
-const WRAP: React.CSSProperties = {
+const wrapStyle = (mobile: boolean): React.CSSProperties => ({
   position: "absolute",
-  top: 12,
-  left: "50%",
-  transform: "translateX(-50%)",
+  top: mobile ? 8 : 12,
+  left: mobile ? 8 : "50%",
+  right: mobile ? 8 : undefined,
+  transform: mobile ? undefined : "translateX(-50%)",
   zIndex: 20,
-  width: 320,
+  width: mobile ? "auto" : 320,
   fontFamily: "system-ui, sans-serif",
-};
+});
 
 const INPUT_WRAP: React.CSSProperties = {
   display: "flex",
@@ -39,15 +41,17 @@ const INPUT_WRAP: React.CSSProperties = {
   gap: 6,
 };
 
-const INPUT: React.CSSProperties = {
+// font-size >= 16px на мобильном — иначе iOS Safari зумит при фокусе на input
+const inputStyle = (mobile: boolean): React.CSSProperties => ({
   flex: 1,
   border: "none",
   outline: "none",
-  fontSize: 13,
-  padding: "9px 0",
+  fontSize: mobile ? 16 : 13,
+  padding: mobile ? "11px 0" : "9px 0",
   background: "transparent",
   color: "#222",
-};
+  minWidth: 0,  // чтобы input не выпирал из flex-родителя на узких экранах
+});
 
 const DROPDOWN: React.CSSProperties = {
   marginTop: 4,
@@ -82,6 +86,7 @@ const ITEM = (highlighted: boolean): React.CSSProperties => ({
 });
 
 export function SearchBar({ onFlyTo, onSpeciesFilter }: Props) {
+  const mobile = useIsMobile();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Result[]>([]);
   const [loading, setLoading] = useState(false);
@@ -159,11 +164,11 @@ export function SearchBar({ onFlyTo, onSpeciesFilter }: Props) {
   let resultIdx = -1;
 
   return (
-    <div style={WRAP} ref={wrapRef}>
+    <div style={wrapStyle(mobile)} ref={wrapRef}>
       <div style={INPUT_WRAP}>
         <span style={{ color: "#aaa", fontSize: 14 }}>🔍</span>
         <input
-          style={INPUT}
+          style={inputStyle(mobile)}
           placeholder="Поиск гриба или места…"
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true); }}

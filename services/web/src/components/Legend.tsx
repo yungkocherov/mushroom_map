@@ -1,9 +1,11 @@
+import { useState } from "react";
 import {
   FOREST_COLORS,
   ForestColorMode,
   BONITET_LEGEND,
   AGE_GROUP_LEGEND,
 } from "../lib/forestStyle";
+import { useIsMobile } from "../lib/useIsMobile";
 
 const SPECIES_LEGEND = [
   { slug: "pine",             label: "Сосна" },
@@ -54,6 +56,10 @@ const SWATCH = (color: string): React.CSSProperties => ({
 });
 
 export function Legend({ colorMode }: Props) {
+  const mobile = useIsMobile();
+  // На мобильном легенда сворачивается в иконку, чтобы не закрывать карту.
+  const [open, setOpen] = useState(!mobile);
+
   let title = "";
   let items: Array<{ label: string; color: string }> = [];
 
@@ -71,10 +77,50 @@ export function Legend({ colorMode }: Props) {
     items = AGE_GROUP_LEGEND;
   }
 
+  if (mobile && !open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        style={{
+          ...WRAP,
+          minWidth: 0,
+          padding: "8px 10px",
+          cursor: "pointer",
+          fontSize: 12,
+          fontWeight: 600,
+          color: "#333",
+          border: "1px solid rgba(0,0,0,0.08)",
+        }}
+        title="Показать легенду"
+      >
+        {title} ▴
+      </button>
+    );
+  }
+
   return (
     <div style={WRAP}>
-      <div style={{ fontSize: 10, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
-        {title}
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 4,
+      }}>
+        <span style={{ fontSize: 10, color: "#888", textTransform: "uppercase", letterSpacing: 0.5 }}>
+          {title}
+        </span>
+        {mobile && (
+          <button
+            onClick={() => setOpen(false)}
+            style={{
+              border: "none", background: "transparent", color: "#888",
+              cursor: "pointer", fontSize: 14, padding: "0 0 0 8px",
+            }}
+            title="Свернуть"
+          >
+            ✕
+          </button>
+        )}
       </div>
       {items.map(({ label, color }) => (
         <div key={label} style={ROW}>

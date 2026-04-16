@@ -1,8 +1,13 @@
 /**
  * Плавающая панель контролов карты.
+ *
+ * На мобильном (useIsMobile) — крупнее touch-target'ы (минимум 40px высота
+ * по гайдлайнам Apple/Google), уменьшенный font-size чтобы влезало в
+ * узкий экран. Тултипы (title=) скрыты — их всё равно нельзя посмотреть на тач.
  */
 import { useState } from "react";
 import { ForestColorMode, FOREST_COLOR_MODE_LABELS } from "../lib/forestStyle";
+import { useIsMobile } from "../lib/useIsMobile";
 
 export type BaseMapMode = "osm" | "scheme" | "satellite" | "hybrid";
 
@@ -35,26 +40,27 @@ interface Props {
   onShare: () => void;
 }
 
-const WRAP_STYLE: React.CSSProperties = {
+const wrapStyle = (mobile: boolean): React.CSSProperties => ({
   position: "absolute",
-  top: 12,
-  left: 12,
+  top: mobile ? 60 : 12,   // на мобильном поиск занимает верх — отступаем ниже
+  left: mobile ? 8 : 12,
   zIndex: 10,
   display: "flex",
   flexDirection: "column",
-  gap: 4,
+  gap: mobile ? 6 : 4,
   fontFamily: "system-ui, sans-serif",
-  fontSize: 12,
-};
+  fontSize: mobile ? 13 : 12,
+  maxWidth: mobile ? "calc(50vw - 16px)" : undefined,
+});
 
-const CARD_STYLE: React.CSSProperties = {
+const cardStyle = (mobile: boolean): React.CSSProperties => ({
   background: "rgba(255, 255, 255, 0.95)",
   backdropFilter: "blur(6px)",
   borderRadius: 7,
-  padding: "6px 8px",
+  padding: mobile ? "8px 10px" : "6px 8px",
   boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
   border: "1px solid rgba(0, 0, 0, 0.08)",
-};
+});
 
 const PILL_WRAP_STYLE: React.CSSProperties = {
   display: "inline-flex",
@@ -64,39 +70,41 @@ const PILL_WRAP_STYLE: React.CSSProperties = {
   gap: 2,
 };
 
-const pillBtn = (active: boolean): React.CSSProperties => ({
+const pillBtn = (active: boolean, mobile: boolean): React.CSSProperties => ({
   border: "none",
   background: active ? "white" : "transparent",
   color: active ? "#222" : "#666",
-  padding: "3px 8px",
-  fontSize: 11,
+  padding: mobile ? "8px 10px" : "3px 8px",
+  fontSize: mobile ? 12 : 11,
   fontWeight: active ? 600 : 500,
   borderRadius: 4,
   cursor: "pointer",
   boxShadow: active ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
   transition: "all 0.15s ease",
+  minHeight: mobile ? 36 : undefined,
 });
 
-const layerBtn = (loaded: boolean, visible: boolean, color: string): React.CSSProperties => ({
+const layerBtn = (loaded: boolean, visible: boolean, color: string, mobile: boolean): React.CSSProperties => ({
   border: loaded && visible ? "none" : `1.5px solid ${color}`,
   background: loaded && visible ? color : "transparent",
   color: loaded && visible ? "white" : color,
-  padding: "4px 10px",
-  fontSize: 11,
+  padding: mobile ? "10px 12px" : "4px 10px",
+  fontSize: mobile ? 12 : 11,
   fontWeight: 600,
   borderRadius: 5,
   cursor: "pointer",
   width: "100%",
   transition: "all 0.15s ease",
+  minHeight: mobile ? 40 : undefined,
 });
 
-const expandBtn: React.CSSProperties = {
+const expandBtnStyle = (mobile: boolean): React.CSSProperties => ({
   background: "rgba(255,255,255,0.95)",
   backdropFilter: "blur(6px)",
   border: "1px solid rgba(0,0,0,0.12)",
   borderRadius: 7,
-  padding: "4px 10px",
-  fontSize: 11,
+  padding: mobile ? "10px 12px" : "4px 10px",
+  fontSize: mobile ? 12 : 11,
   fontWeight: 600,
   color: "#555",
   cursor: "pointer",
@@ -106,32 +114,34 @@ const expandBtn: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-};
+  minHeight: mobile ? 40 : undefined,
+});
 
 export function MapControls(props: Props) {
+  const mobile = useIsMobile();
   const [layersOpen, setLayersOpen] = useState(false);
 
   return (
-    <div style={WRAP_STYLE}>
+    <div style={wrapStyle(mobile)}>
       {/* Подложка */}
-      <div style={CARD_STYLE}>
+      <div style={cardStyle(mobile)}>
         <div style={{ fontSize: 10, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: 0.5 }}>
           Подложка
         </div>
         <div style={PILL_WRAP_STYLE}>
-          <button style={pillBtn(props.baseMap === "osm")}       onClick={() => props.onBaseMapChange("osm")}>OSM</button>
-          <button style={pillBtn(props.baseMap === "scheme")}    onClick={() => props.onBaseMapChange("scheme")}>Схема</button>
-          <button style={pillBtn(props.baseMap === "satellite")} onClick={() => props.onBaseMapChange("satellite")}>Спутник</button>
-          <button style={pillBtn(props.baseMap === "hybrid")}    onClick={() => props.onBaseMapChange("hybrid")}>Гибрид</button>
+          <button style={pillBtn(props.baseMap === "osm", mobile)}       onClick={() => props.onBaseMapChange("osm")}>OSM</button>
+          <button style={pillBtn(props.baseMap === "scheme", mobile)}    onClick={() => props.onBaseMapChange("scheme")}>Схема</button>
+          <button style={pillBtn(props.baseMap === "satellite", mobile)} onClick={() => props.onBaseMapChange("satellite")}>Спутник</button>
+          <button style={pillBtn(props.baseMap === "hybrid", mobile)}    onClick={() => props.onBaseMapChange("hybrid")}>Гибрид</button>
         </div>
       </div>
 
       {/* Лесной слой + режим раскраски */}
-      <div style={CARD_STYLE}>
+      <div style={cardStyle(mobile)}>
         <button
           onClick={props.onForestToggle}
-          style={layerBtn(props.forestLoaded, props.forestVisible, "#2e7d32")}
-          title="Лесные выделы ФГИС ЛК. Цвет — доминирующая порода, бонитет или возраст. Клик по полигону — детальная информация."
+          style={layerBtn(props.forestLoaded, props.forestVisible, "#2e7d32", mobile)}
+          title={mobile ? undefined : "Лесные выделы ФГИС ЛК. Цвет — доминирующая порода, бонитет или возраст. Клик по полигону — детальная информация."}
         >
           {!props.forestLoaded ? "Загрузить леса" : props.forestVisible ? "Леса: вкл" : "Леса: выкл"}
         </button>
@@ -140,13 +150,13 @@ export function MapControls(props: Props) {
             {(["species", "bonitet", "age_group"] as ForestColorMode[]).map(mode => (
               <button
                 key={mode}
-                style={pillBtn(props.forestColorMode === mode)}
+                style={pillBtn(props.forestColorMode === mode, mobile)}
                 onClick={() => props.onForestColorMode(mode)}
-                title={
+                title={mobile ? undefined : (
                   mode === "species"   ? "Цвет по доминирующей породе: ель, сосна, берёза и т.д." :
                   mode === "bonitet"   ? "Бонитет I–V — продуктивность леса. I = самый продуктивный." :
                                         "Возрастная группа: молодняки, средневозрастные, спелые."
-                }
+                )}
               >
                 {FOREST_COLOR_MODE_LABELS[mode]}
               </button>
@@ -156,7 +166,7 @@ export function MapControls(props: Props) {
       </div>
 
       {/* Кнопка «Доп. слои» */}
-      <button style={expandBtn} onClick={() => setLayersOpen(o => !o)}>
+      <button style={expandBtnStyle(mobile)} onClick={() => setLayersOpen(o => !o)}>
         <span>Доп. слои</span>
         <span style={{ fontSize: 10, marginLeft: 6 }}>{layersOpen ? "▲" : "▼"}</span>
       </button>
@@ -164,71 +174,71 @@ export function MapControls(props: Props) {
       {/* Дополнительные слои — раскрываются */}
       {layersOpen && (
         <>
-          <div style={CARD_STYLE}>
+          <div style={cardStyle(mobile)}>
             <button
               onClick={props.onWaterToggle}
-              style={layerBtn(props.waterLoaded, props.waterVisible, "#1565C0")}
-              title="Водоохранные зоны рек и озёр. Ограничения на лесозаготовку и проезд."
+              style={layerBtn(props.waterLoaded, props.waterVisible, "#1565C0", mobile)}
+              title={mobile ? undefined : "Водоохранные зоны рек и озёр. Ограничения на лесозаготовку и проезд."}
             >
               {!props.waterLoaded ? "Водоохранные зоны" : props.waterVisible ? "Водоохрана: вкл" : "Водоохрана: выкл"}
             </button>
           </div>
 
-          <div style={CARD_STYLE}>
+          <div style={cardStyle(mobile)}>
             <button
               onClick={props.onOoptToggle}
-              style={layerBtn(props.ooptLoaded, props.ooptVisible, "#b71c1c")}
-              title="Особо охраняемые природные территории: заповедники, нацпарки, заказники. В большинстве ограничен сбор грибов."
+              style={layerBtn(props.ooptLoaded, props.ooptVisible, "#b71c1c", mobile)}
+              title={mobile ? undefined : "Особо охраняемые природные территории: заповедники, нацпарки, заказники. В большинстве ограничен сбор грибов."}
             >
               {!props.ooptLoaded ? "ООПТ" : props.ooptVisible ? "ООПТ: вкл" : "ООПТ: выкл"}
             </button>
           </div>
 
-          <div style={CARD_STYLE}>
+          <div style={cardStyle(mobile)}>
             <button
               onClick={props.onRoadsToggle}
-              style={layerBtn(props.roadsLoaded, props.roadsVisible, "#5d4037")}
-              title="Лесные дороги, просеки, тропы и грунтовки (OSM). Полезно при планировании маршрута."
+              style={layerBtn(props.roadsLoaded, props.roadsVisible, "#5d4037", mobile)}
+              title={mobile ? undefined : "Лесные дороги, просеки, тропы и грунтовки (OSM). Полезно при планировании маршрута."}
             >
               {!props.roadsLoaded ? "Лесные дороги" : props.roadsVisible ? "Дороги: вкл" : "Дороги: выкл"}
             </button>
           </div>
 
-          <div style={CARD_STYLE}>
+          <div style={cardStyle(mobile)}>
             <button
               onClick={props.onWetlandToggle}
-              style={layerBtn(props.wetlandLoaded, props.wetlandVisible, "#795548")}
-              title="Болотные массивы (OSM). Часто непроходимы. Зоны клюквы, морошки, моховиков."
+              style={layerBtn(props.wetlandLoaded, props.wetlandVisible, "#795548", mobile)}
+              title={mobile ? undefined : "Болотные массивы (OSM). Часто непроходимы. Зоны клюквы, морошки, моховиков."}
             >
               {!props.wetlandLoaded ? "Болота" : props.wetlandVisible ? "Болота: вкл" : "Болота: выкл"}
             </button>
           </div>
 
-          <div style={CARD_STYLE}>
+          <div style={cardStyle(mobile)}>
             <button
               onClick={props.onFellingToggle}
-              style={layerBtn(props.fellingLoaded, props.fellingVisible, "#bf360c")}
-              title="Вырубки, гари и погибшие насаждения (ФГИС ЛК). На 3–7-летних вырубках — подосиновики, маслята, опята."
+              style={layerBtn(props.fellingLoaded, props.fellingVisible, "#bf360c", mobile)}
+              title={mobile ? undefined : "Вырубки, гари и погибшие насаждения (ФГИС ЛК). На 3–7-летних вырубках — подосиновики, маслята, опята."}
             >
               {!props.fellingLoaded ? "Вырубки и гари" : props.fellingVisible ? "Вырубки: вкл" : "Вырубки: выкл"}
             </button>
           </div>
 
-          <div style={CARD_STYLE}>
+          <div style={cardStyle(mobile)}>
             <button
               onClick={props.onProtectiveToggle}
-              style={layerBtn(props.protectiveLoaded, props.protectiveVisible, "#6a1b9a")}
-              title="Защитные леса (ФГИС ЛК): запретные полосы, городские леса. Возможны ограничения на посещение."
+              style={layerBtn(props.protectiveLoaded, props.protectiveVisible, "#6a1b9a", mobile)}
+              title={mobile ? undefined : "Защитные леса (ФГИС ЛК): запретные полосы, городские леса. Возможны ограничения на посещение."}
             >
               {!props.protectiveLoaded ? "Защитные леса" : props.protectiveVisible ? "Защитные: вкл" : "Защитные: выкл"}
             </button>
           </div>
 
-          <div style={CARD_STYLE}>
+          <div style={cardStyle(mobile)}>
             <button
               onClick={props.onShare}
-              style={{ ...layerBtn(false, false, "#455a64"), border: "1.5px solid #455a64" }}
-              title="Скопировать ссылку на текущий вид карты"
+              style={{ ...layerBtn(false, false, "#455a64", mobile), border: "1.5px solid #455a64" }}
+              title={mobile ? undefined : "Скопировать ссылку на текущий вид карты"}
             >
               Поделиться
             </button>

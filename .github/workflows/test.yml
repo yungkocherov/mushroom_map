@@ -1,0 +1,58 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Unit-тесты geodata (formula parser и т.п.) — без БД, чисто Python.
+  geodata-unit:
+    name: geodata unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install geodata + dev deps
+        working-directory: services/geodata
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Run pytest
+        working-directory: services/geodata
+        run: pytest -v tests/
+
+  # TypeScript typecheck + production build для веб-фронта.
+  # Vitest не настроен — нет смысла гонять пустой test runner. Зато
+  # `tsc --noEmit` ловит API-несоответствия + `vite build` падает на
+  # ошибках импортов и неразрешённых ассетах.
+  web-typecheck:
+    name: web typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: services/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: services/web
+        run: npm ci
+
+      - name: TypeScript typecheck
+        working-directory: services/web
+        run: npx tsc --noEmit
+
+      - name: Vite build
+        working-directory: services/web
+        run: npx vite build

@@ -10,6 +10,7 @@ import {
   ForestColorMode,
 } from "../lib/forestStyle";
 import { fetchForestAt, ForestAtResponse } from "../lib/api";
+import { useIsMobile } from "../lib/useIsMobile";
 import { MapControls, BaseMapMode } from "./MapControls";
 import { Legend } from "./Legend";
 import { SearchBar } from "./SearchBar";
@@ -128,7 +129,7 @@ function buildPopupHtml(data: ForestAtResponse): string {
     })
     .join("");
 
-  return `<div style="font-family:sans-serif;font-size:13px;min-width:260px;max-width:340px;line-height:1.4">
+  return `<div style="font-family:sans-serif;font-size:13px;min-width:0;max-width:100%;line-height:1.4">
     <div style="margin-bottom:6px">
       <strong style="font-size:14px">${forestName}</strong>
       ${areaStr ? `<span style="font-size:11px;color:#aaa;margin-left:8px">${areaStr}</span>` : ""}
@@ -692,6 +693,7 @@ function setRoadsVisibility(m: Map, visible: boolean) {
 }
 
 export function MapView() {
+  const mobile = useIsMobile();
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
   const [baseMap, setBaseMap] = useState<BaseMapMode>("scheme");
@@ -1064,7 +1066,9 @@ export function MapView() {
       if (!e.lngLat) return;
       const { lng, lat } = e.lngLat;
 
-      const popup = new maplibregl.Popup({ maxWidth: "380px" })
+      // На мобильном popup занимает ширину экрана минус по 16px с каждой стороны
+      const popupMaxWidth = window.innerWidth < 600 ? `${window.innerWidth - 32}px` : "380px";
+      const popup = new maplibregl.Popup({ maxWidth: popupMaxWidth })
         .setLngLat([lng, lat])
         .setHTML(`<div style="font-family:sans-serif;color:#555;padding:4px">Загружаю…</div>`)
         .addTo(m);
@@ -1179,8 +1183,8 @@ export function MapView() {
 
       {forestLoaded && <Legend colorMode={forestColorMode} />}
 
-      {/* Координаты под курсором */}
-      {cursor && (
+      {/* Координаты под курсором — скрыты на тач-устройствах (mousemove там бесполезен) */}
+      {cursor && !mobile && (
         <div style={{
           position: "absolute", bottom: 28, right: 50,
           background: "rgba(255,255,255,0.85)", borderRadius: 4,
