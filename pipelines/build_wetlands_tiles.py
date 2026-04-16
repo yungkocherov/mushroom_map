@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import argparse
 import gzip
-import math
-import os
 import time
 from pathlib import Path
 
 import psycopg
 from pmtiles.tile import Compression, TileType, zxy_to_tileid
 from pmtiles.writer import Writer
+
+from tile_utils import build_dsn, lonlat_to_tile, region_bbox
 
 DEFAULT_MINZOOM = 7
 DEFAULT_MAXZOOM = 13
@@ -25,28 +25,6 @@ DEFAULT_BUFFER = 64
 DEFAULT_REGION = "lenoblast"
 
 
-def _build_dsn() -> str:
-    if url := os.environ.get("DATABASE_URL"):
-        return url
-    return "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
-
-
-def lonlat_to_tile(lat: float, lon: float, z: int) -> tuple[int, int]:
-    n = 2 ** z
-    x = int((lon + 180.0) / 360.0 * n)
-    lat_rad = math.radians(lat)
-    y = int((1 - math.log(math.tan(lat_rad) + 1 / math.cos(lat_rad)) / math.pi) / 2 * n)
-    return x, y
-
-
-def region_bbox(conn: psycopg.Connection, code: str) -> tuple[float, float, float, float]:
-    row = conn.execute(
-        "SELECT ST_XMin(bbox), ST_YMin(bbox), ST_XMax(bbox), ST_YMax(bbox) FROM region WHERE code = %s",
-        (code,),
-    ).fetchone()
-    if row is None:
-        raise SystemExit(f"регион {code!r} не найден")
-    return tuple(float(v) for v in row)  # type: ignore[return-value]
 
 
 def prepare_projected_source(conn: psycopg.Connection) -> None:
@@ -97,7 +75,7 @@ def main() -> None:
     out_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = out_path.with_suffix(".pmtiles.tmp")
 
-    dsn = _build_dsn()
+    dsn = build_dsn()
     print(f"region={args.region} zoom={args.minzoom}..{args.maxzoom} out={out_path}")
 
     with psycopg.connect(dsn, autocommit=True) as conn:
