@@ -352,20 +352,43 @@ function addPlaceLabelsLayer(m: Map) {
   if (!m.getSource("places")) {
     m.addSource("places", { type: "geojson", data: PLACES_URL });
   }
+  // Зум-фильтр: показываем только те типы мест, которые нужны на текущем зуме.
+  // Без фильтра все 7k точек конкурируют за пространство → collision detection
+  // убирает большинство. С фильтром на далёком зуме видны только города/посёлки,
+  // а деревни появляются по мере приближения.
+  //
+  // step(zoom, default, break1, out1, break2, out2, ...)
+  //  zoom < 6  → только city
+  //  zoom 6–7  → city, town
+  //  zoom 8–9  → + village, suburb, locality
+  //  zoom 10+  → все типы (hamlet, farm, isolated_dwelling, ...)
   m.addLayer({
     id: "places-text",
     type: "symbol",
     source: "places",
     minzoom: 4,
+    filter: [
+      "step", ["zoom"],
+      ["in", ["get", "place"], ["literal", ["city"]]],
+      6,  ["in", ["get", "place"], ["literal", ["city", "town"]]],
+      8,  ["in", ["get", "place"], ["literal", ["city", "town", "village", "suburb", "locality"]]],
+      10, true,
+    ],
     layout: {
       "text-field": ["get", "name"],
-      "text-size": ["interpolate", ["linear"], ["zoom"], 5, 9, 8, 11, 10, 12, 14, 14],
-      "text-font": ["Noto Sans Regular", "Arial Unicode MS Regular"],
+      // Размер зависит и от зума и от типа места: города крупнее деревень
+      "text-size": [
+        "interpolate", ["linear"], ["zoom"],
+        4, ["match", ["get", "place"], ["city"], 11, ["town"], 9, 7],
+        8, ["match", ["get", "place"], ["city"], 14, ["town"], 12, 10],
+        12, ["match", ["get", "place"], ["city"], 16, ["town"], 14, 12],
+      ],
+      "text-font": versatilesFonts,
       "text-anchor": "center",
       "text-max-width": 8,
       "text-allow-overlap": false,
       "text-padding": 2,
-      // priority=0 (city) отображается поверх priority=4 (hamlet)
+      // priority=0 (city) побеждает в collision detection над priority=7 (hamlet)
       "symbol-sort-key": ["get", "priority"],
     },
     paint: {
@@ -441,6 +464,10 @@ const SATELLITE_STYLE: maplibregl.StyleSpecification = {
 // colorful.json — тот отдаёт 404).
 const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful/style.json";
 
+// Шрифты из Versatiles-стиля — инициализируются при первом buildSchemeStyle().
+// Нужны для addPlaceLabelsLayer, чтобы text-font совпадал с glyphs-хостом стиля.
+let versatilesFonts: string[] = ["Noto Sans Regular", "Arial Unicode MS Regular"];
+
 // Масштаб текста по типу слоя.
 //
 // КЛЮЧЕВОЕ ПРАВИЛО: мелкие населённые пункты (village/hamlet/...) НЕ увеличиваем.
@@ -503,6 +530,18 @@ async function buildSchemeStyle(): Promise<maplibregl.StyleSpecification> {
   // (1) sprite → строка
   if (Array.isArray(style.sprite) && style.sprite.length > 0) {
     style.sprite = style.sprite[0].url;
+  }
+
+  // (1b) Извлекаем шрифты из первого symbol-слоя с text-font — они нужны
+  // для addPlaceLabelsLayer (наш кастомный слой должен использовать те же glyphs).
+  for (const layer of style.layers) {
+    if (layer.type === "symbol" && layer.layout?.["text-font"]) {
+      const fonts = layer.layout["text-font"];
+      if (Array.isArray(fonts) && fonts.length > 0 && typeof fonts[0] === "string") {
+        versatilesFonts = fonts as string[];
+        break;
+      }
+    }
   }
 
   for (const layer of style.layers) {
