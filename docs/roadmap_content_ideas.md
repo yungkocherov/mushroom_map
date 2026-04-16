@@ -5,6 +5,20 @@
 
 ## Этапы (в обратном хронологическом порядке)
 
+### ✅ Этап 8 — Полное покрытие ЛО + UI + рефакторинг пайплайнов (апрель 2026)
+- **Полная Ленобласть** — ~2M выделов (27.8–36.0°E), PMTiles 496 MB
+  - Восточная зона (33–36°E): 480k тайлов ФГИС ЛК скачаны, 1.18M обработаны
+  - fgislk_tiles_to_geojson → ingest_forest → build_tiles: 27 мин
+- **Подписи населённых пунктов** — 7 116 точек из OSM Overpass
+  - Собственный GeoJSON-слой (Versatiles тайлы не содержат village/hamlet ниже z12)
+  - Zoom-фильтр: city z4+, town z6+, village z8+, hamlet z10+
+  - Извлечение шрифтов из Versatiles-стиля для корректного рендера
+- **Компактный UI** — "Доп. слои" сворачиваемая панель, тултипы, фильтр грибов
+- **Рефакторинг пайплайнов**
+  - `pipelines/tile_utils.py` — shared `build_dsn`, `lonlat_to_tile`, `region_bbox`
+  - 199 строк дублирования удалено из 7 build-скриптов
+  - `ST_TileEnvelope` CTE — вычисляется 1 раз вместо 2 за тайл
+
 ### ✅ Этап 7 — Новые слои + тесты (апрель 2026)
 - **Болота** — 34 177 полигонов OSM `natural=wetland`, PMTiles 20 MB
 - **Вырубки и гари** — 1 270 полигонов ФГИС ЛК `SPECIAL_CONDITION_AREA`, PMTiles 6 MB
@@ -44,10 +58,10 @@
   label minzoom понижен на 2-3 уровня
 - 7 тоггл-кнопок слоёв в UI
 
-### ✅ Этап 3 — Rosleshoz/ФГИСЛК — полное покрытие (апрель 2026)
-- 1 086 247 полигонов на всю Ленобласть до 33°E
+### ✅ Этап 3 — Rosleshoz/ФГИСЛК — первичное покрытие (апрель 2026)
+- ~913k полигонов, западная часть ЛО до 33°E (Карельский перешеек)
 - bonitet, timber_stock, age_group в `meta JSONB`
-- PMTiles 439 MB, 15 105 тайлов
+- PMTiles 322 MB
 
 ### ✅ Этап 2 — Первичные данные лесов
 - OSM ingest через Overpass — 47k полигонов, 88% unknown
@@ -65,23 +79,7 @@
 
 ### 🔴 Высокий приоритет
 
-1. **Расширение покрытия на восток** (Тихвин, Бокситогорск)
-   - *Зачем:* сейчас данные только до 33°E, вся Ленобласть до ~36°E
-   - *Как:*
-     ```bash
-     python pipelines/download_fgislk_tiles.py --bbox 33.0,58.5,36.0,61.0 \
-         --out data/rosleshoz/fgislk_tiles
-     python pipelines/fgislk_tiles_to_geojson.py \
-         --in data/rosleshoz/fgislk_tiles \
-         --out data/rosleshoz/fgislk_vydels_full.geojson
-     python pipelines/ingest_forest.py --source rosleshoz --region lenoblast \
-         --rosleshoz-file data/rosleshoz/fgislk_vydels_full.geojson \
-         --rosleshoz-version fgislk-karelian-2026
-     python pipelines/build_tiles.py --region lenoblast
-     ```
-   - *Оценка:* 1 час на запуск (большая часть — download тайлов)
-
-2. **VK-наблюдения** (запуск существующего парсера)
+1. **VK-наблюдения** (запуск существующего парсера)
    - *Зачем:* эмпирические данные для тепловой карты и попапа
    - *Как:* получить VK_TOKEN, запустить LM Studio с Gemma 3 12B,
      прогнать `pipelines/ingest_vk.py` (4 стадии), затем
@@ -89,29 +87,34 @@
    - *Блокер:* нужен работающий LM Studio + ~10 GB под модель
    - *Оценка:* 1 день настройки + несколько часов прогона
 
-3. **Тепловая карта H3** (`observation_h3_species_stats`)
+2. **Тепловая карта H3** (`observation_h3_species_stats`)
    - *Зачем:* "горячие точки" видны без клика
    - *Как:* API endpoint `GET /api/observations/h3?bbox=&species=`,
      фронт-слой на fill-color ramp с hex-полигонами
-   - *Блокер:* нужны VK-наблюдения (п.2)
+   - *Блокер:* нужны VK-наблюдения (п.1)
    - *Оценка:* 2-3 дня
 
 ### 🟡 Средний приоритет
 
-4. **CI/CD** — `.github/workflows/test.yml`
+3. **CI/CD** — `.github/workflows/test.yml`
    - Сейчас тесты запускаются только руками
    - *Оценка:* 2 часа
 
-5. **Временной фильтр наблюдений** — слайдер "последние 2-3 года"
-   - *Блокер:* нужны VK-наблюдения
+4. **Мобильная вёрстка** — сейчас только desktop
+   - Компактные контролы уже есть, но touch-оптимизации нет
 
-6. **Улучшение стиля вырубок** — разделить по типу (`area_type`)
-   - Старые вырубки vs свежие vs гари — разные цвета
+5. **Материализация `forest_unified`** — при добавлении второго региона
+   VIEW с NOT EXISTS станет O(n²). Нужна `MATERIALIZED VIEW` с
+   `REFRESH` после каждого ingest.
+
+6. **Инкрементальный tile build** — сейчас build_tiles.py пересчитывает
+   все тайлы с нуля. С 2M полигонами ~5 мин, но дальше будет расти.
 
 ### 🟢 Низкий приоритет / "когда-нибудь"
 
 7. **Рельеф / хиллшейдинг** — Copernicus DEM 30m
 8. **Точки доступа** — OSM `highway=bus_stop` + `amenity=parking`
-9. **Мобильная вёрстка** — сейчас только desktop
-10. **PWA offline-mode** — загрузка региона без интернета
-11. **Лента последних находок** — `GET /api/observations/recent?bbox=`
+9. **PWA offline-mode** — загрузка региона без интернета
+10. **Лента последних находок** — `GET /api/observations/recent?bbox=`
+11. **Временной фильтр наблюдений** — слайдер "последние 2-3 года"
+    - *Блокер:* нужны VK-наблюдения

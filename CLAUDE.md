@@ -8,10 +8,10 @@ for why we ended up with Rosleshoz see `docs/forest_sources_analysis.md`.
 ## One-line summary
 
 Interactive mushroom map for Leningrad Oblast. PostGIS + FastAPI + React
-+ MapLibre GL + PMTiles. Forest polygons from Rosleshoz/ФГИСЛК (~913k),
-painted by dominant tree species / bonitet / age group; click → popup
-with bonitet/timber_stock/age_group + fungi theoretical from species
-registry.
++ MapLibre GL + PMTiles. Forest polygons from Rosleshoz/ФГИСЛК (~2M,
+full LoO coverage 27.8-36.0°E), painted by dominant tree species /
+bonitet / age group; click → popup with bonitet/timber_stock/age_group +
+fungi theoretical from species registry.
 
 ## Environment quirks — read this first
 
