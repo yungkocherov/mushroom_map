@@ -1066,25 +1066,12 @@ export function MapView() {
         protectiveVisible={protectiveVisible}
         protectiveLoaded={protectiveLoaded}
         onProtectiveToggle={handleProtectiveToggle}
+        onShare={handleShare}
       />
 
       <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={handleSpeciesFilter} />
 
       {forestLoaded && <Legend colorMode={forestColorMode} />}
-
-      {/* Кнопка «поделиться» — минималистичная, внизу */}
-      <button
-        onClick={handleShare}
-        title="Скопировать ссылку на текущий вид карты"
-        style={{
-          position: "absolute", bottom: 50, left: 12, zIndex: 10,
-          background: "rgba(255,255,255,0.8)", border: "1px solid rgba(0,0,0,0.1)",
-          borderRadius: 4, padding: "2px 8px", fontSize: 11, color: "#888",
-          cursor: "pointer", fontFamily: "system-ui, sans-serif",
-        }}
-      >
-        Поделиться
-      </button>
 
       {/* Координаты под курсором */}
       {cursor && (
