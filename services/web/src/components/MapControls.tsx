@@ -31,7 +31,6 @@ interface Props {
   protectiveVisible: boolean;
   protectiveLoaded: boolean;
   onProtectiveToggle: () => void;
-  onShare: () => void;
 }
 
 const WRAP_STYLE: React.CSSProperties = {
@@ -107,7 +106,11 @@ export function MapControls(props: Props) {
 
       {/* Лесной слой + режим раскраски */}
       <div style={CARD_STYLE}>
-        <button onClick={props.onForestToggle} style={layerBtn(props.forestLoaded, props.forestVisible, "#2e7d32")}>
+        <button
+          onClick={props.onForestToggle}
+          style={layerBtn(props.forestLoaded, props.forestVisible, "#2e7d32")}
+          title="Лесные выделы ФГИС ЛК. Цвет показывает доминирующую породу дерева, бонитет (продуктивность) или возрастную группу. Клик по полигону — детальная информация и список грибов."
+        >
           {!props.forestLoaded ? "Загрузить леса" : props.forestVisible ? "Леса: вкл" : "Леса: выкл"}
         </button>
         {props.forestLoaded && (
@@ -117,6 +120,11 @@ export function MapControls(props: Props) {
                 key={mode}
                 style={pillBtn(props.forestColorMode === mode)}
                 onClick={() => props.onForestColorMode(mode)}
+                title={
+                  mode === "species"   ? "Цвет по доминирующей породе: ель, сосна, берёза и т.д." :
+                  mode === "bonitet"   ? "Бонитет I–V — продуктивность древостоя. I = самый продуктивный (грибной)." :
+                                        "Возрастная группа: молодняк, средневозрастные, приспевающие, спелые, перестойные."
+                }
               >
                 {FOREST_COLOR_MODE_LABELS[mode]}
               </button>
@@ -127,53 +135,67 @@ export function MapControls(props: Props) {
 
       {/* Водоохрана */}
       <div style={CARD_STYLE}>
-        <button onClick={props.onWaterToggle} style={layerBtn(props.waterLoaded, props.waterVisible, "#1565C0")}>
+        <button
+          onClick={props.onWaterToggle}
+          style={layerBtn(props.waterLoaded, props.waterVisible, "#1565C0")}
+          title="Водоохранные зоны рек и озёр. В этих зонах действуют ограничения на лесозаготовку, проезд и хозяйственную деятельность."
+        >
           {!props.waterLoaded ? "Водоохранные зоны" : props.waterVisible ? "Водоохрана: вкл" : "Водоохрана: выкл"}
         </button>
       </div>
 
       {/* ООПТ */}
       <div style={CARD_STYLE}>
-        <button onClick={props.onOoptToggle} style={layerBtn(props.ooptLoaded, props.ooptVisible, "#b71c1c")}>
+        <button
+          onClick={props.onOoptToggle}
+          style={layerBtn(props.ooptLoaded, props.ooptVisible, "#b71c1c")}
+          title="Особо охраняемые природные территории: заповедники (тёмно-красный), нацпарки (оранжевый), природные парки, заказники (зелёный), памятники природы (фиолетовый). В большинстве ограничен или запрещён сбор грибов."
+        >
           {!props.ooptLoaded ? "ООПТ" : props.ooptVisible ? "ООПТ: вкл" : "ООПТ: выкл"}
         </button>
       </div>
 
       {/* Лесные дороги */}
       <div style={CARD_STYLE}>
-        <button onClick={props.onRoadsToggle} style={layerBtn(props.roadsLoaded, props.roadsVisible, "#5d4037")}>
+        <button
+          onClick={props.onRoadsToggle}
+          style={layerBtn(props.roadsLoaded, props.roadsVisible, "#5d4037")}
+          title="Лесные дороги, просеки, тропы и грунтовки по данным OpenStreetMap. Полезно для планирования маршрута в лес."
+        >
           {!props.roadsLoaded ? "Лесные дороги" : props.roadsVisible ? "Дороги: вкл" : "Дороги: выкл"}
         </button>
       </div>
 
       {/* Болота */}
       <div style={CARD_STYLE}>
-        <button onClick={props.onWetlandToggle} style={layerBtn(props.wetlandLoaded, props.wetlandVisible, "#795548")}>
+        <button
+          onClick={props.onWetlandToggle}
+          style={layerBtn(props.wetlandLoaded, props.wetlandVisible, "#795548")}
+          title="Болотные массивы по данным OSM. Часто непроходимы. Здесь встречаются клюква, морошка, а рядом с краями — моховики и подберёзовики."
+        >
           {!props.wetlandLoaded ? "Болота" : props.wetlandVisible ? "Болота: вкл" : "Болота: выкл"}
         </button>
       </div>
 
       {/* Вырубки / гари */}
       <div style={CARD_STYLE}>
-        <button onClick={props.onFellingToggle} style={layerBtn(props.fellingLoaded, props.fellingVisible, "#bf360c")}>
+        <button
+          onClick={props.onFellingToggle}
+          style={layerBtn(props.fellingLoaded, props.fellingVisible, "#bf360c")}
+          title="Вырубки, гари и погибшие насаждения (ФГИС ЛК). На 3–7-летних вырубках массово растут подосиновики, маслята и опята. Свежие гари — через 5–10 лет тоже станут грибными."
+        >
           {!props.fellingLoaded ? "Вырубки и гари" : props.fellingVisible ? "Вырубки: вкл" : "Вырубки: выкл"}
         </button>
       </div>
 
       {/* Защитные леса */}
       <div style={CARD_STYLE}>
-        <button onClick={props.onProtectiveToggle} style={layerBtn(props.protectiveLoaded, props.protectiveVisible, "#6a1b9a")}>
-          {!props.protectiveLoaded ? "Защитные леса" : props.protectiveVisible ? "Защитные: вкл" : "Защитные: выкл"}
-        </button>
-      </div>
-
-      {/* Поделиться */}
-      <div style={CARD_STYLE}>
         <button
-          onClick={props.onShare}
-          style={{ ...layerBtn(false, false, "#455a64"), border: "1.5px solid #455a64" }}
+          onClick={props.onProtectiveToggle}
+          style={layerBtn(props.protectiveLoaded, props.protectiveVisible, "#6a1b9a")}
+          title="Защитные леса (ФГИС ЛК): запретные полосы вдоль рек, городские леса, зелёные зоны. Часть из них имеет ограничения на посещение или сбор."
         >
-          Скопировать ссылку
+          {!props.protectiveLoaded ? "Защитные леса" : props.protectiveVisible ? "Защитные: вкл" : "Защитные: выкл"}
         </button>
       </div>
     </div>

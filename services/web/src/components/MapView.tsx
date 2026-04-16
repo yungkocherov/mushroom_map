@@ -61,6 +61,23 @@ const EDIBILITY_STYLE: Record<string, string> = {
 const MONTH_SHORT = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
 const ROMAN = ["", "I", "II", "III", "IV", "V"];
 
+// Виды, интересные грибникам. Остальные скрыты по умолчанию.
+const PRIORITY_SPECIES = new Set([
+  "Белый гриб",
+  "Лисичка обыкновенная",
+  "Лисичка трубчатая",
+  "Подосиновик красный",
+  "Подосиновик жёлто-бурый",
+  "Подберёзовик обыкновенный",
+  "Опёнок осенний",
+  "Опёнок летний",
+  "Сморчок настоящий",
+  "Груздь настоящий",
+  "Рыжик сосновый",
+  "Маслёнок настоящий",
+  "Маслёнок зернистый",
+]);
+
 function buildPopupHtml(data: ForestAtResponse): string {
   if (!data.forest) {
     return `<div style="font-family:sans-serif;padding:4px 2px;color:#555">
@@ -87,6 +104,7 @@ function buildPopupHtml(data: ForestAtResponse): string {
     .map((s) => {
       const style = EDIBILITY_STYLE[s.edibility ?? ""] ?? "color:#333";
       const inSeason = (s.season_months ?? []).includes(curMonth);
+      const isPriority = PRIORITY_SPECIES.has(s.name_ru);
       const months = (s.season_months ?? [])
         .map((m) =>
           m === curMonth
@@ -95,7 +113,8 @@ function buildPopupHtml(data: ForestAtResponse): string {
         )
         .join("&thinsp;");
       const aff = s.affinity ? Math.round(s.affinity * 100) : 0;
-      return `<tr class="sp-row${inSeason ? " sp-season" : " sp-offseason"}" style="display:table-row">
+      return `<tr class="sp-row" data-p="${isPriority ? 1 : 0}" data-s="${inSeason ? 1 : 0}"
+          style="display:${isPriority ? "table-row" : "none"}">
         <td style="${style};padding:2px 6px 2px 0">${s.name_ru}</td>
         <td style="color:#aaa;font-size:10px;padding:2px 6px 2px 0;font-style:italic">${s.name_lat ?? ""}</td>
         <td style="font-size:10px;color:#555;padding:2px 6px 2px 0;white-space:nowrap">${months}</td>
@@ -109,16 +128,22 @@ function buildPopupHtml(data: ForestAtResponse): string {
       <strong style="font-size:14px">${forestName}</strong>
       ${areaStr ? `<span style="font-size:11px;color:#aaa;margin-left:8px">${areaStr}</span>` : ""}
       ${metaStr ? `<div style="font-size:11px;color:#888;margin-top:2px">${metaStr}</div>` : ""}
-      <div style="font-size:10px;color:#bbb;margin-top:1px">${f.source} · уверенность ${Math.round(f.confidence * 100)}%</div>
     </div>
     ${speciesRows ? `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <span style="font-size:11px;color:#888">Виды грибов</span>
-        <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
-          <input type="checkbox" id="sp-filter-cb" style="margin:0"
-            onchange="document.querySelectorAll('.sp-offseason').forEach(r => r.style.display = this.checked ? 'none' : 'table-row')">
-          только в сезоне
-        </label>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
+            <input type="checkbox" id="sp-all-cb" style="margin:0"
+              onchange="const ns=document.getElementById('sp-filter-cb').checked;document.querySelectorAll('.sp-row').forEach(r=>{r.style.display=(this.checked||r.dataset.p=='1')&&(!ns||r.dataset.s=='1')?'table-row':'none'})">
+            все виды
+          </label>
+          <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
+            <input type="checkbox" id="sp-filter-cb" style="margin:0"
+              onchange="const all=document.getElementById('sp-all-cb').checked;document.querySelectorAll('.sp-row').forEach(r=>{r.style.display=(all||r.dataset.p=='1')&&(!this.checked||r.dataset.s=='1')?'table-row':'none'})">
+            в сезоне
+          </label>
+        </div>
       </div>
       <table style="width:100%;border-collapse:collapse">
         <thead><tr style="font-size:10px;color:#aaa;border-bottom:1px solid #eee">
@@ -386,15 +411,18 @@ const LABEL_SCALE = 1.6;
  * не показывает, но важные города/посёлки выигрывают приоритет.
  */
 const LABEL_MINZOOM_OVERRIDES: Record<string, number> = {
-  "label-place-capital":       3,   // было 5
-  "label-place-statecapital":  4,   // было 6
-  "label-place-city":          5,   // было 7
-  "label-place-town":          6,   // было 9
-  "label-place-village":       6,   // было 11 — для грибника ГЛАВНОЕ
-  "label-place-hamlet":        9,   // было 13 — хутора видны сразу
-  "label-place-suburb":        8,   // было 11
-  "label-place-quarter":      10,   // было 13
-  "label-place-neighbourhood": 11,  // было 14
+  "label-place-capital":            3,   // было 5
+  "label-place-statecapital":       4,   // было 6
+  "label-place-city":               5,   // было 7
+  "label-place-town":               6,   // было 9
+  "label-place-village":            6,   // было 11 — для грибника ГЛАВНОЕ
+  "label-place-hamlet":             7,   // было 13 — хутора видны раньше
+  "label-place-suburb":             7,   // было 11
+  "label-place-quarter":            9,   // было 13
+  "label-place-neighbourhood":     10,   // было 14
+  "label-place-locality":           8,   // малые населённые пункты
+  "label-place-isolated_dwelling":  9,   // отдельно стоящие дома/фермы
+  "label-place-farm":               8,   // деревня / хутор
 };
 
 /**
@@ -1038,12 +1066,25 @@ export function MapView() {
         protectiveVisible={protectiveVisible}
         protectiveLoaded={protectiveLoaded}
         onProtectiveToggle={handleProtectiveToggle}
-        onShare={handleShare}
       />
 
       <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={handleSpeciesFilter} />
 
       {forestLoaded && <Legend colorMode={forestColorMode} />}
+
+      {/* Кнопка «поделиться» — минималистичная, внизу */}
+      <button
+        onClick={handleShare}
+        title="Скопировать ссылку на текущий вид карты"
+        style={{
+          position: "absolute", bottom: 50, left: 12, zIndex: 10,
+          background: "rgba(255,255,255,0.8)", border: "1px solid rgba(0,0,0,0.1)",
+          borderRadius: 4, padding: "2px 8px", fontSize: 11, color: "#888",
+          cursor: "pointer", fontFamily: "system-ui, sans-serif",
+        }}
+      >
+        Поделиться
+      </button>
 
       {/* Координаты под курсором */}
       {cursor && (
