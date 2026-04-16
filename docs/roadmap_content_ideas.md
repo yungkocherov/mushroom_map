@@ -5,41 +5,49 @@
 
 ## Этапы (в обратном хронологическом порядке)
 
+### ✅ Этап 7 — Новые слои + тесты (апрель 2026)
+- **Болота** — 34 177 полигонов OSM `natural=wetland`, PMTiles 20 MB
+- **Вырубки и гари** — 1 270 полигонов ФГИС ЛК `SPECIAL_CONDITION_AREA`, PMTiles 6 MB
+- **Защитные леса** — 598 полигонов ФГИС ЛК `PROTECTIVE_FOREST`, PMTiles 14 MB
+- **Лесные дороги** — 318 884 линии OSM, PMTiles 31 MB
+  - Фикс: `r.geometry && ST_Transform(ST_TileEnvelope(), 4326)` вместо
+    `ST_Transform(r.geometry, 3857) && ...` — разница 3+ часов vs 1 минута
+- **34 теста**: 25 unit (formula parser) + 9 API smoke
+- Миграции 014-016 (wetland, felling_area, protective_forest)
+
 ### ✅ Этап 6 — Оверлейные слои (апрель 2026)
-- OSM дороги (track/path/footway/bridleway/cycleway) — 353 867 линий,
-  скачаны через Overpass в `scripts/download_osm_roads_overpass.py`
-  (3×3 bbox grid с ретраями и дедупом по OSM way id)
-- ООПТ — 419 полигонов из OSM boundary=protected_area + leisure=
-  nature_reserve, скачаны через `scripts/download_oopt_overpass.py`
+- ООПТ — 419 полигонов из OSM, PMTiles 1.2 MB
+- Водоохранные зоны — PMTiles 6.2 MB
+- Даунлоадеры: `scripts/download_oopt_overpass.py`,
+  `scripts/download_osm_roads_overpass.py`,
+  `scripts/download_wetlands_overpass.py`
+  (grid-split + retry + dedup по OSM way id)
+- CLAUDE.md — дурабельные правила для Claude Code сессий
 
 ### ✅ Этап 5 — Оптимизация pipeline (апрель 2026)
 - Pipeline 73 мин → 9 мин (~8×)
-- WKB pass-through в rosleshoz source — обходит shapely целиком,
-  PostGIS парсит WKB в C-коде через `ST_GeomFromWKB(decode(x, 'hex'))`
+- WKB pass-through — обходит shapely целиком,
+  PostGIS парсит через `ST_GeomFromWKB(decode(x, 'hex'))`
 - area_m2 вычисляется в SQL через `ST_Area(ST_Transform(geom, 3857))`
-- DELETE+INSERT вместо ON CONFLICT DO UPDATE — убирает стоимость
-  rewrite старых tuples
+- DELETE+INSERT вместо ON CONFLICT DO UPDATE
 - COPY FROM STDIN вместо `cursor.executemany()`
-- Multiprocessing в `fgislk_tiles_to_geojson.py` (ProcessPoolExecutor
-  по X-директориям)
+- Multiprocessing в `fgislk_tiles_to_geojson.py`
 - `CLUSTER forest_3857 USING idx_forest_3857_gix` в build_tiles
 
 ### ✅ Этап 4 — Интерфейс (апрель 2026)
 - 4 подложки: OSM / Схема (Versatiles Colorful) / Спутник (ESRI) / Гибрид
 - 3 режима раскраски леса: порода / бонитет / возраст
 - Попап: бонитет, запас м³/га, возрастная группа, виды грибов
-  (теоретически из species_forest_affinity)
-- Сезонный фильтр видов в попапе
-- Поиск по виду гриба (фильтр лесного слоя) и по месту (Nominatim)
+- Сезонный фильтр видов, поиск по виду и по месту (Nominatim)
 - Share URL, координаты под курсором, URL sync `?lat=&lon=&z=`
-- Тоггл-кнопки: Лес / Водоохрана / ООПТ / Дороги
 - Patch Versatiles стиля: sprite array→string, text-size ×1.6,
-  label-place-* minzoom понижен на 2-3 уровня
+  label minzoom понижен на 2-3 уровня
+- 7 тоггл-кнопок слоёв в UI
 
 ### ✅ Этап 3 — Rosleshoz/ФГИСЛК — полное покрытие (апрель 2026)
 - 1 086 247 полигонов на всю Ленобласть до 33°E
 - bonitet, timber_stock, age_group в `meta JSONB`
-- PMTiles 438 MB, 15 105 тайлов
+- PMTiles 439 MB, 15 105 тайлов
 
 ### ✅ Этап 2 — Первичные данные лесов
 - OSM ingest через Overpass — 47k полигонов, 88% unknown
@@ -48,7 +56,7 @@
 
 ### ✅ Этап 1 — Инфраструктура
 - PostGIS + Docker Compose
-- Миграции 001..013
+- Миграции 001..016
 - FastAPI + React + MapLibre GL + PMTiles
 
 ---
@@ -57,31 +65,9 @@
 
 ### 🔴 Высокий приоритет
 
-1. **Болота** (OSM `natural=wetland`, `wetland=bog`)
-   - *Зачем:* безопасность (не зайти в топь) + клюква/морошка/моховики
-   - *Как:* `scripts/download_wetlands_overpass.py` (клон roads-скрипта),
-     миграция `014_wetlands.sql`, `ingest_wetlands.py`, `build_wetlands_tiles.py`,
-     фронт-тоггл
-   - *Оценка:* 1 день
-
-2. **Тепловая карта H3** (`observation_h3_species_stats`)
-   - *Зачем:* "горячие точки" видны без клика, сразу показывает где чаще находят
-   - *Как:* API endpoint `GET /api/observations/h3?bbox=&species=`, фронт-слой
-     на fill-color ramp + `h3` для hexagons. Данные уже есть в matview.
-   - *Блокер:* нужны реальные VK-наблюдения (см. ниже)
-   - *Оценка:* 2-3 дня
-
-3. **VK-наблюдения** (запуск существующего парсера)
-   - *Зачем:* эмпирические данные для тепловой карты и попапа
-   - *Как:* получить VK_TOKEN, запустить LM Studio с Gemma 3 12B,
-     прогнать `pipelines/ingest_vk.py` (4 стадии), затем
-     `pipelines/extract_places.py` (NER + H3)
-   - *Блокер:* нужен работающий LM Studio и ~10 GB места для модели
-   - *Оценка:* 1 день настройки + несколько часов прогона
-
-4. **Расширение покрытия на восток** (Тихвин, Бокситогорск)
+1. **Расширение покрытия на восток** (Тихвин, Бокситогорск)
    - *Зачем:* сейчас данные только до 33°E, вся Ленобласть до ~36°E
-   - *Как (автоматизация):*
+   - *Как:*
      ```bash
      python pipelines/download_fgislk_tiles.py --bbox 33.0,58.5,36.0,61.0 \
          --out data/rosleshoz/fgislk_tiles
@@ -93,41 +79,39 @@
          --rosleshoz-version fgislk-karelian-2026
      python pipelines/build_tiles.py --region lenoblast
      ```
-     Это цепочка из существующих скриптов — можно обернуть в
-     `scripts/reingest_rosleshoz.sh` одним вызовом.
-   - *Оценка:* 1 час на запуск (большая часть времени — download ФГИС ЛК тайлов)
+   - *Оценка:* 1 час на запуск (большая часть — download тайлов)
+
+2. **VK-наблюдения** (запуск существующего парсера)
+   - *Зачем:* эмпирические данные для тепловой карты и попапа
+   - *Как:* получить VK_TOKEN, запустить LM Studio с Gemma 3 12B,
+     прогнать `pipelines/ingest_vk.py` (4 стадии), затем
+     `pipelines/extract_places.py` (NER + H3)
+   - *Блокер:* нужен работающий LM Studio + ~10 GB под модель
+   - *Оценка:* 1 день настройки + несколько часов прогона
+
+3. **Тепловая карта H3** (`observation_h3_species_stats`)
+   - *Зачем:* "горячие точки" видны без клика
+   - *Как:* API endpoint `GET /api/observations/h3?bbox=&species=`,
+     фронт-слой на fill-color ramp с hex-полигонами
+   - *Блокер:* нужны VK-наблюдения (п.2)
+   - *Оценка:* 2-3 дня
 
 ### 🟡 Средний приоритет
 
-5. **Тесты**
-   - `services/geodata/tests/test_formula_parser.py` — чисто-функциональный
-     (2 часа)
-   - `services/api/tests/conftest.py` + `test_api_smoke.py` — smoke для
-     `/api/forest/at` и `/api/species/search` (1 день)
-   - `tests/test_forest_unified.py` — проверка priority cascade (4 часа)
-   - `.github/workflows/test.yml` — CI
+4. **CI/CD** — `.github/workflows/test.yml`
+   - Сейчас тесты запускаются только руками
+   - *Оценка:* 2 часа
 
-6. **Вырубки и гари** — ФГИС ЛК слой `SPECIAL_CONDITION_AREA`
-   - *Зачем:* на 3-7-летних вырубках массово растут подосиновики, маслята, опята
-   - *Как:* patch в `fgislk_tiles_to_geojson.py` — добавить ещё один
-     source-layer extraction, новая таблица `felling_area`, новый PMTiles,
-     тоггл в UI
-   - *Оценка:* 1 день
+5. **Временной фильтр наблюдений** — слайдер "последние 2-3 года"
+   - *Блокер:* нужны VK-наблюдения
 
-7. **Защитные леса** — ФГИС ЛК слой `PROTECTIVE_FOREST`
-   - *Зачем:* запретные полосы, городские леса, сбор ограничен
-   - *Как:* аналогично вырубкам — patch экстрактора, отдельный слой
-   - *Оценка:* 1 день (делается вместе с вырубками)
-
-8. **Временной фильтр наблюдений** — слайдер "последние 2-3 года"
-   - *Блокер:* нужны реальные VK-наблюдения
+6. **Улучшение стиля вырубок** — разделить по типу (`area_type`)
+   - Старые вырубки vs свежие vs гари — разные цвета
 
 ### 🟢 Низкий приоритет / "когда-нибудь"
 
-9. **Рельеф / хиллшейдинг** — Copernicus DEM 30m. Низины = сырость = подберёзовики,
-   склоны = дренаж = рыжики/грузди
-10. **Точки доступа** — OSM `highway=bus_stop` + `amenity=parking` возле леса
-11. **Мобильная вёрстка** — сейчас только desktop
-12. **PWA offline-mode** — загрузка региона для использования без интернета в лесу
-13. **Лента последних находок** — `GET /api/observations/recent?bbox=`,
-    "3 дня назад нашли белые"
+7. **Рельеф / хиллшейдинг** — Copernicus DEM 30m
+8. **Точки доступа** — OSM `highway=bus_stop` + `amenity=parking`
+9. **Мобильная вёрстка** — сейчас только desktop
+10. **PWA offline-mode** — загрузка региона без интернета
+11. **Лента последних находок** — `GET /api/observations/recent?bbox=`

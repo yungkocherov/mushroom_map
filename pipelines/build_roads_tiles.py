@@ -73,7 +73,7 @@ def build_tile_bytes(
                     %s, %s, true
                 ) AS geom
             FROM osm_road r
-            WHERE ST_Transform(r.geometry, 3857) && ST_TileEnvelope(%s, %s, %s)
+            WHERE r.geometry && ST_Transform(ST_TileEnvelope(%s, %s, %s), 4326)
         )
         SELECT ST_AsMVT(mvt_src, 'roads', %s, 'geom')
         FROM mvt_src
