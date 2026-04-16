@@ -136,9 +136,14 @@ def build_tile_bytes(
     Требует предварительно вызванного prepare_projected_source(conn).
     `min_area` — нижний порог area_m2 (для уменьшения файла на низких зумах).
     """
+    # tile_env вычисляется один раз и переиспользуется в WHERE и ST_AsMVTGeom,
+    # чтобы PostGIS не считал ST_TileEnvelope трижды на каждый тайл.
     row = conn.execute(
         """
-        WITH mvt_src AS (
+        WITH tile_env AS (
+            SELECT ST_TileEnvelope(%s, %s, %s) AS env
+        ),
+        mvt_src AS (
             SELECT
                 f.id,
                 f.dominant_species,
@@ -148,19 +153,19 @@ def build_tile_bytes(
                 (f.meta->>'bonitet')::int       AS bonitet,
                 (f.meta->>'timber_stock')::real AS timber_stock,
                 f.meta->>'age_group'            AS age_group,
-                ST_AsMVTGeom(f.geom, ST_TileEnvelope(%s, %s, %s), %s, %s, true) AS geom
-            FROM forest_3857 f
+                ST_AsMVTGeom(f.geom, tile_env.env, %s, %s, true) AS geom
+            FROM forest_3857 f, tile_env
             WHERE f.area_m2 >= %s
-              AND f.geom && ST_TileEnvelope(%s, %s, %s)
+              AND f.geom && tile_env.env
         )
         SELECT ST_AsMVT(mvt_src, %s, %s, 'geom')
         FROM mvt_src
         WHERE geom IS NOT NULL
         """,
         (
-            z, x, y, extent, buffer,    # ST_AsMVTGeom
+            z, x, y,                    # ST_TileEnvelope (один раз)
+            extent, buffer,             # ST_AsMVTGeom
             min_area,                   # area filter
-            z, x, y,                    # ST_TileEnvelope
             layer, extent,              # ST_AsMVT
         ),
     ).fetchone()
