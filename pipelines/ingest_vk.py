@@ -76,23 +76,27 @@ def build_database_url() -> str:
 
 # Версия промпта и маппинга — при изменении бампается, photos-stage
 # автоматически перегоняет все посты где photo_prompt_version != текущей.
-PHOTO_PROMPT_VERSION = "v3-nine-species-2026-04-17"
+PHOTO_PROMPT_VERSION = "v4-thirteen-species-2026-04-17"
 
 # Маппинг ключей от Gemma → slug'и в таблице species.
-# Сознательно ограничен 9 категориями — Gemma 12B Vision не различает
-# мухоморов по виду, подосиновики по сортам, маслёнков/моховиков/польского
-# и прочее на уровне достаточном для ingest. Лучше честное «other»
-# чем ложная точность.
+# Добавлены 4 вида которые реально часто встречаются в ЛО и имеют
+# distinctive визуальные признаки: маслёнок (блестящая шляпка),
+# рыжик (концентрические кольца), груздь (белый волнистый край),
+# волнушка (розовый с зонами).
 #
 # Один ключ → несколько slug'ов там где Gemma не может различить
-# (подосиновик красный vs жёлто-бурый — пишем оба; сморчок/сморчковая
-# шапочка/строчок — пишем все три).
+# (подосиновик красный vs жёлто-бурый — пишем оба; сморчок/шапочка/
+# строчок — все три; опёнок осенний vs летний — оба).
 GROUP_TO_SLUGS: dict[str, list[str]] = {
     "porcini":             ["boletus-edulis"],                               # Белый
     "aspen_bolete":        ["leccinum-aurantiacum", "leccinum-versipelle"],  # Подосиновик
     "birch_bolete":        ["leccinum-scabrum"],                             # Подберёзовик
+    "butter_bolete":       ["suillus-luteus", "suillus-granulatus"],         # Маслёнок
     "chanterelle":         ["cantharellus-cibarius"],                        # Лисичка
     "trumpet_chanterelle": ["craterellus-tubaeformis"],                      # Лисичка трубчатая
+    "saffron_milkcap":     ["lactarius-deliciosus"],                         # Рыжик
+    "white_milkcap":       ["lactarius-resimus"],                            # Груздь
+    "woolly_milkcap":      ["lactarius-torminosus"],                         # Волнушка
     "spring_mushroom":     ["morchella-esculenta",                           # Сморчок /
                             "verpa-bohemica",                                # сморчковая шапочка /
                             "gyromitra-esculenta"],                          # строчок
@@ -136,77 +140,92 @@ SKIP_DATE_RE = re.compile("|".join([
     r"8\s*марта|23\s*февраля|день\s+защитника",
 ]), re.IGNORECASE)
 
-CLASSIFY_PROMPT = """You are classifying mushroom photos from a VK foraging group.
-Return JSON only: [{"species": "<key>", "count": N}, ...]
+CLASSIFY_PROMPT = """You are classifying mushroom photos from a VK foraging group
+in Leningrad Oblast (Russia). Expect boreal/temperate species from this region.
 
-CRITICAL RULES — read carefully:
+Return JSON only: [{"species": "<key>", "count": N, "scene": "<scene>"}, ...]
 
-1. If you are NOT VISUALLY CERTAIN which key fits → use "other".
-   Do NOT guess based on context. Do NOT "stretch" a photo to fit a key.
-   A fuzzy photo, a single blurry cap, unusual angle → "other".
+RULES:
 
-2. If there are NO mushrooms at all → return []
-   (pure landscape, recipe, berries, fish, people without mushrooms, etc.)
+1. If NO mushrooms at all → return []
+   (pure landscape, recipe, berries, fish, pet/human-only photos)
 
-3. Mushrooms visible but none match the keys below → "other"
-   (e.g. boletus other than the three listed; amanita; parasol;
-    lactarius/milkcaps; truffles — all go to "other")
+2. If mushrooms visible → ALWAYS classify them. Use one of the KEYS below
+   when you're confident about which species group it matches.
+   If you see a mushroom but unsure WHICH key matches → "other".
+   Don't skip mushrooms; just use "other" when ambiguous.
 
-4. Multiple distinct species in one photo → multiple entries in array.
+3. Multiple distinct species in one photo → multiple entries.
 
-Counting: full basket ≈ 30-50, handful ≈ 5-10, a couple ≈ 1-3.
+4. Count: full basket ≈ 30-50, handful ≈ 5-10, a couple ≈ 1-3.
 
-KEYS (use ONLY when visually unambiguous):
+5. SCENE (important for correct aggregation across multiple photos of one post):
+   - "basket"  — mushrooms in basket/bucket/pan/container, OR cut and stacked
+   - "kitchen" — cooking prep, cleaning, drying on table
+   - "forest"  — growing in nature, being picked, single held in hand
+   - "other"   — anything else (close-up of one mushroom on neutral background, etc.)
 
-- porcini — thick bulbous WHITE stem with fine white NETTING pattern,
-  brown cap, cream or white pores underneath. "Белый гриб"
+KEYS (13 mushrooms commonly collected in Ленобласть):
 
-- aspen_bolete — ORANGE or red-orange cap + dark SPECKLED stem.
-  The cap colour is the dead giveaway. "Подосиновик"
+BOLETES (sponge/tubes under cap, thick fleshy stem):
+- porcini — THICK BULBOUS stem with fine WHITE NETTING pattern, brown cap,
+  cream/white pores. "Белый гриб / боровик"
+- aspen_bolete — ORANGE or red-orange cap + dark speckled stem.
+  "Подосиновик"
+- birch_bolete — GREY-BROWN smooth cap (NOT orange) + dark speckled stem.
+  "Подберёзовик"
+- butter_bolete — SHINY, WET, STICKY-LOOKING brown cap (looks polished),
+  yellow pores below, often a ring on stem, young pine forest. "Маслёнок"
 
-- birch_bolete — GREY-BROWN or BROWN smooth cap (NOT orange) +
-  dark speckled stem. "Подберёзовик"
-
-- chanterelle — BRIGHT GOLDEN-YELLOW, funnel/trumpet shape, false
-  gills running down the stem. "Лисичка обыкновенная"
-
+CHANTERELLES (trumpet/funnel shape, false gills running DOWN the stem):
+- chanterelle — BRIGHT GOLDEN-YELLOW trumpet, summer. "Лисичка"
 - trumpet_chanterelle — SMALL BROWN-GREY funnel, HOLLOW stem,
-  usually in groups on forest floor. "Лисичка трубчатая"
+  autumn. "Лисичка трубчатая"
 
-- spring_mushroom — WRINKLED, HONEYCOMB or BRAIN-like cap.
-  Spring-only (Apr-May). Covers сморчок, сморчковая шапочка, строчок
-  — they look similar enough to group.
+MILKCAPS (brittle, exude milky juice when broken, flat cap):
+- saffron_milkcap — ORANGE cap with CONCENTRIC ORANGE/GREEN RINGS,
+  in pine/spruce forest. Orange milk if visible. "Рыжик"
+- white_milkcap — WHITE cap, WAVY/FRINGED edges, often in basket in
+  wavy stacks (many white scalloped caps together). "Груздь"
+- woolly_milkcap — PINK cap with CONCENTRIC PINK ZONES and
+  HAIRY/FRINGED edge. "Волнушка розовая"
 
-- honey_fungus — CLUSTERS of small tan caps growing on wood or
-  at tree base. Often with a ring on stem. "Опёнок"
-
+OTHER:
+- spring_mushroom — WRINKLED HONEYCOMB or BRAIN-like cap, spring only
+  (Apr-May). Covers сморчок/сморчковая шапочка/строчок (similar look).
+- honey_fungus — CLUSTERS of small tan-brown caps on WOOD or at
+  tree base. Often a ring on stem. "Опёнок"
 - oyster — LARGE SHELL- or FAN-shaped white/grey caps growing
-  SIDEWAYS out of tree trunks or logs. No central stem. "Вешенка"
+  SIDEWAYS from tree trunks, no central stem. "Вешенка"
+- russula — BRITTLE flat cap in bright colours (red/yellow/green/purple),
+  WHITE stem, NO ring. "Сыроежка"
 
-- russula — BRITTLE, flat-open cap in bright colours (red, yellow,
-  green, purple), WHITE stem, NO ring. "Сыроежка"
+- other — any mushroom not clearly matching above. Use for: мухоморы,
+  польский гриб, моховики, зонтик, трутовики, горькушки, rare finds.
+- none — ONLY when there are no mushrooms at all.
 
-- other — any mushroom that doesn't CLEARLY match one of the above.
-  Maslenki, mokhoviki, polish bolete, amanitas, milkcaps, parasols,
-  anything unclear — all go here.
-
-- none — no mushrooms in the photo at all.
-
-Examples:
-- Basket full of cream-capped mushrooms with thick netted stems →
-  [{"species":"porcini","count":20}]
-- One orange-capped mushroom in forest →
-  [{"species":"aspen_bolete","count":1}]
-- Fried mushrooms in a pan →
+EXAMPLES:
+- Basket of cream mushrooms with thick netted stems →
+  [{"species":"porcini","count":20,"scene":"basket"}]
+- Forest ground with single orange-cap mushroom →
+  [{"species":"aspen_bolete","count":1,"scene":"forest"}]
+- Shiny brown cap on pine duff, yellow pores visible →
+  [{"species":"butter_bolete","count":3,"scene":"forest"}]
+- Orange mushroom with concentric rings in pine needles →
+  [{"species":"saffron_milkcap","count":2,"scene":"forest"}]
+- Stack of white wavy-edged mushrooms in a bucket →
+  [{"species":"white_milkcap","count":15,"scene":"basket"}]
+- Cluster of tan caps on a stump →
+  [{"species":"honey_fungus","count":12,"scene":"forest"}]
+- Mixed basket: white-stemmed brown bolete + orange-cap bolete →
+  [{"species":"porcini","count":8,"scene":"basket"},
+   {"species":"aspen_bolete","count":5,"scene":"basket"}]
+- Red cap with white dots (fly agaric, not in our list) →
+  [{"species":"other","count":1,"scene":"forest"}]
+- Mushroom soup in a bowl →
   []
-- Photo of a river and fishing rod →
-  []
-- Cluster of small brown mushrooms on a tree stump →
-  [{"species":"honey_fungus","count":15}]
-- Some mushroom but unclear which type →
-  [{"species":"other","count":3}]
-- A red mushroom with white dots (fly agaric) →
-  [{"species":"other","count":1}]  (NOT in our key list → other)"""
+- Kids smiling in a forest, no mushrooms visible →
+  []"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -570,34 +589,57 @@ def _download_photo(url: str, timeout: int = 15) -> Optional[bytes]:
     return None
 
 
-def _ask_model(image_bytes: bytes) -> list[dict]:
+def _ask_model(image_bytes: bytes, retries: int = 3) -> list[dict]:
+    """Отправляет фото в LM Studio. Возвращает список {species, count, scene}.
+
+    Retry с экспоненциальным backoff на сетевых ошибках (не на content-ошибках
+    типа парсинг JSON — там Gemma либо выдала мусор, либо нет, ретрай не поможет).
+    """
     img_b64 = base64.b64encode(image_bytes).decode()
-    try:
-        resp = requests.post(LM_STUDIO_URL, json={
-            "model": LM_STUDIO_MODEL,
-            "messages": [{"role": "user", "content": [
-                {"type": "image_url",
-                 "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-                {"type": "text", "text": CLASSIFY_PROMPT},
-            ]}],
-            "temperature": 0.1,
-            "max_tokens": 200,
-        }, timeout=60)
-        if resp.status_code != 200:
+    payload = {
+        "model": LM_STUDIO_MODEL,
+        "messages": [{"role": "user", "content": [
+            {"type": "image_url",
+             "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
+            {"type": "text", "text": CLASSIFY_PROMPT},
+        ]}],
+        "temperature": 0.1,
+        "max_tokens": 300,
+    }
+
+    for attempt in range(retries):
+        try:
+            resp = requests.post(LM_STUDIO_URL, json=payload, timeout=60)
+            if resp.status_code != 200:
+                if attempt == retries - 1:
+                    return []
+                time.sleep(2 ** attempt)
+                continue
+
+            text = resp.json()["choices"][0]["message"]["content"].strip()
+            # диапазоны count: 30-50 → строка
+            text = re.sub(r'"count"\s*:\s*(\d+)\s*-\s*(\d+)', r'"count": "\1-\2"', text)
+            # greedy match чтобы захватить массив целиком даже при нескольких объектах
+            m = re.search(r"\[.*\]", text, re.DOTALL)
+            if m:
+                try:
+                    out = json.loads(m.group())
+                    if isinstance(out, list):
+                        return out
+                except json.JSONDecodeError:
+                    pass
             return []
-        text = resp.json()["choices"][0]["message"]["content"].strip()
-        # диапазоны count: 30-50 → строка
-        text = re.sub(r'"count"\s*:\s*(\d+)\s*-\s*(\d+)', r'"count": "\1-\2"', text)
-        m = re.search(r"\[.*?\]", text, re.DOTALL)
-        if m:
-            try:
-                out = json.loads(m.group())
-                if isinstance(out, list):
-                    return out
-            except json.JSONDecodeError:
-                pass
-    except Exception as e:
-        print(f"  model error: {e}")
+
+        except (requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout) as e:
+            if attempt == retries - 1:
+                print(f"  model network error after {retries} tries: {e}")
+                return []
+            time.sleep(2 ** attempt)
+        except Exception as e:
+            print(f"  model error: {e}")
+            return []
+
     return []
 
 
@@ -697,11 +739,7 @@ def photos_stage(
     print(f"  {len(to_process)} posts go to LM Studio")
 
     def process_one(pk: int, urls: list[str]) -> tuple[int, list[dict]]:
-        combined: dict[str, int] = {}
-        # Семплирование по числу фото в посте.
-        # Данные показывают: 66% постов имеют 3+ фото, текущая эвристика
-        # "первое + последнее" теряла середину. Компромисс между охватом и
-        # стоимостью: до 4 вызовов на пост.
+        # Семплирование по числу фото: до 4 вызовов на пост.
         n = len(urls)
         if n <= 2:
             sample_urls = list(urls)
@@ -709,17 +747,63 @@ def photos_stage(
             sample_urls = [urls[0], urls[n // 2], urls[-1]]
         else:
             sample_urls = [urls[0], urls[n // 3], urls[2 * n // 3], urls[-1]]
+
+        # Собираем результаты по фото в сыром виде (не сразу мерджим)
+        per_photo: list[list[dict]] = []
         for url in sample_urls:
             img = _download_photo(url)
             if img is None:
                 continue
             items = _ask_model(img)
+            per_photo.append(items)
+
+        # Scene-aware агрегация:
+        #   Если у вида есть basket/kitchen фото — доверяем самому большому
+        #   такому снимку (это «итоговая корзина»), forest-фото игнорируются
+        #   (на них тот же урожай до укладки). Это MAX_basket.
+        #
+        #   Если у вида ТОЛЬКО forest/other сцены — суммируем, предполагая
+        #   что каждое фото — отдельная находка. Под-оценка возможна если
+        #   одно и то же грибное тело сняли дважды, но для случая «несколько
+        #   разных грибов показывают по одному» (типично при walk-and-pick)
+        #   SUM точнее чем MAX.
+        basket_counts: dict[str, int] = {}     # sp -> max count across basket/kitchen photos
+        forest_counts: dict[str, list[int]] = {}  # sp -> list of counts from forest/other
+        n_photos_with_sp: dict[str, int] = {}
+
+        for items in per_photo:
+            # в рамках одного фото одно вхождение вида считаем один раз
+            # даже если модель вернула два одинаковых (редко, но бывает)
+            seen_here: dict[str, tuple[int, str]] = {}
             for it in items:
                 sp = it.get("species", "")
+                if not sp or sp == "none":
+                    continue
                 cnt = _normalize_count(it.get("count", 0))
-                if sp:
-                    combined[sp] = max(combined.get(sp, 0), cnt)
-        result = [{"species": s, "count": c} for s, c in combined.items()]
+                scene = (it.get("scene") or "other").lower()
+                if sp not in seen_here or cnt > seen_here[sp][0]:
+                    seen_here[sp] = (cnt, scene)
+            for sp, (cnt, scene) in seen_here.items():
+                n_photos_with_sp[sp] = n_photos_with_sp.get(sp, 0) + 1
+                if scene in ("basket", "kitchen"):
+                    basket_counts[sp] = max(basket_counts.get(sp, 0), cnt)
+                else:
+                    forest_counts.setdefault(sp, []).append(cnt)
+
+        all_species = set(basket_counts) | set(forest_counts)
+        result = []
+        total_photos = len(per_photo) or 1
+        for sp in all_species:
+            if sp in basket_counts:
+                total = basket_counts[sp]  # доверяем корзине, игнорируем forest shots
+            else:
+                total = sum(forest_counts.get(sp, []))  # разные находки → сумма
+            result.append({
+                "species": sp,
+                "count": total,
+                "n_photos": n_photos_with_sp.get(sp, 0),
+                "photos_sampled": total_photos,
+            })
         return pk, result
 
     BATCH = 100
@@ -803,7 +887,6 @@ def promote_stage(
         for vk_pk, post_id, foray_date, photo_species, text in rows:
             source_ref = f"{group}-{post_id}"
             text_excerpt = (text or "")[:300]
-            any_inserted = False
 
             for item in photo_species:
                 photo_group = item.get("species", "")
@@ -814,6 +897,18 @@ def promote_stage(
                     continue
                 cnt = item.get("count") or None
 
+                # Quality вычисляется из доли фото где вид был виден.
+                # Чем больше фото подтвердили вид — тем выше уверенность.
+                n_seen = item.get("n_photos", 1)
+                n_sampled = item.get("photos_sampled", 1)
+                ratio = n_seen / max(n_sampled, 1)
+                if ratio >= 0.5 or n_seen >= 2:
+                    quality = "high"
+                elif n_seen >= 1 and n_sampled <= 2:
+                    quality = "ok"      # мало фото вообще, одного достаточно
+                else:
+                    quality = "low"     # 1 из 3+ фото — возможна ошибка модели
+
                 for slug in slugs:
                     sp_id = slug_to_id.get(slug)
                     if sp_id is None:
@@ -823,24 +918,26 @@ def promote_stage(
                         INSERT INTO observation
                           (region_id, source, source_ref, source_version,
                            species_id, species_raw, observed_on,
-                           count_estimate, text_excerpt, meta)
-                        VALUES (%s, 'vk', %s, %s, %s, %s, %s, %s, %s, %s)
+                           count_estimate, quality, text_excerpt, meta)
+                        VALUES (%s, 'vk', %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         ON CONFLICT (source, source_ref, species_id) DO NOTHING
                         """,
                         (
                             region_id, source_ref, source_version,
                             sp_id, photo_group, foray_date,
-                            cnt, text_excerpt,
-                            json.dumps({"photo_group": photo_group,
-                                        "vk_group": group}),
+                            cnt, quality, text_excerpt,
+                            json.dumps({
+                                "photo_group": photo_group,
+                                "vk_group": group,
+                                "n_photos_with_sp": n_seen,
+                                "photos_sampled": n_sampled,
+                            }),
                         ),
                     )
                     n_inserted += 1
-                    any_inserted = True
 
             # observation_written ставим в любом случае — мы честно попытались
             done_ids.append(vk_pk)
-            _ = any_inserted  # для читаемости, не используем
 
         if done_ids:
             with conn.cursor() as cur:
