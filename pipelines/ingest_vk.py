@@ -76,33 +76,30 @@ def build_database_url() -> str:
 
 # Версия промпта и маппинга — при изменении бампается, photos-stage
 # автоматически перегоняет все посты где photo_prompt_version != текущей.
-PHOTO_PROMPT_VERSION = "v2-fine-grained-2026-04-17"
+PHOTO_PROMPT_VERSION = "v3-nine-species-2026-04-17"
 
 # Маппинг ключей от Gemma → slug'и в таблице species.
-# Один ключ может раскрыться в несколько slug'ов (по фото не всегда
-# можно различить подосиновик красный vs жёлто-бурый — пишем оба).
+# Сознательно ограничен 9 категориями — Gemma 12B Vision не различает
+# мухоморов по виду, подосиновики по сортам, маслёнков/моховиков/польского
+# и прочее на уровне достаточном для ingest. Лучше честное «other»
+# чем ложная точность.
+#
+# Один ключ → несколько slug'ов там где Gemma не может различить
+# (подосиновик красный vs жёлто-бурый — пишем оба; сморчок/сморчковая
+# шапочка/строчок — пишем все три).
 GROUP_TO_SLUGS: dict[str, list[str]] = {
-    "porcini":             ["boletus-edulis"],                               # Белый гриб
+    "porcini":             ["boletus-edulis"],                               # Белый
     "aspen_bolete":        ["leccinum-aurantiacum", "leccinum-versipelle"],  # Подосиновик
     "birch_bolete":        ["leccinum-scabrum"],                             # Подберёзовик
-    "butter_bolete":       ["suillus-luteus", "suillus-granulatus"],         # Маслёнок
-    "moss_bolete":         ["xerocomus-subtomentosus"],                      # Моховик зелёный
-    "bay_bolete":          ["imleria-badia"],                                # Польский
     "chanterelle":         ["cantharellus-cibarius"],                        # Лисичка
     "trumpet_chanterelle": ["craterellus-tubaeformis"],                      # Лисичка трубчатая
-    "saffron_milkcap":     ["lactarius-deliciosus"],                         # Рыжик
-    "white_milkcap":       ["lactarius-resimus"],                            # Груздь
-    "woolly_milkcap":      ["lactarius-torminosus"],                         # Волнушка
-    "bitter_milkcap":      ["lactarius-rufus"],                              # Горькушка
-    "russula":             ["russula-vesca"],                                # Сыроежка
+    "spring_mushroom":     ["morchella-esculenta",                           # Сморчок /
+                            "verpa-bohemica",                                # сморчковая шапочка /
+                            "gyromitra-esculenta"],                          # строчок
     "honey_fungus":        ["armillaria-mellea", "kuehneromyces-mutabilis"], # Опята
-    "morel":               ["morchella-esculenta"],                          # Сморчок
-    "false_morel":         ["gyromitra-esculenta"],                          # Строчок
-    "parasol":             ["macrolepiota-procera"],                         # Зонтик
-    "fly_agaric":          ["amanita-muscaria"],                             # Мухомор красный
-    "death_cap":           ["amanita-phalloides"],                           # Бледная поганка
-    "false_death_cap":     ["amanita-citrina"],                              # Мухомор поганковидный
-    # "other" / "none" → игнорируем (нет подходящего slug'а)
+    "oyster":              ["pleurotus-ostreatus"],                          # Вешенка
+    "russula":             ["russula-vesca"],                                # Сыроежка
+    # "other" / "none" → игнорируем (нет соответствующего slug'а)
 }
 
 # Нерелевантные посты на стадии фото (не про реальный сбор грибов).
@@ -139,44 +136,77 @@ SKIP_DATE_RE = re.compile("|".join([
     r"8\s*марта|23\s*февраля|день\s+защитника",
 ]), re.IGNORECASE)
 
-CLASSIFY_PROMPT = """Classify EACH mushroom type visible in this photo. Return JSON array:
-[{"species": "<key>", "count": N}, ...]
+CLASSIFY_PROMPT = """You are classifying mushroom photos from a VK foraging group.
+Return JSON only: [{"species": "<key>", "count": N}, ...]
 
-Multiple species visible → multiple entries. No mushrooms or unrelated
-(recipe, landscape, berries, fish, people alone) → []
-Counting: basket ≈ 30-50, handful ≈ 5-10, a couple ≈ 1-3.
+CRITICAL RULES — read carefully:
 
-Use these exact keys (pick the BEST specific match, not the most generic):
+1. If you are NOT VISUALLY CERTAIN which key fits → use "other".
+   Do NOT guess based on context. Do NOT "stretch" a photo to fit a key.
+   A fuzzy photo, a single blurry cap, unusual angle → "other".
 
-BOLETES (sponge/tubes under cap):
-- porcini: thick bulbous stem with WHITE NETTING pattern, brown cap, cream pores ("Белый гриб")
-- aspen_bolete: ORANGE or red-orange cap, stem with DARK SCALES ("Подосиновик")
-- birch_bolete: grey-brown smooth cap (NOT orange), stem with dark scales ("Подберёзовик")
-- butter_bolete: SHINY/WET sticky brown cap, yellow pores ("Маслёнок")
-- moss_bolete: velvety olive-brown cap, yellow pores bruise blue ("Моховик")
-- bay_bolete: smooth chestnut cap, yellow pores, often bruises blue-green ("Польский")
+2. If there are NO mushrooms at all → return []
+   (pure landscape, recipe, berries, fish, people without mushrooms, etc.)
 
-CHANTERELLES (funnel shape, false gills down stem):
-- chanterelle: BRIGHT GOLDEN-YELLOW trumpet ("Лисичка обыкновенная")
-- trumpet_chanterelle: small BROWN-GREY trumpet, hollow stem ("Лисичка трубчатая")
+3. Mushrooms visible but none match the keys below → "other"
+   (e.g. boletus other than the three listed; amanita; parasol;
+    lactarius/milkcaps; truffles — all go to "other")
 
-MILKCAPS (exude milky juice when cut):
-- saffron_milkcap: ORANGE cap with concentric rings, orange milk, in pine forest ("Рыжик")
-- white_milkcap: WHITE cap with wavy/fringed shaggy edges ("Груздь настоящий")
-- woolly_milkcap: PINK cap with concentric zones + hairy edge ("Волнушка")
-- bitter_milkcap: brick-red smooth cap ("Горькушка")
+4. Multiple distinct species in one photo → multiple entries in array.
 
-OTHER:
-- russula: BRITTLE colorful caps (red/yellow/green/purple), WHITE stem, no ring ("Сыроежка")
-- honey_fungus: CLUSTERS on wood or tree base, small tan caps, often with ring ("Опёнок")
-- morel: WRINKLED HONEYCOMB cap, hollow inside, spring ("Сморчок")
-- false_morel: BRAIN-LIKE red-brown wrinkly cap, spring ("Строчок")
-- parasol: VERY TALL (30+ cm), parasol cap with brown scales, movable ring ("Зонтик")
-- fly_agaric: RED cap with WHITE DOTS, ring, white stem ("Мухомор красный")
-- death_cap: GREENISH-OLIVE smooth cap, white gills, ring, volva cup at base ("Бледная поганка")
-- false_death_cap: pale YELLOW cap with scales, ring, volva ("Мухомор поганковидный")
-- other: mushroom that doesn't match any above
-- none: no mushrooms, recipe, landscape, berries, fish, pure people photo"""
+Counting: full basket ≈ 30-50, handful ≈ 5-10, a couple ≈ 1-3.
+
+KEYS (use ONLY when visually unambiguous):
+
+- porcini — thick bulbous WHITE stem with fine white NETTING pattern,
+  brown cap, cream or white pores underneath. "Белый гриб"
+
+- aspen_bolete — ORANGE or red-orange cap + dark SPECKLED stem.
+  The cap colour is the dead giveaway. "Подосиновик"
+
+- birch_bolete — GREY-BROWN or BROWN smooth cap (NOT orange) +
+  dark speckled stem. "Подберёзовик"
+
+- chanterelle — BRIGHT GOLDEN-YELLOW, funnel/trumpet shape, false
+  gills running down the stem. "Лисичка обыкновенная"
+
+- trumpet_chanterelle — SMALL BROWN-GREY funnel, HOLLOW stem,
+  usually in groups on forest floor. "Лисичка трубчатая"
+
+- spring_mushroom — WRINKLED, HONEYCOMB or BRAIN-like cap.
+  Spring-only (Apr-May). Covers сморчок, сморчковая шапочка, строчок
+  — they look similar enough to group.
+
+- honey_fungus — CLUSTERS of small tan caps growing on wood or
+  at tree base. Often with a ring on stem. "Опёнок"
+
+- oyster — LARGE SHELL- or FAN-shaped white/grey caps growing
+  SIDEWAYS out of tree trunks or logs. No central stem. "Вешенка"
+
+- russula — BRITTLE, flat-open cap in bright colours (red, yellow,
+  green, purple), WHITE stem, NO ring. "Сыроежка"
+
+- other — any mushroom that doesn't CLEARLY match one of the above.
+  Maslenki, mokhoviki, polish bolete, amanitas, milkcaps, parasols,
+  anything unclear — all go here.
+
+- none — no mushrooms in the photo at all.
+
+Examples:
+- Basket full of cream-capped mushrooms with thick netted stems →
+  [{"species":"porcini","count":20}]
+- One orange-capped mushroom in forest →
+  [{"species":"aspen_bolete","count":1}]
+- Fried mushrooms in a pan →
+  []
+- Photo of a river and fishing rod →
+  []
+- Cluster of small brown mushrooms on a tree stump →
+  [{"species":"honey_fungus","count":15}]
+- Some mushroom but unclear which type →
+  [{"species":"other","count":3}]
+- A red mushroom with white dots (fly agaric) →
+  [{"species":"other","count":1}]  (NOT in our key list → other)"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════

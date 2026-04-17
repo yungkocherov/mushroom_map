@@ -313,3 +313,30 @@ species:
       - { type: birch,            affinity: 1.0 }
       - { type: mixed,            affinity: 0.6 }
     description: Растёт под берёзой, не под осиной — путать не надо.
+
+  # ─── Дровесные (растут на древесине, не микоризные) ──────
+  - slug: pleurotus-ostreatus
+    name_ru: Вешенка обыкновенная
+    name_lat: Pleurotus ostreatus
+    synonyms: [вешенка, устричный гриб]
+    edibility: edible
+    season_months: [5, 6, 7, 8, 9, 10, 11]
+    forests:
+      - { type: aspen,            affinity: 0.9 }
+      - { type: birch,            affinity: 0.8 }
+      - { type: alder,            affinity: 0.7 }
+      - { type: mixed_broadleaved,affinity: 0.8 }
+    description: Крупные веерообразные шляпки на лиственных. Колониями на пнях и валеже.
+
+  # ─── Весенние (добавка к сморчок+строчок) ────────────────
+  - slug: verpa-bohemica
+    name_ru: Сморчковая шапочка
+    name_lat: Verpa bohemica
+    synonyms: [шапочка сморчковая]
+    edibility: conditionally_edible
+    season_months: [4, 5]
+    forests:
+      - { type: aspen,            affinity: 0.7 }
+      - { type: birch,            affinity: 0.7 }
+      - { type: mixed_broadleaved,affinity: 0.6 }
+    description: Весенний гриб, шляпка свободно сидит на ножке. Осиново-берёзовые поймы.
