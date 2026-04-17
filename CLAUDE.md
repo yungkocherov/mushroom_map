@@ -108,6 +108,7 @@ the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
 
 ## Rules of engagement for changes
 
+**Process:**
 - **Verify root cause before iterating.** Last session I rewrote the
   scheme basemap 7 times across 3 providers without once checking if
   the URL was even returning 200. Always `curl -I <url>` first when a
@@ -118,6 +119,17 @@ the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
 - **Respect the user's git history.** Use `git log --oneline -20` at
   the start of a session to see what was just done — the story is in
   the commits.
+- **Match the existing style of the file you're editing**, even if you'd
+  do it differently in a fresh project. Consistency inside one repo beats
+  global consistency with your own preferences.
+- **Every changed line should trace directly to the user's request.**
+  If a diff contains cleanup / rename / refactor that the user didn't
+  ask for, cut it out and ask first.
+- **State assumptions explicitly.** If a request is ambiguous, name
+  what's unclear in one sentence and pick a direction — don't silently
+  guess, don't freeze up asking for specs.
+
+**Project-specific facts:**
 - **Scheme/hybrid basemap tiles**: `tiles.openfreemap.org` and
   `basemaps.cartocdn.com/rastertiles/*` are unreachable from this
   user's network. `server.arcgisonline.com` and `tiles.versatiles.org`
@@ -152,3 +164,4 @@ the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
   because FastAPI doesn't attach CORS headers to error responses. When
   you see "blocked by CORS policy" on an endpoint that used to work,
   check `docker compose logs api` for the real exception.
+

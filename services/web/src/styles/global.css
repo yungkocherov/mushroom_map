@@ -1,131 +1,309 @@
-:root {
-  --bg: #0f1410;
-  --panel: #161c17;
-  --panel-2: #1d241e;
-  --text: #e7ecea;
-  --text-dim: #9aa39c;
-  --accent: #8fd36e;
-  --border: #283028;
+/*
+ * Глобальные стили. Минимальные — основная стилизация идёт inline
+ * в компонентах карты. Здесь: сброс, layout, shell и контент-страницы.
+ *
+ * Дизайн-система (Fraunces/Inter, бумажный фон, полный токен-набор)
+ * появится в Фазе 2. Сейчас — рабочий базовый вид, близкий к тому
+ * что было до миграции, с адаптацией под маршруты.
+ */
 
-  --sidebar-w: 300px;
+:root {
+  /* Холодная нейтральная палитра — переделаем в тёплую бумажную
+     в Фазе 2 вместе с typography. */
+  --paper:       #fafaf7;
+  --surface:     #ffffff;
+  --ink:         #1f2420;
+  --ink-dim:     #5a6159;
+  --ink-faint:   #9aa297;
+  --rule:        #e5e3dc;
+  --forest:      #2d5a3a;
+  --forest-deep: #1a3a24;
+  --accent:      #d88c1e;
 }
 
 * {
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
+html, body, #root {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter",
-    system-ui, sans-serif;
-  font-size: 14px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Inter", system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
-.app {
-  display: grid;
-  grid-template-columns: var(--sidebar-w) 1fr;
+a {
+  color: var(--forest);
+  text-decoration: underline;
+  text-decoration-color: rgba(45, 90, 58, 0.3);
+  text-underline-offset: 2px;
+  transition: color 0.15s, text-decoration-color 0.15s;
+}
+a:hover {
+  color: var(--forest-deep);
+  text-decoration-color: var(--forest-deep);
+}
+
+/* ─── Layout ───────────────────────────────────────────────────── */
+
+.layout {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.layout--map {
   height: 100vh;
-  width: 100vw;
+  overflow: hidden;
+}
+.layout--map .main--map {
+  flex: 1;
+  position: relative;
+  min-height: 0;
 }
 
-.sidebar {
-  background: var(--panel);
-  border-right: 1px solid var(--border);
-  padding: 20px;
-  overflow-y: auto;
+.layout--content .main--content {
+  padding: 32px 20px 64px;
 }
 
-.sidebar__header h1 {
-  margin: 0 0 4px;
-  font-size: 20px;
+/* ─── Site header ──────────────────────────────────────────────── */
+
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.site-header__inner {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+.site-header__logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-weight: 600;
+  font-size: 16px;
+  color: var(--ink);
+  text-decoration: none;
   letter-spacing: -0.01em;
 }
+.site-header__logo:hover { color: var(--forest-deep); }
 
-.sidebar__subtitle {
+.site-header__logo-mark {
+  font-size: 18px;
+}
+
+.site-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.site-header__link {
+  color: var(--ink-dim);
+  text-decoration: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: background 0.15s, color 0.15s;
+}
+.site-header__link:hover {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.03);
+}
+.site-header__link--active {
+  color: var(--forest-deep);
+  background: rgba(45, 90, 58, 0.08);
+  font-weight: 500;
+}
+
+/* ─── Content pages ────────────────────────────────────────────── */
+
+.content {
+  max-width: 860px;
+  margin: 0 auto;
+}
+.content--narrow {
+  max-width: 680px;
+}
+
+.content h1 {
+  margin: 0 0 16px;
+  font-size: 2rem;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  font-weight: 700;
+}
+
+.content h2 {
+  margin: 40px 0 14px;
+  font-size: 1.35rem;
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+.content p {
+  margin: 0 0 16px;
+  color: var(--ink);
+}
+
+.lead {
+  font-size: 1.1rem;
+  color: var(--ink-dim);
+  line-height: 1.55;
+}
+
+/* ─── Hero ─────────────────────────────────────────────────────── */
+
+.hero {
+  padding: 24px 0 32px;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 40px;
+}
+
+.hero__title {
+  margin: 0 0 16px;
+  font-size: 2.5rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-weight: 700;
+}
+
+.hero__lead {
+  font-size: 1.15rem;
+  color: var(--ink);
+  margin: 0 0 12px;
+  max-width: 640px;
+}
+
+.hero__sub {
+  color: var(--ink-dim);
+  max-width: 640px;
+  margin: 0 0 24px;
+}
+
+.hero__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+/* ─── Buttons ──────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 15px;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  border: 1px solid transparent;
+}
+
+.btn--primary {
+  background: var(--forest);
+  color: white;
+}
+.btn--primary:hover {
+  background: var(--forest-deep);
+  color: white;
+}
+
+.btn--ghost {
+  border-color: var(--rule);
+  color: var(--ink);
+}
+.btn--ghost:hover {
+  border-color: var(--ink-dim);
+  color: var(--ink);
+}
+
+/* ─── Home grid (карточки-разделы) ────────────────────────────── */
+
+.home-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.home-grid__card {
+  display: block;
+  padding: 20px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  text-decoration: none;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  color: inherit;
+}
+.home-grid__card:hover {
+  border-color: var(--forest);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  color: inherit;
+}
+.home-grid__card h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+.home-grid__card p {
   margin: 0;
-  color: var(--text-dim);
-  font-size: 13px;
+  font-size: 0.95rem;
+  color: var(--ink-dim);
 }
 
-.sidebar__filters {
-  margin-top: 28px;
-}
+/* ─── Placeholder box ─────────────────────────────────────────── */
 
-.placeholder {
-  color: var(--text-dim);
-  font-style: italic;
-  font-size: 13px;
+.placeholder-box {
+  margin-top: 32px;
+  padding: 24px;
+  background: var(--surface);
+  border: 1px dashed var(--rule);
+  border-radius: 10px;
+  color: var(--ink-dim);
 }
+.placeholder-box p { margin: 0; }
+
+/* ─── Map container (осталось от прежнего layout'а) ───────────── */
 
 .map-root {
   width: 100%;
   height: 100%;
 }
 
-.legend {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  background: rgba(22, 28, 23, 0.92);
-  backdrop-filter: blur(6px);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 12px 14px;
-  min-width: 200px;
-  font-size: 12px;
-}
+/* ─── Адаптив ──────────────────────────────────────────────────── */
 
-.legend__title {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.legend__list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.legend__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 3px 0;
-  color: var(--text-dim);
-}
-
-.legend__swatch {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  flex-shrink: 0;
-}
-
-@media (max-width: 720px) {
-  .app {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
+@media (max-width: 640px) {
+  .hero__title       { font-size: 2rem; }
+  .content h1        { font-size: 1.6rem; }
+  .layout--content .main--content { padding: 20px 14px 48px; }
+  .site-header__inner {
+    padding: 10px 14px;
+    gap: 12px;
   }
-  .sidebar {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    padding: 12px 16px;
-  }
-  .legend {
-    right: 8px;
-    bottom: 8px;
-    min-width: 170px;
-  }
+  .site-header__nav  { gap: 0; }
+  .site-header__link { padding: 6px 8px; font-size: 13px; }
 }
