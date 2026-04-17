@@ -1,30 +1,39 @@
 """
-VK → observation pipeline.
+VK → observation pipeline (DB-backed, инкрементальный).
+
+Все стадии читают/пишут vk_post; observation получается на финальной стадии.
+Каждая стадия обрабатывает только то, что ещё не сделано — повторный
+запуск добирает новое, не трогает уже готовое.
 
 Стадии:
-  1. collect  — скачать посты из ВК (wall.get)
-  2. dates    — извлечь дату похода из текста (regex + опционально LLM)
-  3. photos   — распознать виды грибов на фото через Gemma (LM Studio)
-  4. db       — записать в таблицу observation (psycopg)
+  1. collect  — fetch новых постов из VK API (MAX(date_ts) как cutoff);
+                INSERT INTO vk_post ON CONFLICT DO NOTHING.
+  2. dates    — для vk_post.foray_date IS NULL: regex-парсинг текста;
+                --llm добавляет Claude-фоллбэк на не распознанное.
+  3. photos   — для vk_post.photo_processed_at IS NULL: LM Studio (Gemma).
+                Пропускает зимние месяцы и «нерелевантные» по тексту.
+  4. promote  — INSERT INTO observation из vk_post, где есть и foray_date
+                и photo_species; флаг observation_written = TRUE.
 
 Запуск:
   python pipelines/ingest_vk.py --group grib_spb --region lenoblast
-  python pipelines/ingest_vk.py --group grib_spb --region lenoblast --from photos
-  python pipelines/ingest_vk.py --group grib_spb --region lenoblast --step db
+  python pipelines/ingest_vk.py --group grib_spb --step collect
+  python pipelines/ingest_vk.py --group grib_spb --step dates --limit 5000
+  python pipelines/ingest_vk.py --group grib_spb --step photos --limit 500
+  python pipelines/ingest_vk.py --group grib_spb --step promote --region lenoblast
 
-Переменные окружения (из .env):
+Env (.env):
   VK_TOKEN          — токен ВК API
-  DATABASE_URL      — postgresql://...
-  LM_STUDIO_URL     — http://127.0.0.1:1234/v1/chat/completions  (по умолчанию)
-  LM_STUDIO_MODEL   — google/gemma-3-12b  (по умолчанию)
-  ANTHROPIC_API_KEY — опционально, для LLM-фоллбэка при извлечении дат
+  DATABASE_URL      — postgresql://... (или POSTGRES_* переменные)
+  LM_STUDIO_URL     — http://127.0.0.1:1234/v1/chat/completions
+  LM_STUDIO_MODEL   — google/gemma-3-12b
+  ANTHROPIC_API_KEY — опционально, для даты-фоллбэка
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
-import csv
 import json
 import os
 import re
@@ -40,58 +49,63 @@ import requests
 from dotenv import load_dotenv
 from tqdm import tqdm
 
-# ─── Конфигурация ────────────────────────────────────────────────────────────
+# ─── Конфиг ──────────────────────────────────────────────────────────────────
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-VK_TOKEN       = os.getenv("VK_TOKEN", "")
-LM_STUDIO_URL  = os.getenv("LM_STUDIO_URL",
+VK_TOKEN        = os.getenv("VK_TOKEN", "")
+VK_API_VERSION  = "5.131"
+VK_BATCH_SIZE   = 100
+VK_DELAY_SEC    = 0.35
+
+LM_STUDIO_URL   = os.getenv("LM_STUDIO_URL",
                             "http://127.0.0.1:1234/v1/chat/completions")
 LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "google/gemma-3-12b")
 
-# DATABASE_URL: берём из env или собираем из частей (поддерживает POSTGRES_PORT=5433)
-def _build_database_url() -> str:
+
+def build_database_url() -> str:
     if url := os.getenv("DATABASE_URL"):
         return url
-    user   = os.getenv("POSTGRES_USER",     "mushroom")
-    pw     = os.getenv("POSTGRES_PASSWORD", "mushroom_dev")
-    host   = os.getenv("POSTGRES_HOST",     "127.0.0.1")
-    port   = os.getenv("POSTGRES_PORT",     "5434")
-    db     = os.getenv("POSTGRES_DB",       "mushroom_map")
+    user = os.getenv("POSTGRES_USER",     "mushroom")
+    pw   = os.getenv("POSTGRES_PASSWORD", "mushroom_dev")
+    host = os.getenv("POSTGRES_HOST",     "127.0.0.1")
+    port = os.getenv("POSTGRES_PORT",     "5434")
+    db   = os.getenv("POSTGRES_DB",       "mushroom_map")
     return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
 
-DATABASE_URL = _build_database_url()
 
-VK_API_VERSION = "5.131"
-VK_BATCH_SIZE  = 100
-VK_DELAY       = 0.35          # секунды между запросами
-CHECKPOINT_EVERY = 500         # постов до сохранения checkpoint
+# Версия промпта и маппинга — при изменении бампается, photos-stage
+# автоматически перегоняет все посты где photo_prompt_version != текущей.
+PHOTO_PROMPT_VERSION = "v2-fine-grained-2026-04-17"
 
-YEARS_BACK = 8                 # сколько лет истории брать
-
-# Рабочая папка для промежуточных файлов: data/vk/{group}/
-DATA_ROOT = Path(__file__).parent.parent / "data" / "vk"
-
-# ─── Маппинг: группа на фото → species slug в БД ─────────────────────────────
-#
-# Для каждой фотогруппы выбран главный представитель — самый часто встречающийся
-# в Ленобласти вид. При расширении справочника species можно добавить больше slug'ов
-# в список и pipeline запишет отдельное наблюдение для каждого.
-
+# Маппинг ключей от Gemma → slug'и в таблице species.
+# Один ключ может раскрыться в несколько slug'ов (по фото не всегда
+# можно различить подосиновик красный vs жёлто-бурый — пишем оба).
 GROUP_TO_SLUGS: dict[str, list[str]] = {
-    "chanterelle":  ["cantharellus-cibarius"],
-    "bolete":       ["boletus-edulis", "leccinum-scabrum", "leccinum-aurantiacum"],
-    "honey_fungus": ["armillaria-mellea"],
-    "morel":        ["morchella-esculenta"],
-    "russula":      ["russula-vesca"],
-    "lactarius":    ["lactarius-deliciosus", "lactarius-resimus", "lactarius-torminosus"],
-    "amanita":      ["amanita-muscaria"],
-    "parasol":      ["macrolepiota-procera"],
-    # "other" и "none" — не записываем
+    "porcini":             ["boletus-edulis"],                               # Белый гриб
+    "aspen_bolete":        ["leccinum-aurantiacum", "leccinum-versipelle"],  # Подосиновик
+    "birch_bolete":        ["leccinum-scabrum"],                             # Подберёзовик
+    "butter_bolete":       ["suillus-luteus", "suillus-granulatus"],         # Маслёнок
+    "moss_bolete":         ["xerocomus-subtomentosus"],                      # Моховик зелёный
+    "bay_bolete":          ["imleria-badia"],                                # Польский
+    "chanterelle":         ["cantharellus-cibarius"],                        # Лисичка
+    "trumpet_chanterelle": ["craterellus-tubaeformis"],                      # Лисичка трубчатая
+    "saffron_milkcap":     ["lactarius-deliciosus"],                         # Рыжик
+    "white_milkcap":       ["lactarius-resimus"],                            # Груздь
+    "woolly_milkcap":      ["lactarius-torminosus"],                         # Волнушка
+    "bitter_milkcap":      ["lactarius-rufus"],                              # Горькушка
+    "russula":             ["russula-vesca"],                                # Сыроежка
+    "honey_fungus":        ["armillaria-mellea", "kuehneromyces-mutabilis"], # Опята
+    "morel":               ["morchella-esculenta"],                          # Сморчок
+    "false_morel":         ["gyromitra-esculenta"],                          # Строчок
+    "parasol":             ["macrolepiota-procera"],                         # Зонтик
+    "fly_agaric":          ["amanita-muscaria"],                             # Мухомор красный
+    "death_cap":           ["amanita-phalloides"],                           # Бледная поганка
+    "false_death_cap":     ["amanita-citrina"],                              # Мухомор поганковидный
+    # "other" / "none" → игнорируем (нет подходящего slug'а)
 }
 
-# ─── Фильтр нерелевантных постов ─────────────────────────────────────────────
-
+# Нерелевантные посты на стадии фото (не про реальный сбор грибов).
 SKIP_PHOTO_RE = re.compile("|".join([
     r"рецепт", r"приготовл",
     r"жарен|варен|тушен|маринов",
@@ -117,6 +131,7 @@ SKIP_PHOTO_RE = re.compile("|".join([
     r"8\s*марта|23\s*февраля|день\s+защитника",
 ]), re.IGNORECASE)
 
+# Посты про которые ТОЧНО не нужно извлекать foray_date
 SKIP_DATE_RE = re.compile("|".join([
     r"архив",
     r"с\s+днём?\s+рождени|день\s+рождени|\bдр\b|поздравля",
@@ -124,41 +139,49 @@ SKIP_DATE_RE = re.compile("|".join([
     r"8\s*марта|23\s*февраля|день\s+защитника",
 ]), re.IGNORECASE)
 
-# ─── Промпт для распознавания видов ──────────────────────────────────────────
+CLASSIFY_PROMPT = """Classify EACH mushroom type visible in this photo. Return JSON array:
+[{"species": "<key>", "count": N}, ...]
 
-CLASSIFY_PROMPT = """Classify mushrooms in this photo. JSON only: [{"species":"group","count":N}]
-No mushrooms or unrelated photo: [{"species":"none","count":0}]
-Basket=30-50, handful=5-10.
+Multiple species visible → multiple entries. No mushrooms or unrelated
+(recipe, landscape, berries, fish, people alone) → []
+Counting: basket ≈ 30-50, handful ≈ 5-10, a couple ≈ 1-3.
 
-Groups:
-- chanterelle (Cantharellus, Craterellus - golden/yellow funnel-shaped, false gills)
-- bolete (Boletus, Leccinum, Suillus, Xerocomus, Imleria - sponge/tubes under cap)
-- honey_fungus (Armillaria, Kuehneromyces - small, clusters on wood or roots, ring on stem)
-- morel (Morchella, Gyromitra - wrinkled/brain-like cap, spring mushrooms)
-- russula (Russula - brittle, colorful caps, white stem, no ring, no volva)
-- lactarius (Lactarius - milk caps: рыжики/saffron milk, грузди/white milk, волнушки/woolly milk)
-- amanita (Amanita - ring AND volva/cup at base: fly agaric, death cap, destroying angel)
-- parasol (Macrolepiota - very large, parasol-shaped, brown scaly cap, movable ring)
-- other (any mushroom not matching above groups)
-- none (no mushrooms, recipe photo, forest landscape, berries, etc.)"""
+Use these exact keys (pick the BEST specific match, not the most generic):
 
-# ─── Русские названия месяцев для парсинга дат ───────────────────────────────
+BOLETES (sponge/tubes under cap):
+- porcini: thick bulbous stem with WHITE NETTING pattern, brown cap, cream pores ("Белый гриб")
+- aspen_bolete: ORANGE or red-orange cap, stem with DARK SCALES ("Подосиновик")
+- birch_bolete: grey-brown smooth cap (NOT orange), stem with dark scales ("Подберёзовик")
+- butter_bolete: SHINY/WET sticky brown cap, yellow pores ("Маслёнок")
+- moss_bolete: velvety olive-brown cap, yellow pores bruise blue ("Моховик")
+- bay_bolete: smooth chestnut cap, yellow pores, often bruises blue-green ("Польский")
 
-MONTHS_RU = {
-    "январ": 1, "феврал": 2, "март": 3, "апрел": 4,
-    "май": 5, "маи": 5, "июн": 6, "июл": 7, "август": 8,
-    "сентябр": 9, "октябр": 10, "ноябр": 11, "декабр": 12,
-}
-MONTHS_RU_PATTERN = (
-    r"(январ[яеьи]?|феврал[яеьи]?|марта?|апрел[яеьи]?|"
-    r"ма[йи]|июн[яеьи]?|июл[яеьи]?|август[ае]?|"
-    r"сентябр[яеьи]?|октябр[яеьи]?|ноябр[яеьи]?|декабр[яеьи]?)"
-)
+CHANTERELLES (funnel shape, false gills down stem):
+- chanterelle: BRIGHT GOLDEN-YELLOW trumpet ("Лисичка обыкновенная")
+- trumpet_chanterelle: small BROWN-GREY trumpet, hollow stem ("Лисичка трубчатая")
+
+MILKCAPS (exude milky juice when cut):
+- saffron_milkcap: ORANGE cap with concentric rings, orange milk, in pine forest ("Рыжик")
+- white_milkcap: WHITE cap with wavy/fringed shaggy edges ("Груздь настоящий")
+- woolly_milkcap: PINK cap with concentric zones + hairy edge ("Волнушка")
+- bitter_milkcap: brick-red smooth cap ("Горькушка")
+
+OTHER:
+- russula: BRITTLE colorful caps (red/yellow/green/purple), WHITE stem, no ring ("Сыроежка")
+- honey_fungus: CLUSTERS on wood or tree base, small tan caps, often with ring ("Опёнок")
+- morel: WRINKLED HONEYCOMB cap, hollow inside, spring ("Сморчок")
+- false_morel: BRAIN-LIKE red-brown wrinkly cap, spring ("Строчок")
+- parasol: VERY TALL (30+ cm), parasol cap with brown scales, movable ring ("Зонтик")
+- fly_agaric: RED cap with WHITE DOTS, ring, white stem ("Мухомор красный")
+- death_cap: GREENISH-OLIVE smooth cap, white gills, ring, volva cup at base ("Бледная поганка")
+- false_death_cap: pale YELLOW cap with scales, ring, volva ("Мухомор поганковидный")
+- other: mushroom that doesn't match any above
+- none: no mushrooms, recipe, landscape, berries, fish, pure people photo"""
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# СТАДИЯ 1: СБОР ПОСТОВ
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+#  СТАДИЯ 1: COLLECT — fetch новых постов из VK
+# ═══════════════════════════════════════════════════════════════════════════
 
 def vk_request(method: str, params: dict, retries: int = 5) -> dict:
     url = f"https://api.vk.com/method/{method}"
@@ -179,126 +202,147 @@ def vk_request(method: str, params: dict, retries: int = 5) -> dict:
             if attempt == retries - 1:
                 raise
             wait = 2 ** attempt
-            print(f"\nСетевая ошибка (попытка {attempt+1}/{retries}), ждём {wait}с: {e}")
+            print(f"  network error (try {attempt+1}/{retries}), wait {wait}s: {e}")
             time.sleep(wait)
 
 
-def collect_posts(group: str, data_dir: Path) -> list[dict]:
-    """Скачивает посты из VK группы. Возвращает список постов."""
-    checkpoint_file = data_dir / "checkpoint.json"
-    out_json = data_dir / "raw_posts.json"
+def get_incremental_cutoff(
+    conn: psycopg.Connection,
+    group: str,
+    years_back: int,
+) -> datetime:
+    """Нижняя граница дат для очередного collect-прогона.
 
-    # Загружаем checkpoint если есть
-    if checkpoint_file.exists():
-        with open(checkpoint_file, encoding="utf-8") as f:
-            saved = json.load(f)
-        posts, offset = saved["posts"], saved["offset"]
-        print(f"Найден checkpoint: {len(posts)} постов, offset={offset}")
-    else:
-        posts, offset = [], 0
-
-    # Вычисляем cutoff timestamp
-    cutoff_dt = datetime.now(tz=timezone.utc).replace(
-        year=datetime.now().year - YEARS_BACK
+    Если в vk_post уже есть посты этой группы — берём MAX(date_ts),
+    таким образом фетчим только то что новее. Если пусто — уходим на
+    `years_back` лет назад, это полный первичный сбор.
+    """
+    row = conn.execute(
+        "SELECT MAX(date_ts) FROM vk_post WHERE vk_group = %s",
+        (group,),
+    ).fetchone()
+    latest = row[0] if row else None
+    if latest is not None:
+        print(f"  cutoff: {latest.isoformat()} (last known post in DB)")
+        return latest
+    cutoff = datetime.now(tz=timezone.utc).replace(
+        year=datetime.now().year - years_back
     )
-    cutoff_ts = int(cutoff_dt.timestamp())
+    print(f"  cutoff: {cutoff.isoformat()} (years_back={years_back}, first run)")
+    return cutoff
 
-    # Общее число постов
+
+def collect_stage(
+    conn: psycopg.Connection,
+    group: str,
+    years_back: int = 8,
+) -> int:
+    """Скачивает новые посты из VK и инсертит в vk_post.
+
+    Возвращает количество ВСТАВЛЕННЫХ строк (на конфликте — игнор).
+    """
+    if not VK_TOKEN:
+        raise SystemExit("VK_TOKEN пуст — проверьте .env")
+
+    cutoff = get_incremental_cutoff(conn, group, years_back)
+    cutoff_ts = int(cutoff.timestamp())
+
     total = vk_request("wall.get", {"domain": group, "count": 1, "filter": "owner"})["count"]
-    print(f"[{group}] Постов в группе: {total}, забираем с {cutoff_dt.strftime('%Y-%m-%d')}")
+    print(f"  group has {total} posts total")
 
+    inserted = 0
+    offset = 0
     stopped_early = False
-    last_cp_size = len(posts)
 
-    try:
-        with tqdm(total=total, initial=offset, desc="Посты", unit="пост") as pbar:
-            while True:
-                resp = vk_request("wall.get", {
-                    "domain": group,
-                    "count": VK_BATCH_SIZE,
-                    "offset": offset,
-                    "filter": "owner",
-                })
-                batch = resp.get("items", [])
-                if not batch:
+    with tqdm(desc=f"collect {group}", unit="post") as pbar:
+        while True:
+            resp = vk_request("wall.get", {
+                "domain": group,
+                "count": VK_BATCH_SIZE,
+                "offset": offset,
+                "filter": "owner",
+            })
+            batch = resp.get("items", [])
+            if not batch:
+                break
+
+            rows = []
+            for post in batch:
+                if post["date"] <= cutoff_ts:
+                    stopped_early = True
                     break
+                photo_urls = [
+                    max(a["photo"]["sizes"], key=lambda s: s["width"] * s["height"])["url"]
+                    for a in post.get("attachments", [])
+                    if a.get("type") == "photo" and a.get("photo", {}).get("sizes")
+                ]
+                rows.append((
+                    group,
+                    int(post["id"]),
+                    datetime.fromtimestamp(post["date"], tz=timezone.utc),
+                    post.get("text", "") or "",
+                    int(post.get("likes",   {}).get("count", 0) or 0),
+                    int(post.get("reposts", {}).get("count", 0) or 0),
+                    int(post.get("views",   {}).get("count")) if post.get("views") else None,
+                    photo_urls,
+                ))
 
-                for post in batch:
-                    if post["date"] < cutoff_ts:
-                        stopped_early = True
-                        break
-                    posts.append({
-                        "id": post["id"],
-                        "date_ts": post["date"],
-                        "date_posted": datetime.fromtimestamp(
-                            post["date"], tz=timezone.utc
-                        ).strftime("%Y-%m-%d"),
-                        "text": post.get("text", ""),
-                        "likes": post.get("likes", {}).get("count", 0),
-                        "reposts": post.get("reposts", {}).get("count", 0),
-                        "views": post.get("views", {}).get("count", 0),
-                        "photos": sum(
-                            1 for a in post.get("attachments", [])
-                            if a.get("type") == "photo"
-                        ),
-                        "photo_urls": [
-                            max(
-                                a["photo"]["sizes"],
-                                key=lambda s: s["width"] * s["height"]
-                            )["url"]
-                            for a in post.get("attachments", [])
-                            if a.get("type") == "photo"
-                            and a.get("photo", {}).get("sizes")
-                        ],
-                    })
+            if rows:
+                with conn.cursor() as cur:
+                    cur.executemany(
+                        """
+                        INSERT INTO vk_post
+                          (vk_group, post_id, date_ts, text, likes, reposts,
+                           views, photo_urls)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (vk_group, post_id) DO NOTHING
+                        """,
+                        rows,
+                    )
+                    inserted += cur.rowcount if cur.rowcount > 0 else 0
+                conn.commit()
 
-                pbar.update(len(batch))
-                offset += len(batch)
+            offset += len(batch)
+            pbar.update(len(batch))
+            if stopped_early or offset >= total:
+                break
+            time.sleep(VK_DELAY_SEC)
 
-                if len(posts) - last_cp_size >= CHECKPOINT_EVERY:
-                    data_dir.mkdir(parents=True, exist_ok=True)
-                    with open(checkpoint_file, "w", encoding="utf-8") as f:
-                        json.dump({"posts": posts, "offset": offset}, f, ensure_ascii=False)
-                    last_cp_size = len(posts)
-
-                if stopped_early or offset >= total:
-                    break
-
-                time.sleep(VK_DELAY)
-
-    except Exception:
-        if posts:
-            data_dir.mkdir(parents=True, exist_ok=True)
-            with open(checkpoint_file, "w", encoding="utf-8") as f:
-                json.dump({"posts": posts, "offset": offset}, f, ensure_ascii=False)
-        raise
-
-    if checkpoint_file.exists():
-        checkpoint_file.unlink()
-
-    print(f"\nСобрано постов: {len(posts)}")
-    data_dir.mkdir(parents=True, exist_ok=True)
-    with open(out_json, "w", encoding="utf-8") as f:
-        json.dump(posts, f, ensure_ascii=False, indent=2)
-    print(f"Сохранено: {out_json}")
-    return posts
+    print(f"  inserted {inserted} new posts into vk_post")
+    return inserted
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# СТАДИЯ 2: ИЗВЛЕЧЕНИЕ ДАТ
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+#  СТАДИЯ 2: DATES — regex-парсинг даты похода
+# ═══════════════════════════════════════════════════════════════════════════
+
+MONTHS_RU = {
+    "январ": 1, "феврал": 2, "март": 3, "апрел": 4,
+    "май": 5, "маи": 5, "июн": 6, "июл": 7, "август": 8,
+    "сентябр": 9, "октябр": 10, "ноябр": 11, "декабр": 12,
+}
+MONTHS_RU_PATTERN = (
+    r"(январ[яеьи]?|феврал[яеьи]?|марта?|апрел[яеьи]?|"
+    r"ма[йи]|июн[яеьи]?|июл[яеьи]?|август[ае]?|"
+    r"сентябр[яеьи]?|октябр[яеьи]?|ноябр[яеьи]?|декабр[яеьи]?)"
+)
+WEEKDAYS_RU = {
+    "понедельник": 0, "вторник": 1, "среду": 2, "среда": 2,
+    "четверг": 3, "пятницу": 4, "пятница": 4,
+    "субботу": 5, "суббота": 5, "воскресенье": 6,
+}
+
 
 def _month_num(word: str) -> Optional[int]:
-    word = word.lower()
+    w = word.lower()
     for prefix, num in MONTHS_RU.items():
-        if word.startswith(prefix):
+        if w.startswith(prefix):
             return num
     return None
 
 
-def parse_date_regex(text: str, post_date: str) -> Optional[str]:
-    """Извлекает дату похода из текста поста. Возвращает YYYY-MM-DD или None."""
-    post_dt = datetime.strptime(post_date, "%Y-%m-%d").date()
+def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
+    """Ищет дату похода за грибами в тексте. Возвращает date или None."""
     text_lower = text.lower()
 
     # DD.MM.YYYY / DD-MM-YYYY / DD/MM/YYYY
@@ -311,11 +355,11 @@ def parse_date_regex(text: str, post_date: str) -> Optional[str]:
             year -= 1000
         if 1 <= month <= 12 and 1 <= day <= 31:
             try:
-                return date(year, month, day).isoformat()
+                return date(year, month, day)
             except ValueError:
                 pass
 
-    # Диапазон "27-28.01.26"
+    # "27-28.01.26"
     m = re.search(r"(\d{1,2})-\d{1,2}\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{2,4})г?", text)
     if m:
         day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
@@ -323,7 +367,7 @@ def parse_date_regex(text: str, post_date: str) -> Optional[str]:
             year += 2000
         if 1 <= month <= 12 and 1 <= day <= 31:
             try:
-                return date(year, month, day).isoformat()
+                return date(year, month, day)
             except ValueError:
                 pass
 
@@ -331,6 +375,7 @@ def parse_date_regex(text: str, post_date: str) -> Optional[str]:
     m = re.search(r"\b(\d{1,2})[./\\](\d{1,2})\b", text)
     if m:
         day, month = int(m.group(1)), int(m.group(2))
+        # Отсекаем «15.30» = время
         looks_like_time = (day <= 23 and month <= 59 and month > 12)
         if not looks_like_time and 1 <= month <= 12 and 1 <= day <= 31:
             year = post_dt.year
@@ -338,169 +383,164 @@ def parse_date_regex(text: str, post_date: str) -> Optional[str]:
                 d = date(year, month, day)
                 if d > post_dt:
                     d = date(year - 1, month, day)
-                return d.isoformat()
+                return d
             except ValueError:
                 pass
 
-    # DD месяц YYYY
-    pattern_dmy = rf"\b(\d{{1,2}})\s+{MONTHS_RU_PATTERN}(?:\s+(\d{{4}}))?"
-    m = re.search(pattern_dmy, text_lower)
+    # DD месяц [YYYY]
+    m = re.search(rf"\b(\d{{1,2}})\s+{MONTHS_RU_PATTERN}(?:\s+(\d{{4}}))?", text_lower)
     if m:
         day = int(m.group(1))
         month = _month_num(m.group(2))
-        year_str = m.group(3)
-        year = int(year_str) if year_str else post_dt.year
+        year = int(m.group(3)) if m.group(3) else post_dt.year
         if month:
             try:
                 d = date(year, month, day)
                 if d > post_dt:
                     d = date(year - 1, month, day)
-                return d.isoformat()
+                return d
             except ValueError:
                 pass
 
-    # месяц DD
-    pattern_mdy = rf"{MONTHS_RU_PATTERN}\s+(\d{{1,2}})(?:\s+(\d{{4}}))?"
-    m = re.search(pattern_mdy, text_lower)
+    # месяц DD [YYYY]
+    m = re.search(rf"{MONTHS_RU_PATTERN}\s+(\d{{1,2}})(?:\s+(\d{{4}}))?", text_lower)
     if m:
         month = _month_num(m.group(1))
         day = int(m.group(2))
-        year_str = m.group(3)
-        year = int(year_str) if year_str else post_dt.year
+        year = int(m.group(3)) if m.group(3) else post_dt.year
         if month:
             try:
                 d = date(year, month, day)
                 if d > post_dt:
                     d = date(year - 1, month, day)
-                return d.isoformat()
+                return d
             except ValueError:
                 pass
 
-    # День недели
-    WEEKDAYS_RU = {
-        "понедельник": 0, "вторник": 1, "среду": 2, "среда": 2,
-        "четверг": 3, "пятницу": 4, "пятница": 4,
-        "субботу": 5, "суббота": 5, "воскресенье": 6,
-    }
+    # день недели («в субботу»)
     m = re.search(r"\bв\s+(" + "|".join(WEEKDAYS_RU) + r")\b", text_lower)
     if m:
         target_wd = WEEKDAYS_RU[m.group(1)]
-        days_back = (post_dt.weekday() - target_wd) % 7
-        if days_back == 0:
-            days_back = 7
+        days_back = (post_dt.weekday() - target_wd) % 7 or 7
         if days_back <= 14:
-            return (post_dt - timedelta(days=days_back)).isoformat()
+            return post_dt - timedelta(days=days_back)
 
-    # Относительные
+    # относительные
     if re.search(r"\bсегодня\b", text_lower):
-        return post_dt.isoformat()
+        return post_dt
     if re.search(r"\bвчера\b", text_lower):
-        return (post_dt - timedelta(days=1)).isoformat()
+        return post_dt - timedelta(days=1)
     if re.search(r"\bпозавчера\b", text_lower):
-        return (post_dt - timedelta(days=2)).isoformat()
+        return post_dt - timedelta(days=2)
 
     return None
 
 
-def parse_date_llm(text: str, post_date: str) -> Optional[str]:
-    """Claude-фоллбэк для извлечения даты. Используется только при --llm."""
+def parse_date_llm(text: str, post_dt: date) -> Optional[date]:
+    """Claude-фоллбэк, вызывается только при --llm."""
     try:
         import anthropic
         client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        prompt = (
-            f"Вот текст поста грибников. Дата публикации: {post_date}.\n"
-            "Определи дату похода за грибами (не дата публикации).\n"
-            "Ответь ТОЛЬКО датой YYYY-MM-DD. Если дата не указана — UNKNOWN.\n\n"
-            f"Текст:\n{text[:800]}"
-        )
         msg = client.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=20,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": (
+                f"Вот текст поста грибников. Дата публикации: {post_dt.isoformat()}.\n"
+                "Определи дату похода за грибами (не дата публикации).\n"
+                "Ответь ТОЛЬКО датой YYYY-MM-DD. Если дата не указана — UNKNOWN.\n\n"
+                f"Текст:\n{text[:800]}"
+            )}],
         )
         result = msg.content[0].text.strip()
-        datetime.strptime(result, "%Y-%m-%d")
-        return result
+        return datetime.strptime(result, "%Y-%m-%d").date()
     except Exception:
         return None
 
 
-def extract_dates(posts: list[dict], data_dir: Path, use_llm: bool = False) -> list[dict]:
-    """Извлекает даты походов. Возвращает список записей с foray_date."""
-    out_csv = data_dir / "posts_with_dates.csv"
+def dates_stage(
+    conn: psycopg.Connection,
+    group: Optional[str],
+    use_llm: bool,
+    limit: Optional[int],
+) -> int:
+    """Для каждого vk_post без date_source — запускаем regex (и LLM при --llm).
 
-    results = []
-    llm_count = 0
-    no_date_count = 0
-    skipped_count = 0
+    Возвращает количество обновлённых строк.
+    """
+    sql = """
+        SELECT id, post_id, date_ts, text
+        FROM vk_post
+        WHERE date_source IS NULL
+    """
+    params: list = []
+    if group:
+        sql += " AND vk_group = %s"
+        params.append(group)
+    sql += " ORDER BY date_ts DESC"
+    if limit:
+        sql += " LIMIT %s"
+        params.append(limit)
 
-    for post in tqdm(posts, desc="Даты"):
-        post_date = post["date_posted"]
-        text = post["text"]
+    rows = conn.execute(sql, params).fetchall()
+    print(f"  {len(rows)} posts to process")
 
-        if not text.strip():
-            source = "no_text"
-            foray_date = None
+    updates: list[tuple] = []
+    stats = {"regex": 0, "llm": 0, "skipped": 0, "no_text": 0, "not_found": 0}
+
+    for row in tqdm(rows, desc="dates", unit="post"):
+        pk, _post_id, date_ts, text = row
+        post_dt = date_ts.date()
+
+        if not text or not text.strip():
+            source, foray = "no_text", None
         elif SKIP_DATE_RE.search(text):
-            source = "skipped"
-            foray_date = None
-            skipped_count += 1
+            source, foray = "skipped", None
         else:
-            foray_date = parse_date_regex(text, post_date)
-            source = "regex" if foray_date else None
-
-            if foray_date is None and use_llm:
-                foray_date = parse_date_llm(text, post_date)
-                if foray_date:
-                    source = "llm"
-                    llm_count += 1
-
-            if foray_date is None:
+            foray = parse_date_regex(text, post_dt)
+            if foray:
+                source = "regex"
+            elif use_llm:
+                foray = parse_date_llm(text, post_dt)
+                source = "llm" if foray else "not_found"
+            else:
                 source = "not_found"
-                no_date_count += 1
 
-        results.append({
-            "id": post["id"],
-            "date_posted": post_date,
-            "foray_date": foray_date or "",
-            "date_source": source,
-            "likes": post["likes"],
-            "views": post.get("views", 0),
-            "photos": post["photos"],
-            "text_preview": text[:200].replace("\n", " "),
-        })
+        stats[source if source in stats else "not_found"] += 1
+        updates.append((foray, source, pk))
 
-    found = sum(1 for r in results if r["foray_date"])
-    relevant = len(posts) - skipped_count
-    print(f"\nВсего: {len(posts)} | Найдено дат: {found} | "
-          f"Regex: {found - llm_count} | LLM: {llm_count} | "
-          f"Не найдено: {no_date_count} | "
-          f"Покрытие: {found/max(relevant,1)*100:.1f}%")
+    if updates:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "UPDATE vk_post SET foray_date = %s, date_source = %s WHERE id = %s",
+                updates,
+            )
+        conn.commit()
 
-    with open(out_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(results[0].keys()))
-        writer.writeheader()
-        writer.writerows(results)
-    print(f"Сохранено: {out_csv}")
-    return results
+    n = len(updates)
+    print(f"  updated {n}: regex={stats['regex']} llm={stats['llm']} "
+          f"skipped={stats['skipped']} no_text={stats['no_text']} "
+          f"not_found={stats['not_found']}")
+    return n
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# СТАДИЯ 3: РАСПОЗНАВАНИЕ ВИДОВ ПО ФОТО
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+#  СТАДИЯ 3: PHOTOS — классификация через LM Studio (Gemma)
+# ═══════════════════════════════════════════════════════════════════════════
+
+WINTER_MONTHS = {11, 12, 1, 2, 3}
+
 
 def _download_photo(url: str, timeout: int = 15) -> Optional[bytes]:
     try:
-        resp = requests.get(url, timeout=timeout)
-        if resp.status_code == 200 and len(resp.content) > 1000:
-            return resp.content
-        return None
+        r = requests.get(url, timeout=timeout)
+        if r.status_code == 200 and len(r.content) > 1000:
+            return r.content
     except Exception:
-        return None
+        pass
+    return None
 
 
-def _ask_model(image_bytes: bytes) -> list:
-    """Отправляет фото в LM Studio, возвращает список {species, count}."""
+def _ask_model(image_bytes: bytes) -> list[dict]:
     img_b64 = base64.b64encode(image_bytes).decode()
     try:
         resp = requests.post(LM_STUDIO_URL, json={
@@ -515,30 +555,27 @@ def _ask_model(image_bytes: bytes) -> list:
         }, timeout=60)
         if resp.status_code != 200:
             return []
-
         text = resp.json()["choices"][0]["message"]["content"].strip()
-        # Фиксим диапазоны: "count": 30-50 → строка
+        # диапазоны count: 30-50 → строка
         text = re.sub(r'"count"\s*:\s*(\d+)\s*-\s*(\d+)', r'"count": "\1-\2"', text)
-
-        json_match = re.search(r"\[.*?\]", text, re.DOTALL)
-        if json_match:
+        m = re.search(r"\[.*?\]", text, re.DOTALL)
+        if m:
             try:
-                parsed = json.loads(json_match.group())
-                if isinstance(parsed, list):
-                    return parsed
+                out = json.loads(m.group())
+                if isinstance(out, list):
+                    return out
             except json.JSONDecodeError:
                 pass
-        return []
     except Exception as e:
-        print(f"  Ошибка модели: {e}")
-        return []
+        print(f"  model error: {e}")
+    return []
 
 
 def _normalize_count(cnt) -> int:
     if isinstance(cnt, str) and "-" in cnt:
-        parts = cnt.split("-")
         try:
-            return min((int(parts[0]) + int(parts[1])) // 2, 150)
+            a, b = cnt.split("-")
+            return min((int(a) + int(b)) // 2, 150)
         except (ValueError, IndexError):
             return 0
     try:
@@ -547,387 +584,299 @@ def _normalize_count(cnt) -> int:
         return 0
 
 
-def classify_photos(posts: list[dict], data_dir: Path) -> dict[str, list[dict]]:
+def photos_stage(
+    conn: psycopg.Connection,
+    group: Optional[str],
+    limit: Optional[int],
+    n_workers: int = 4,
+    reprocess: bool = False,
+) -> int:
+    """Классифицирует фото. Обрабатывает посты где photo_processed_at IS NULL
+    или photo_prompt_version отличается от текущей PHOTO_PROMPT_VERSION.
+
+    При reprocess=True — берёт ВСЕ посты этой группы (игнорируя фильтры),
+    даже если они уже были обработаны с текущей версией.
+
+    Пропускает зимние месяцы, посты без фото, посты с нерелевантным текстом
+    (для них ставит photo_species = [] и помечает текущую версию).
     """
-    Классифицирует грибы на фото через LM Studio (Gemma).
-    Возвращает dict[post_id -> список {species, count}].
-    Пропускает зиму, нерелевантные по тексту посты.
-    """
-    out_checkpoint = data_dir / "photo_species_checkpoint.json"
-    out_csv = data_dir / "photo_species.csv"
-
-    WINTER_MONTHS = {11, 12, 1, 2, 3}
-
-    to_process = []
-    for p in posts:
-        urls = p.get("photo_urls", [])
-        if not urls:
-            continue
-        post_month = datetime.strptime(p["date_posted"], "%Y-%m-%d").month
-        if post_month in WINTER_MONTHS:
-            continue
-        text = p.get("text", "")
-        if text and SKIP_PHOTO_RE.search(text):
-            continue
-        to_process.append({
-            "id": str(p["id"]),
-            "urls": [urls[0]] if len(urls) == 1 else [urls[0], urls[-1]],
-            "month": post_month,
-        })
-
-    # Проверяем LM Studio
     try:
-        base_url = LM_STUDIO_URL.rsplit("/chat/completions", 1)[0]
-        requests.get(f"{base_url}/models", timeout=5)
-        print(f"LM Studio доступна: {LM_STUDIO_URL}")
-        print(f"Модель: {LM_STUDIO_MODEL}")
+        base = LM_STUDIO_URL.rsplit("/chat/completions", 1)[0]
+        requests.get(f"{base}/models", timeout=5)
     except Exception:
-        print("LM Studio не запущена! Запусти сервер и укажи LM_STUDIO_URL в .env.")
-        print(f"  Ожидаемый URL: {LM_STUDIO_URL}")
+        print(f"LM Studio недоступна: {LM_STUDIO_URL}")
+        print("Запустите сервер LM Studio и укажите LM_STUDIO_URL в .env")
         sys.exit(1)
+    print(f"  LM Studio: {LM_STUDIO_URL}  model: {LM_STUDIO_MODEL}")
+    print(f"  prompt version: {PHOTO_PROMPT_VERSION}")
 
-    # Загружаем checkpoint
-    results: dict[str, list[dict]] = {}
-    if out_checkpoint.exists():
-        with open(out_checkpoint, encoding="utf-8") as f:
-            results = json.load(f)
-        print(f"Checkpoint: {len(results)} постов обработано")
+    sql = """
+        SELECT id, post_id, date_ts, text, photo_urls
+        FROM vk_post
+        WHERE 1=1
+    """
+    params: list = []
+    if not reprocess:
+        sql += """
+            AND (photo_processed_at IS NULL
+                 OR photo_prompt_version IS DISTINCT FROM %s)
+        """
+        params.append(PHOTO_PROMPT_VERSION)
+    if group:
+        sql += " AND vk_group = %s"
+        params.append(group)
+    sql += " ORDER BY date_ts DESC"
+    if limit:
+        sql += " LIMIT %s"
+        params.append(limit)
 
-    remaining = [p for p in to_process if p["id"] not in results]
-    print(f"Постов с фото (апр-окт, релевантные): {len(to_process)}")
-    print(f"Осталось обработать: {len(remaining)}")
+    rows = conn.execute(sql, params).fetchall()
+    print(f"  {len(rows)} posts to process"
+          f"{' (reprocessing all)' if reprocess else ''}")
+    if not rows:
+        return 0
 
-    if not remaining:
-        print("Все посты обработаны!")
-    else:
-        import threading
-        last_lock = threading.Lock()
-        last_answer = {"text": ""}
+    # Разделяем: сразу помечаем «пусто» либо отправляем модели
+    skip_updates = []
+    to_process = []
+    for pk, _post_id, date_ts, text, photo_urls in rows:
+        if not photo_urls:
+            skip_updates.append((json.dumps([]), PHOTO_PROMPT_VERSION, pk))
+            continue
+        if date_ts.month in WINTER_MONTHS:
+            skip_updates.append((json.dumps([]), PHOTO_PROMPT_VERSION, pk))
+            continue
+        if text and SKIP_PHOTO_RE.search(text):
+            skip_updates.append((json.dumps([]), PHOTO_PROMPT_VERSION, pk))
+            continue
+        to_process.append((pk, photo_urls))
 
-        def process_one(post: dict) -> tuple[str, list[dict]]:
-            combined: dict[str, int] = {}
-            for url in post["urls"]:
-                img = _download_photo(url)
-                if img is None:
-                    continue
-                items = _ask_model(img)
-                with last_lock:
-                    last_answer["text"] = str(items)[:100]
-                for item in items:
-                    sp = item.get("species", "")
-                    cnt = _normalize_count(item.get("count", 0))
-                    combined[sp] = max(combined.get(sp, 0), cnt)
-            if not combined:
-                return post["id"], []
-            return post["id"], [{"species": sp, "count": cnt}
-                                  for sp, cnt in combined.items()]
+    if skip_updates:
+        with conn.cursor() as cur:
+            cur.executemany(
+                """UPDATE vk_post SET
+                     photo_species = %s::jsonb,
+                     photo_processed_at = now(),
+                     photo_prompt_version = %s
+                   WHERE id = %s""",
+                skip_updates,
+            )
+        conn.commit()
+        print(f"  {len(skip_updates)} posts skipped (winter / no photos / irrelevant)")
 
-        N_WORKERS = 4
-        BATCH = 100
-        pbar = tqdm(total=len(remaining), desc="Фото")
+    print(f"  {len(to_process)} posts go to LM Studio")
 
-        for batch_start in range(0, len(remaining), BATCH):
-            batch = remaining[batch_start:batch_start + BATCH]
-            with ThreadPoolExecutor(max_workers=N_WORKERS) as ex:
-                futures = {ex.submit(process_one, p): p for p in batch}
-                for future in as_completed(futures):
-                    pid, result = future.result()
-                    results[pid] = result
-                    pbar.update(1)
-                    if pbar.n % 20 == 0:
-                        with last_lock:
-                            tqdm.write(f"  >> {last_answer['text']}")
-
-            with open(out_checkpoint, "w", encoding="utf-8") as f:
-                json.dump(results, f, ensure_ascii=False)
-
-        pbar.close()
-
-    # Сохраняем CSV
-    rows = []
-    for pid, items in results.items():
-        for item in items:
-            sp = item.get("species", "")
-            if sp in ("none", "ошибка", ""):
+    def process_one(pk: int, urls: list[str]) -> tuple[int, list[dict]]:
+        combined: dict[str, int] = {}
+        # первое + последнее фото — обычно разные ракурсы одной добычи
+        sample_urls = [urls[0]] if len(urls) == 1 else [urls[0], urls[-1]]
+        for url in sample_urls:
+            img = _download_photo(url)
+            if img is None:
                 continue
-            rows.append({
-                "id": pid,
-                "photo_species": sp,
-                "photo_count": item.get("count", 0),
-            })
+            items = _ask_model(img)
+            for it in items:
+                sp = it.get("species", "")
+                cnt = _normalize_count(it.get("count", 0))
+                if sp:
+                    combined[sp] = max(combined.get(sp, 0), cnt)
+        result = [{"species": s, "count": c} for s, c in combined.items()]
+        return pk, result
 
-    with open(out_csv, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=["id", "photo_species", "photo_count"])
-        writer.writeheader()
-        writer.writerows(rows)
+    BATCH = 100
+    total_updated = len(skip_updates)
 
-    species_count: dict[str, int] = {}
-    for r in rows:
-        sp = r["photo_species"]
-        species_count[sp] = species_count.get(sp, 0) + 1
-    print(f"\nСохранено: {out_csv} ({len(rows)} записей)")
-    print("Виды по фото:")
-    for sp, cnt in sorted(species_count.items(), key=lambda x: -x[1]):
-        print(f"  {sp:20s} {cnt:6d}")
+    for start in range(0, len(to_process), BATCH):
+        batch = to_process[start : start + BATCH]
+        photo_updates = []
+        with ThreadPoolExecutor(max_workers=n_workers) as ex:
+            futures = {ex.submit(process_one, pk, urls): pk for pk, urls in batch}
+            for fut in tqdm(as_completed(futures), total=len(futures),
+                            desc=f"photos {start}/{len(to_process)}", unit="post"):
+                pk, result = fut.result()
+                photo_updates.append((
+                    json.dumps(result, ensure_ascii=False),
+                    PHOTO_PROMPT_VERSION,
+                    pk,
+                ))
 
-    return results
+        with conn.cursor() as cur:
+            cur.executemany(
+                """UPDATE vk_post SET
+                     photo_species = %s::jsonb,
+                     photo_processed_at = now(),
+                     photo_prompt_version = %s
+                   WHERE id = %s""",
+                photo_updates,
+            )
+        conn.commit()
+        total_updated += len(photo_updates)
+
+    print(f"  processed {total_updated} posts")
+    return total_updated
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# СТАДИЯ 4: ЗАПИСЬ В БД
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+#  СТАДИЯ 4: PROMOTE — vk_post → observation
+# ═══════════════════════════════════════════════════════════════════════════
 
-def write_to_db(
+def promote_stage(
+    conn: psycopg.Connection,
     group: str,
     region_code: str,
-    posts: list[dict],
-    date_results: list[dict],
-    photo_results: dict[str, list[dict]],
-    data_dir: Path,
-) -> None:
-    """Записывает наблюдения в таблицу observation."""
+) -> int:
+    """Создаёт observation-записи из vk_post с foray_date + photo_species.
 
-    # Индекс: post_id → foray_date
-    date_by_id: dict[str, str] = {
-        str(r["id"]): r["foray_date"]
-        for r in date_results
-        if r.get("foray_date")
-    }
+    Помечает обработанные как observation_written = TRUE.
+    Для групп ядерных видов (bolete) делает несколько observation — по slug'у.
+    """
+    row = conn.execute(
+        "SELECT id FROM region WHERE code = %s", (region_code,)
+    ).fetchone()
+    if row is None:
+        raise SystemExit(f"регион {region_code!r} не найден")
+    region_id = row[0]
 
-    # Версия для дедупликации при повторных прогонах
+    slug_to_id: dict[str, int] = {}
+    for r in conn.execute("SELECT id, slug FROM species").fetchall():
+        slug_to_id[r[1]] = r[0]
+    print(f"  region_id={region_id}  species_in_db={len(slug_to_id)}")
+
+    rows = conn.execute(
+        """
+        SELECT id, post_id, foray_date, photo_species, text
+        FROM vk_post
+        WHERE observation_written = FALSE
+          AND foray_date IS NOT NULL
+          AND photo_species IS NOT NULL
+          AND jsonb_array_length(photo_species) > 0
+          AND vk_group = %s
+        """,
+        (group,),
+    ).fetchall()
+    print(f"  {len(rows)} posts ready to promote")
+
+    n_inserted = 0
+    done_ids = []
     source_version = f"vk-{group}-{datetime.now().strftime('%Y-%m-%d')}"
 
-    print(f"\nЗаписываем в БД: {DATABASE_URL[:50]}...")
-    conn = psycopg.connect(DATABASE_URL)
+    with conn.transaction():
+        for vk_pk, post_id, foray_date, photo_species, text in rows:
+            source_ref = f"{group}-{post_id}"
+            text_excerpt = (text or "")[:300]
+            any_inserted = False
 
-    try:
-        # Получаем region_id
-        row = conn.execute(
-            "SELECT id FROM region WHERE code = %s", (region_code,)
-        ).fetchone()
-        if row is None:
-            print(f"Регион '{region_code}' не найден в БД!")
-            print("Доступные регионы:")
-            for r in conn.execute("SELECT code, name_ru FROM region").fetchall():
-                print(f"  {r[0]} — {r[1]}")
-            sys.exit(1)
-        region_id = row[0]
-        print(f"Регион: {region_code} (id={region_id})")
-
-        # Получаем species_id по slug
-        slug_to_id: dict[str, int] = {}
-        for slug_row in conn.execute("SELECT id, slug FROM species").fetchall():
-            slug_to_id[slug_row[1]] = slug_row[0]
-        print(f"Видов в БД: {len(slug_to_id)}")
-
-        # Считаем сколько уже есть наблюдений с этой версией
-        existing_count = conn.execute(
-            "SELECT COUNT(*) FROM observation WHERE source = 'vk' AND source_version = %s",
-            (source_version,)
-        ).fetchone()[0]
-        if existing_count > 0:
-            print(f"Уже есть {existing_count} наблюдений версии {source_version}, пропускаем.")
-            return
-
-        # Собираем строки для вставки
-        post_by_id = {str(p["id"]): p for p in posts}
-        n_inserted = 0
-        n_skipped_no_date = 0
-        n_skipped_no_species = 0
-        n_skipped_unknown_slug = 0
-
-        with conn.transaction():
-            for post_id, photo_items in photo_results.items():
-                if not photo_items:
+            for item in photo_species:
+                photo_group = item.get("species", "")
+                if photo_group in ("none", "", "other", "ошибка"):
                     continue
+                slugs = GROUP_TO_SLUGS.get(photo_group, [])
+                if not slugs:
+                    continue
+                cnt = item.get("count") or None
 
-                foray_date = date_by_id.get(post_id)
-                if not foray_date:
-                    # Нет даты — используем дату публикации как fallback
-                    post = post_by_id.get(post_id)
-                    if post:
-                        foray_date = post["date_posted"]
-                    else:
-                        n_skipped_no_date += 1
+                for slug in slugs:
+                    sp_id = slug_to_id.get(slug)
+                    if sp_id is None:
                         continue
+                    conn.execute(
+                        """
+                        INSERT INTO observation
+                          (region_id, source, source_ref, source_version,
+                           species_id, species_raw, observed_on,
+                           count_estimate, text_excerpt, meta)
+                        VALUES (%s, 'vk', %s, %s, %s, %s, %s, %s, %s, %s)
+                        ON CONFLICT (source, source_ref, species_id) DO NOTHING
+                        """,
+                        (
+                            region_id, source_ref, source_version,
+                            sp_id, photo_group, foray_date,
+                            cnt, text_excerpt,
+                            json.dumps({"photo_group": photo_group,
+                                        "vk_group": group}),
+                        ),
+                    )
+                    n_inserted += 1
+                    any_inserted = True
 
-                post = post_by_id.get(post_id)
-                text_excerpt = post["text"][:300] if post else ""
-                source_ref = f"{group}-{post_id}"
+            # observation_written ставим в любом случае — мы честно попытались
+            done_ids.append(vk_pk)
+            _ = any_inserted  # для читаемости, не используем
 
-                for item in photo_items:
-                    photo_group = item.get("species", "")
-                    if photo_group in ("none", "ошибка", ""):
-                        n_skipped_no_species += 1
-                        continue
+        if done_ids:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    "UPDATE vk_post SET observation_written = TRUE WHERE id = %s",
+                    [(i,) for i in done_ids],
+                )
 
-                    slugs = GROUP_TO_SLUGS.get(photo_group, [])
-                    if not slugs:
-                        # "other" → пропускаем (нет подходящего вида в справочнике)
-                        n_skipped_unknown_slug += 1
-                        continue
+    print(f"  inserted {n_inserted} observations; "
+          f"marked {len(done_ids)} vk_posts as written")
 
-                    count_estimate = item.get("count", 0) or None
-
-                    for slug in slugs:
-                        species_id = slug_to_id.get(slug)
-                        if species_id is None:
-                            n_skipped_unknown_slug += 1
-                            continue
-
-                        try:
-                            conn.execute(
-                                """
-                                INSERT INTO observation (
-                                    region_id, source, source_ref, source_version,
-                                    species_id, species_raw,
-                                    observed_on, count_estimate,
-                                    text_excerpt, meta
-                                )
-                                VALUES (%s, 'vk', %s, %s, %s, %s, %s, %s, %s, %s)
-                                ON CONFLICT (source, source_ref, species_id) DO NOTHING
-                                """,
-                                (
-                                    region_id,
-                                    source_ref,
-                                    source_version,
-                                    species_id,
-                                    photo_group,           # species_raw = photo group name
-                                    foray_date,
-                                    count_estimate,
-                                    text_excerpt,
-                                    json.dumps({"photo_group": photo_group,
-                                                "vk_group": group}),
-                                ),
-                            )
-                            n_inserted += 1
-                        except Exception as e:
-                            print(f"  Ошибка вставки post={post_id} slug={slug}: {e}")
-
-        print(f"\n✅ Вставлено: {n_inserted}")
-        print(f"   Пропущено (нет даты):   {n_skipped_no_date}")
-        print(f"   Пропущено (нет вида):   {n_skipped_no_species}")
-        print(f"   Пропущено (нет slug):   {n_skipped_unknown_slug}")
-
-        # Обновляем материализованные представления
-        print("\nОбновляем материализованные представления...")
-        conn.execute(
-            "REFRESH MATERIALIZED VIEW observation_region_species_stats"
-        )
-        # H3-агрегацию тоже обновляем (она может быть пустой если нет h3_cell)
-        conn.execute(
-            "REFRESH MATERIALIZED VIEW observation_h3_species_stats"
-        )
-        conn.commit()
-        print("✅ Готово!")
-
-    finally:
-        conn.close()
+    # освежаем агрегаты
+    try:
+        conn.execute("REFRESH MATERIALIZED VIEW observation_region_species_stats")
+    except psycopg.Error:
+        pass
+    try:
+        conn.execute("REFRESH MATERIALIZED VIEW observation_h3_species_stats")
+    except psycopg.Error:
+        pass
+    conn.commit()
+    return n_inserted
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ТОЧКА ВХОДА
-# ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════
+#  ENTRY POINT
+# ═══════════════════════════════════════════════════════════════════════════
 
-STEPS = ["collect", "dates", "photos", "db"]
+STEPS = ("collect", "dates", "photos", "promote")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="VK -> observation pipeline dla gribnoj karty"
-    )
-    parser.add_argument(
-        "--group", default="grib_spb",
-        help="VK-группа (domain или id), по умолчанию grib_spb"
-    )
-    parser.add_argument(
-        "--region", default="lenoblast",
-        help="Код региона в БД (lenoblast / spb / ...), по умолчанию lenoblast"
-    )
-    parser.add_argument(
-        "--step", choices=STEPS,
-        help="Запустить только одну стадию"
-    )
-    parser.add_argument(
-        "--from", dest="from_step", choices=STEPS,
-        help="Начать с этой стадии (включительно), используя уже скачанные данные"
-    )
-    parser.add_argument(
-        "--llm", action="store_true",
-        help="Использовать Claude как fallback для извлечения дат"
-    )
-    args = parser.parse_args()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--group",  default="grib_spb", help="VK domain (e.g. grib_spb)")
+    ap.add_argument("--region", default="lenoblast", help="region.code для promote")
+    ap.add_argument("--step",   choices=STEPS, help="одна стадия")
+    ap.add_argument("--from",   dest="from_step", choices=STEPS,
+                    help="стартовать с этой и идти дальше")
+    ap.add_argument("--years-back", type=int, default=8,
+                    help="сколько лет назад копать при первом сборе")
+    ap.add_argument("--limit",  type=int, help="ограничение на стадиях dates/photos")
+    ap.add_argument("--llm",    action="store_true",
+                    help="Claude-фоллбэк для даты")
+    ap.add_argument("--workers", type=int, default=4, help="параллельность LM Studio")
+    ap.add_argument("--dsn", default=build_database_url())
+    args = ap.parse_args()
 
-    if not VK_TOKEN and (args.step in (None, "collect") or args.from_step in (None, "collect")):
-        print("Ошибка: VK_TOKEN не задан в .env")
-        sys.exit(1)
-
-    data_dir = DATA_ROOT / args.group
-    data_dir.mkdir(parents=True, exist_ok=True)
-
-    raw_json = data_dir / "raw_posts.json"
-    dates_csv = data_dir / "posts_with_dates.csv"
-
-    # Определяем какие стадии запускать
     if args.step:
-        run_steps = {args.step}
+        run = [args.step]
     elif args.from_step:
-        run_steps = set(STEPS[STEPS.index(args.from_step):])
+        run = list(STEPS[STEPS.index(args.from_step):])
     else:
-        run_steps = set(STEPS)
+        run = list(STEPS)
 
-    posts: list[dict] = []
-    date_results: list[dict] = []
-    photo_results: dict[str, list[dict]] = {}
+    print(f"DB:      {args.dsn[:60]}...")
+    print(f"group:   {args.group}")
+    print(f"region:  {args.region}")
+    print(f"stages:  {', '.join(run)}")
 
-    # ── Стадия 1: Сбор постов ─────────────────────────────────────────────────
-    if "collect" in run_steps:
-        print("=" * 60)
-        print(f"СТАДИЯ 1: Сбор постов [{args.group}]")
-        print("=" * 60)
-        posts = collect_posts(args.group, data_dir)
-    elif raw_json.exists():
-        with open(raw_json, encoding="utf-8") as f:
-            posts = json.load(f)
-        print(f"Загружено {len(posts)} постов из {raw_json}")
-    else:
-        print(f"Файл {raw_json} не найден. Запусти без --from или с --step collect")
-        sys.exit(1)
-
-    # ── Стадия 2: Извлечение дат ─────────────────────────────────────────────
-    if "dates" in run_steps:
-        print("\n" + "=" * 60)
-        print(f"СТАДИЯ 2: Извлечение дат")
-        print("=" * 60)
-        date_results = extract_dates(posts, data_dir, use_llm=args.llm)
-    elif dates_csv.exists():
-        with open(dates_csv, encoding="utf-8") as f:
-            date_results = list(csv.DictReader(f))
-        print(f"Загружено {len(date_results)} записей из {dates_csv}")
-    elif "photos" in run_steps or "db" in run_steps:
-        print(f"Файл {dates_csv} не найден. Запусти --from dates")
-        sys.exit(1)
-
-    # ── Стадия 3: Распознавание фото ─────────────────────────────────────────
-    if "photos" in run_steps:
-        print("\n" + "=" * 60)
-        print(f"СТАДИЯ 3: Распознавание видов по фото")
-        print("=" * 60)
-        photo_results = classify_photos(posts, data_dir)
-    elif (data_dir / "photo_species_checkpoint.json").exists():
-        with open(data_dir / "photo_species_checkpoint.json", encoding="utf-8") as f:
-            photo_results = json.load(f)
-        print(f"Загружено {len(photo_results)} результатов из checkpoint")
-    elif "db" in run_steps:
-        print("Нет результатов классификации. Запусти --from photos")
-        sys.exit(1)
-
-    # ── Стадия 4: Запись в БД ────────────────────────────────────────────────
-    if "db" in run_steps:
-        print("\n" + "=" * 60)
-        print(f"СТАДИЯ 4: Запись в БД (регион: {args.region})")
-        print("=" * 60)
-        write_to_db(args.group, args.region, posts, date_results, photo_results, data_dir)
+    conn = psycopg.connect(args.dsn, autocommit=False)
+    try:
+        if "collect" in run:
+            print("\n── stage 1: collect ──")
+            collect_stage(conn, args.group, years_back=args.years_back)
+        if "dates" in run:
+            print("\n── stage 2: dates ──")
+            dates_stage(conn, args.group, use_llm=args.llm, limit=args.limit)
+        if "photos" in run:
+            print("\n── stage 3: photos (LM Studio) ──")
+            photos_stage(conn, args.group, limit=args.limit, n_workers=args.workers)
+        if "promote" in run:
+            print("\n── stage 4: promote → observation ──")
+            promote_stage(conn, args.group, args.region)
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
