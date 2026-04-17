@@ -1118,7 +1118,12 @@ export function MapView() {
 
     const apply = (style: maplibregl.StyleSpecification) => {
       if (cancelled) return;
-      m.setStyle(style);
+      // diff: false — полная замена стиля. Без этого MapLibre пытается
+      // вычислить минимальный дифф между старым и новым стилем, что с
+      // тяжёлыми стилями (Versatiles 60+ слоёв + патчи sprite/text-size)
+      // приводит к артефактам: часть тайлов рендерится старым стилем,
+      // часть — новым, пока diff не завершится.
+      m.setStyle(style, { diff: false });
       appliedBaseMap.current = baseMap;
 
       // RAF-poll до готовности стиля, потом восстанавливаем оверлейные слои

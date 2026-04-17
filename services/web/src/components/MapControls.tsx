@@ -42,7 +42,9 @@ interface Props {
 
 const wrapStyle = (mobile: boolean): React.CSSProperties => ({
   position: "absolute",
-  top: mobile ? 60 : 12,   // на мобильном поиск занимает верх — отступаем ниже
+  // Отступаем от «На главную»-пилюли (top: 12, height ~30px) и от
+  // поисковой строки на мобильном (которая занимает top).
+  top: mobile ? 108 : 52,
   left: mobile ? 8 : 12,
   zIndex: 10,
   display: "flex",
