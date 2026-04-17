@@ -34,6 +34,12 @@ fungi theoretical from species registry.
 - **Vite HMR on Docker + Windows needs polling**: `vite.config.ts` has
   `watch: { usePolling: true, interval: 300 }`. If file changes don't
   reload, verify that config is intact.
+- **Web npm packages must be installed inside the container.** The web
+  service uses an anonymous volume `/app/node_modules` (docker-compose.yml)
+  that shadows the host bind-mount. Host-side `npm install` updates
+  package.json but does not reach the running container. Use:
+  `docker compose exec web npm install <pkg>`. Rebuild (`docker compose
+  build web`) when you want a clean node_modules baked into the image.
 - **PMTiles Range requests** go direct to API (`http://${API_ORIGIN}/tiles/...`),
   not through Vite proxy. Vite proxy doesn't handle Range well.
 
