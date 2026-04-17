@@ -76,7 +76,7 @@ def build_database_url() -> str:
 
 # Версия промпта и маппинга — при изменении бампается, photos-stage
 # автоматически перегоняет все посты где photo_prompt_version != текущей.
-PHOTO_PROMPT_VERSION = "v4-thirteen-species-2026-04-17"
+PHOTO_PROMPT_VERSION = "v5-total-count-2026-04-17"
 
 # Маппинг ключей от Gemma → slug'и в таблице species.
 # Добавлены 4 вида которые реально часто встречаются в ЛО и имеют
@@ -155,11 +155,20 @@ RULES:
    If you see a mushroom but unsure WHICH key matches → "other".
    Don't skip mushrooms; just use "other" when ambiguous.
 
-3. Multiple distinct species in one photo → multiple entries.
+3. Multiple distinct SPECIES in one photo → multiple entries.
 
-4. Count: full basket ≈ 30-50, handful ≈ 5-10, a couple ≈ 1-3.
+4. Count = TOTAL number of mushrooms VISIBLE in the photo for that species,
+   summed across ALL containers/areas if there are several.
+   - 1 basket of 30 chanterelles → count=30
+   - 3 baskets of 30 chanterelles each → count=90
+   - 1 basket with 20 chanterelles + a pile of 10 next to it → count=30
+   - 2 baskets of porcini + scattered ones on the table → count = sum of all
+   Never report per-container; always report the total visible.
 
-5. SCENE (important for correct aggregation across multiple photos of one post):
+5. Counting hints (use as guides, you don't need exact precision):
+   full basket ≈ 30-50, half basket ≈ 15-25, handful ≈ 5-10, a couple ≈ 1-3.
+
+6. SCENE (important for correct aggregation across multiple photos of one post):
    - "basket"  — mushrooms in basket/bucket/pan/container, OR cut and stacked
    - "kitchen" — cooking prep, cleaning, drying on table
    - "forest"  — growing in nature, being picked, single held in hand
@@ -220,6 +229,20 @@ EXAMPLES:
 - Mixed basket: white-stemmed brown bolete + orange-cap bolete →
   [{"species":"porcini","count":8,"scene":"basket"},
    {"species":"aspen_bolete","count":5,"scene":"basket"}]
+
+MULTIPLE CONTAINERS — sum across them:
+- Three baskets in a row, each ~30 chanterelles →
+  [{"species":"chanterelle","count":90,"scene":"basket"}]
+- Two buckets of porcini side by side (~25 + ~25) plus a few more on a towel →
+  [{"species":"porcini","count":55,"scene":"basket"}]
+- A basket of porcini AND a separate basket of chanterelles →
+  [{"species":"porcini","count":25,"scene":"basket"},
+   {"species":"chanterelle","count":30,"scene":"basket"}]
+- Big pile spread on a table, mostly aspen boletes with a few porcini mixed in →
+  [{"species":"aspen_bolete","count":40,"scene":"basket"},
+   {"species":"porcini","count":5,"scene":"basket"}]
+
+NOT MUSHROOMS:
 - Red cap with white dots (fly agaric, not in our list) →
   [{"species":"other","count":1,"scene":"forest"}]
 - Mushroom soup in a bowl →
