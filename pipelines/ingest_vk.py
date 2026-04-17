@@ -76,7 +76,39 @@ def build_database_url() -> str:
 
 # Версия промпта и маппинга — при изменении бампается, photos-stage
 # автоматически перегоняет все посты где photo_prompt_version != текущей.
-PHOTO_PROMPT_VERSION = "v5-total-count-2026-04-17"
+PHOTO_PROMPT_VERSION = "v6-schema-2026-04-17"
+
+# JSON Schema для structured output в LM Studio. Constrained sampling
+# гарантирует валидную структуру и species/scene только из enum — не
+# нужно валидировать парсить.
+#
+# Сохраняем схему здесь же чтобы версионирование промпта её тоже покрывало:
+# меняется набор видов → бампается PHOTO_PROMPT_VERSION → автоперегон.
+CLASSIFY_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "species": {
+                "type": "string",
+                "enum": [
+                    "porcini", "aspen_bolete", "birch_bolete", "butter_bolete",
+                    "chanterelle", "trumpet_chanterelle",
+                    "saffron_milkcap", "white_milkcap", "woolly_milkcap",
+                    "spring_mushroom", "honey_fungus", "oyster", "russula",
+                    "other",
+                ],
+            },
+            "count": {"type": "integer", "minimum": 0, "maximum": 500},
+            "scene": {
+                "type": "string",
+                "enum": ["basket", "kitchen", "forest", "other"],
+            },
+        },
+        "required": ["species", "count", "scene"],
+        "additionalProperties": False,
+    },
+}
 
 # Маппинг ключей от Gemma → slug'и в таблице species.
 # Добавлены 4 вида которые реально часто встречаются в ЛО и имеют
@@ -140,115 +172,79 @@ SKIP_DATE_RE = re.compile("|".join([
     r"8\s*марта|23\s*февраля|день\s+защитника",
 ]), re.IGNORECASE)
 
-CLASSIFY_PROMPT = """You are classifying mushroom photos from a VK foraging group
-in Leningrad Oblast (Russia). Expect boreal/temperate species from this region.
-
-Return JSON only: [{"species": "<key>", "count": N, "scene": "<scene>"}, ...]
+CLASSIFY_PROMPT = """Classify mushrooms in this photo from a Leningrad Oblast
+(Russia) VK foraging group. Expect boreal/temperate species.
 
 RULES:
-
-1. If NO mushrooms at all → return []
-   (pure landscape, recipe, berries, fish, pet/human-only photos)
-
-2. If mushrooms visible → ALWAYS classify them. Use one of the KEYS below
-   when you're confident about which species group it matches.
-   If you see a mushroom but unsure WHICH key matches → "other".
-   Don't skip mushrooms; just use "other" when ambiguous.
-
-3. Multiple distinct SPECIES in one photo → multiple entries.
-
-4. Count = TOTAL number of mushrooms VISIBLE in the photo for that species,
-   summed across ALL containers/areas if there are several.
-   - 1 basket of 30 chanterelles → count=30
-   - 3 baskets of 30 chanterelles each → count=90
-   - 1 basket with 20 chanterelles + a pile of 10 next to it → count=30
-   - 2 baskets of porcini + scattered ones on the table → count = sum of all
-   Never report per-container; always report the total visible.
-
-5. Counting hints (use as guides, you don't need exact precision):
-   full basket ≈ 30-50, half basket ≈ 15-25, handful ≈ 5-10, a couple ≈ 1-3.
-
-6. SCENE (important for correct aggregation across multiple photos of one post):
-   - "basket"  — mushrooms in basket/bucket/pan/container, OR cut and stacked
-   - "kitchen" — cooking prep, cleaning, drying on table
-   - "forest"  — growing in nature, being picked, single held in hand
-   - "other"   — anything else (close-up of one mushroom on neutral background, etc.)
+1. No mushrooms visible (landscape, recipe, berries, fish, people alone)
+   → return empty array.
+2. Mushrooms visible → ALWAYS classify. Use a specific KEY when you're
+   confident about its match; use "other" when mushroom is visible but
+   unsure which key. Don't skip mushrooms.
+3. Multiple species in one photo → multiple entries.
+4. count = TOTAL mushrooms of that species visible in the WHOLE photo,
+   SUMMED ACROSS ALL containers/piles/areas. Never per-basket.
+   Hints: full basket ≈ 30-50, half ≈ 15-25, handful ≈ 5-10, few ≈ 1-3.
+5. scene tells how the photo was taken:
+   - basket = in basket/bucket/pan/container, or cut and stacked
+   - kitchen = cooking prep, cleaning, drying
+   - forest = growing, being picked, held in hand in the woods
+   - other = close-up on neutral background, else
 
 KEYS (13 mushrooms commonly collected in Ленобласть):
 
-BOLETES (sponge/tubes under cap, thick fleshy stem):
-- porcini — THICK BULBOUS stem with fine WHITE NETTING pattern, brown cap,
-  cream/white pores. "Белый гриб / боровик"
+BOLETES (sponge/tubes under cap, fleshy stem):
+- porcini — THICK BULBOUS stem with fine WHITE NETTING, brown cap,
+  cream pores. "Белый гриб / боровик"
 - aspen_bolete — ORANGE or red-orange cap + dark speckled stem.
   "Подосиновик"
-- birch_bolete — GREY-BROWN smooth cap (NOT orange) + dark speckled stem.
-  "Подберёзовик"
-- butter_bolete — SHINY, WET, STICKY-LOOKING brown cap (looks polished),
-  yellow pores below, often a ring on stem, young pine forest. "Маслёнок"
+- birch_bolete — GREY-BROWN smooth cap (NOT orange) + dark speckled
+  stem. "Подберёзовик"
+- butter_bolete — SHINY/WET/STICKY brown cap, yellow pores, often a
+  ring on stem, young pine forest. "Маслёнок"
 
-CHANTERELLES (trumpet/funnel shape, false gills running DOWN the stem):
-- chanterelle — BRIGHT GOLDEN-YELLOW trumpet, summer. "Лисичка"
-- trumpet_chanterelle — SMALL BROWN-GREY funnel, HOLLOW stem,
-  autumn. "Лисичка трубчатая"
+CHANTERELLES (trumpet shape, false gills running DOWN the stem):
+- chanterelle — BRIGHT GOLDEN-YELLOW trumpet. "Лисичка"
+- trumpet_chanterelle — SMALL BROWN-GREY funnel, HOLLOW stem, autumn.
+  "Лисичка трубчатая"
 
-MILKCAPS (brittle, exude milky juice when broken, flat cap):
-- saffron_milkcap — ORANGE cap with CONCENTRIC ORANGE/GREEN RINGS,
-  in pine/spruce forest. Orange milk if visible. "Рыжик"
-- white_milkcap — WHITE cap, WAVY/FRINGED edges, often in basket in
-  wavy stacks (many white scalloped caps together). "Груздь"
-- woolly_milkcap — PINK cap with CONCENTRIC PINK ZONES and
-  HAIRY/FRINGED edge. "Волнушка розовая"
+MILKCAPS (brittle, milky juice when broken):
+- saffron_milkcap — ORANGE cap with CONCENTRIC RINGS, in pine/spruce.
+  "Рыжик"
+- white_milkcap — WHITE cap with WAVY/FRINGED edges, often stacked in
+  basket. "Груздь"
+- woolly_milkcap — PINK cap with CONCENTRIC ZONES and HAIRY/FRINGED
+  edge. "Волнушка"
 
 OTHER:
-- spring_mushroom — WRINKLED HONEYCOMB or BRAIN-like cap, spring only
-  (Apr-May). Covers сморчок/сморчковая шапочка/строчок (similar look).
-- honey_fungus — CLUSTERS of small tan-brown caps on WOOD or at
-  tree base. Often a ring on stem. "Опёнок"
-- oyster — LARGE SHELL- or FAN-shaped white/grey caps growing
-  SIDEWAYS from tree trunks, no central stem. "Вешенка"
-- russula — BRITTLE flat cap in bright colours (red/yellow/green/purple),
-  WHITE stem, NO ring. "Сыроежка"
+- spring_mushroom — WRINKLED HONEYCOMB or BRAIN cap, spring (Apr-May).
+  Сморчок/сморчковая шапочка/строчок (all similar).
+- honey_fungus — CLUSTERS of small tan caps on WOOD or at tree base.
+  "Опёнок"
+- oyster — LARGE SHELL/FAN caps growing SIDEWAYS from tree trunks,
+  no central stem. "Вешенка"
+- russula — BRITTLE flat cap, bright colours (red/yellow/green/purple),
+  white stem, NO ring. "Сыроежка"
 
-- other — any mushroom not clearly matching above. Use for: мухоморы,
-  польский гриб, моховики, зонтик, трутовики, горькушки, rare finds.
-- none — ONLY when there are no mushrooms at all.
+- other — mushroom not clearly matching above. Use for мухоморы,
+  польский гриб, моховики, зонтик, трутовики, горькушки, rare species.
 
-EXAMPLES:
-- Basket of cream mushrooms with thick netted stems →
-  [{"species":"porcini","count":20,"scene":"basket"}]
-- Forest ground with single orange-cap mushroom →
-  [{"species":"aspen_bolete","count":1,"scene":"forest"}]
-- Shiny brown cap on pine duff, yellow pores visible →
-  [{"species":"butter_bolete","count":3,"scene":"forest"}]
-- Orange mushroom with concentric rings in pine needles →
-  [{"species":"saffron_milkcap","count":2,"scene":"forest"}]
-- Stack of white wavy-edged mushrooms in a bucket →
-  [{"species":"white_milkcap","count":15,"scene":"basket"}]
-- Cluster of tan caps on a stump →
-  [{"species":"honey_fungus","count":12,"scene":"forest"}]
-- Mixed basket: white-stemmed brown bolete + orange-cap bolete →
-  [{"species":"porcini","count":8,"scene":"basket"},
-   {"species":"aspen_bolete","count":5,"scene":"basket"}]
+Key choice examples (visual → key):
+- Cream cap with thick netted stem → porcini
+- Orange cap with dark speckled stem → aspen_bolete
+- Shiny brown cap with yellow pores → butter_bolete
+- Orange cap with concentric rings → saffron_milkcap
+- White wavy-edged cap → white_milkcap
+- Pink zoned cap with hairy edge → woolly_milkcap
+- Tan caps clustering on a stump → honey_fungus
+- Shelf-like white cap on tree trunk → oyster
+- Wrinkled honeycomb cap, April-May → spring_mushroom
+- Red cap with white dots → other (fly agaric, not in our list)
 
-MULTIPLE CONTAINERS — sum across them:
-- Three baskets in a row, each ~30 chanterelles →
-  [{"species":"chanterelle","count":90,"scene":"basket"}]
-- Two buckets of porcini side by side (~25 + ~25) plus a few more on a towel →
-  [{"species":"porcini","count":55,"scene":"basket"}]
-- A basket of porcini AND a separate basket of chanterelles →
-  [{"species":"porcini","count":25,"scene":"basket"},
-   {"species":"chanterelle","count":30,"scene":"basket"}]
-- Big pile spread on a table, mostly aspen boletes with a few porcini mixed in →
-  [{"species":"aspen_bolete","count":40,"scene":"basket"},
-   {"species":"porcini","count":5,"scene":"basket"}]
-
-NOT MUSHROOMS:
-- Red cap with white dots (fly agaric, not in our list) →
-  [{"species":"other","count":1,"scene":"forest"}]
-- Mushroom soup in a bowl →
-  []
-- Kids smiling in a forest, no mushrooms visible →
-  []"""
+Multi-container examples (totals):
+- 3 baskets × ~30 chanterelles → [{species:chanterelle, count:90, scene:basket}]
+- Porcini basket + chanterelle basket → 2 entries, one per species
+- Mixed pile of 40 aspen_bolete + 5 porcini → 2 entries with those totals"""
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -615,8 +611,9 @@ def _download_photo(url: str, timeout: int = 15) -> Optional[bytes]:
 def _ask_model(image_bytes: bytes, retries: int = 3) -> list[dict]:
     """Отправляет фото в LM Studio. Возвращает список {species, count, scene}.
 
-    Retry с экспоненциальным backoff на сетевых ошибках (не на content-ошибках
-    типа парсинг JSON — там Gemma либо выдала мусор, либо нет, ретрай не поможет).
+    Использует constrained sampling через response_format=json_schema,
+    поэтому ответ ГАРАНТИРОВАННО валиден по CLASSIFY_SCHEMA — парсить
+    regex'ами и чинить "count":30-50 больше не нужно.
     """
     img_b64 = base64.b64encode(image_bytes).decode()
     payload = {
@@ -627,30 +624,35 @@ def _ask_model(image_bytes: bytes, retries: int = 3) -> list[dict]:
             {"type": "text", "text": CLASSIFY_PROMPT},
         ]}],
         "temperature": 0.1,
-        "max_tokens": 300,
+        "max_tokens": 400,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "mushroom_classification",
+                "strict": True,
+                "schema": CLASSIFY_SCHEMA,
+            },
+        },
     }
 
     for attempt in range(retries):
         try:
-            resp = requests.post(LM_STUDIO_URL, json=payload, timeout=60)
+            resp = requests.post(LM_STUDIO_URL, json=payload, timeout=120)
             if resp.status_code != 200:
                 if attempt == retries - 1:
+                    print(f"  model HTTP {resp.status_code}: {resp.text[:200]}")
                     return []
                 time.sleep(2 ** attempt)
                 continue
 
-            text = resp.json()["choices"][0]["message"]["content"].strip()
-            # диапазоны count: 30-50 → строка
-            text = re.sub(r'"count"\s*:\s*(\d+)\s*-\s*(\d+)', r'"count": "\1-\2"', text)
-            # greedy match чтобы захватить массив целиком даже при нескольких объектах
-            m = re.search(r"\[.*\]", text, re.DOTALL)
-            if m:
-                try:
-                    out = json.loads(m.group())
-                    if isinstance(out, list):
-                        return out
-                except json.JSONDecodeError:
-                    pass
+            content = resp.json()["choices"][0]["message"]["content"]
+            # Schema enforces valid JSON — но на всякий случай ловим ошибку
+            try:
+                out = json.loads(content)
+                if isinstance(out, list):
+                    return out
+            except json.JSONDecodeError as e:
+                print(f"  unexpected non-JSON despite schema: {e}\n  content={content[:200]}")
             return []
 
         except (requests.exceptions.ConnectionError,
@@ -667,14 +669,17 @@ def _ask_model(image_bytes: bytes, retries: int = 3) -> list[dict]:
 
 
 def _normalize_count(cnt) -> int:
+    """Schema гарантирует integer 0..500, но оставляем defensive обработку
+    диапазонов и строк на случай если схема не активна (старый LM Studio /
+    Structured Output выключен)."""
     if isinstance(cnt, str) and "-" in cnt:
         try:
             a, b = cnt.split("-")
-            return min((int(a) + int(b)) // 2, 150)
+            return min((int(a) + int(b)) // 2, 300)
         except (ValueError, IndexError):
             return 0
     try:
-        return min(int(cnt), 150)
+        return min(max(int(cnt), 0), 300)
     except (ValueError, TypeError):
         return 0
 
