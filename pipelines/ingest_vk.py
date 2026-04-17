@@ -698,8 +698,17 @@ def photos_stage(
 
     def process_one(pk: int, urls: list[str]) -> tuple[int, list[dict]]:
         combined: dict[str, int] = {}
-        # первое + последнее фото — обычно разные ракурсы одной добычи
-        sample_urls = [urls[0]] if len(urls) == 1 else [urls[0], urls[-1]]
+        # Семплирование по числу фото в посте.
+        # Данные показывают: 66% постов имеют 3+ фото, текущая эвристика
+        # "первое + последнее" теряла середину. Компромисс между охватом и
+        # стоимостью: до 4 вызовов на пост.
+        n = len(urls)
+        if n <= 2:
+            sample_urls = list(urls)
+        elif n <= 5:
+            sample_urls = [urls[0], urls[n // 2], urls[-1]]
+        else:
+            sample_urls = [urls[0], urls[n // 3], urls[2 * n // 3], urls[-1]]
         for url in sample_urls:
             img = _download_photo(url)
             if img is None:
