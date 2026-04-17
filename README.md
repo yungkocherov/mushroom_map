@@ -1,10 +1,17 @@
 # mushroom-map
 
-Интерактивная грибная карта Ленинградской области.
+Сайт и интерактивная карта грибных мест Ленинградской области.
 
 ## Что это
 
-Веб-сервис, на котором:
+Многостраничный сайт с картой в центре:
+- `/` — главная
+- `/map` — полноэкранная карта (всё что ниже)
+- `/species` — каталог видов (в работе)
+- `/guide`, `/methodology` — гайды и методология (в работе)
+- `/about` — об авторе
+
+Карта:
 - леса всей Ленобласти раскрашены по данным Rosleshoz/ФГИСЛК (~2M полигонов: порода, бонитет, возрастная группа)
 - при клике на полигон — попап с теоретическими видами грибов (по справочнику «вид ↔ тип леса»)
 - 7 слоёв: леса, водоохранные зоны, ООПТ, лесные дороги, болота, вырубки, защитные леса
@@ -12,15 +19,17 @@
 - поиск по виду гриба и по месту (геокодер)
 - 4 подложки: OSM / Схема / Спутник / Гибрид
 - сезонный фильтр видов в попапе
+- адаптив под мобильные устройства
 
 ## Стек
 
 - **PostgreSQL 16 + PostGIS** — хранилище (Docker)
 - **Python 3.14 + FastAPI + psycopg3** — бэкенд
-- **React 18 + TypeScript + Vite 5 + MapLibre GL JS** — фронтенд
+- **React 18 + TypeScript + Vite 5 + MapLibre GL JS + react-router-dom** — фронтенд
 - **PMTiles** — векторные тайлы (range-запросы, без тайлового сервера)
 - **Tippecanoe** — генерация PMTiles из PostGIS
 - **Docker Compose** — локальная среда (db + api + web)
+- **GitHub Actions** — CI: pytest + tsc + vite build на каждый push
 
 ## Архитектура
 
@@ -32,12 +41,14 @@ mushroom-map/
 │   ├── placenames/         # NER топонимов (Natasha) + газеттир
 │   ├── species_registry/   # справочник видов (yaml → sql)
 │   ├── api/                # FastAPI: /api/forest/at, /api/species/search, /tiles/
-│   └── web/                # React + MapLibre GL
-├── pipelines/              # ETL-скрипты (ingest_*, build_*_tiles)
-└── docs/
+│   └── web/                # React SPA: routes/ + components/ + lib/
+├── pipelines/              # ETL-скрипты (ingest_*, build_*_tiles, tile_utils)
+├── .github/workflows/      # CI
+└── docs/                   # architecture, roadmap, website_plan, и т.д.
 ```
 
-Подробнее — [docs/architecture.md](docs/architecture.md).
+Подробнее — [docs/architecture.md](docs/architecture.md),
+полный план сайта — [docs/website_plan.md](docs/website_plan.md).
 
 ## Быстрый старт
 
@@ -51,8 +62,13 @@ docker compose up -d db
 # Миграции
 .venv/Scripts/python db/migrate.py
 
-# Карта доступна на http://localhost:5173
+# Сайт доступен на http://localhost:5173 (главная), /map — сама карта
 ```
+
+**Прим.** npm-пакеты для web ставятся внутри контейнера:
+`docker compose exec web npm install <pkg>`. Anonymous volume
+`/app/node_modules` в docker-compose изолирует контейнер от хостового
+`node_modules`.
 
 ## Данные
 
