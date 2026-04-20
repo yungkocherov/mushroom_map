@@ -41,6 +41,56 @@ export async function fetchForestAt(lat: number, lon: number): Promise<ForestAtR
   return res.json();
 }
 
+// ─── Soil ──────────────────────────────────────────────────────────────────
+
+export interface SoilTypeRef {
+  id: number;
+  symbol?: string;
+  descript: string;
+  zone?: string;
+}
+
+export interface SoilPolygon {
+  poligon_id: number;
+  soil0: SoilTypeRef;
+  soil1: { id: number; descript: string } | null;
+  soil2: { id: number; descript: string } | null;
+  soil3: { id: number; descript: string } | null;
+  parent1: { id: number; name: string } | null;
+  parent2: { id: number; name: string } | null;
+  area_m2: number | null;
+}
+
+export interface SoilProfile {
+  card_id: number;
+  rusm: string | null;
+  wrb06: string | null;
+  rureg: string | null;
+  location: string | null;
+  landuse: string | null;
+  veg_assoc: string | null;
+  ph_h2o: number | null;
+  ph_salt: number | null;
+  corg: number | null;
+  altitude_m: number | null;
+  horizons: Array<{ top: number | null; bot: number | null; name: string | null; ph: number | null; corg: number | null }>;
+  distance_km: number;
+}
+
+export interface SoilAtResponse {
+  lat: number;
+  lon: number;
+  polygon: SoilPolygon | null;
+  profile_nearest: SoilProfile | null;
+}
+
+export async function fetchSoilAt(lat: number, lon: number): Promise<SoilAtResponse> {
+  const url = `${API_BASE}/api/soil/at?lat=${lat}&lon=${lon}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`soil/at ${res.status}`);
+  return res.json();
+}
+
 export interface SpeciesSearchResult {
   slug: string;
   name_ru: string;

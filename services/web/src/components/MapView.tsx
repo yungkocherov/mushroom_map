@@ -9,688 +9,29 @@ import {
   FOREST_LAYER_PAINT_AGE_GROUP,
   ForestColorMode,
 } from "../lib/forestStyle";
-import { fetchForestAt, ForestAtResponse } from "../lib/api";
+import { fetchForestAt, fetchSoilAt } from "../lib/api";
 import { useIsMobile } from "../lib/useIsMobile";
 import { MapControls, BaseMapMode } from "./MapControls";
 import { Legend } from "./Legend";
 import { SearchBar } from "./SearchBar";
 
-// ─── PMTiles protocol ─────────────────────────────────────────────────────────
+import { API_ORIGIN } from "./mapView/utils/api";
+import { buildPopupHtml } from "./mapView/utils/popup";
+import { INLINE_STYLE, SATELLITE_STYLE } from "./mapView/styles/inline";
+import { buildSchemeStyle, SCHEME_STYLE_FALLBACK } from "./mapView/styles/scheme";
+import { buildHybridStyle, HYBRID_STYLE_FALLBACK } from "./mapView/styles/hybrid";
+import { addForestLayer, setForestVisibility } from "./mapView/layers/forest";
+import { addOoptLayer, setOoptVisibility } from "./mapView/layers/oopt";
+import { addRoadsLayer, setRoadsVisibility } from "./mapView/layers/roads";
+import { addWaterLayer, setWaterVisibility } from "./mapView/layers/water";
+import { addWetlandLayer, setWetlandVisibility } from "./mapView/layers/wetland";
+import { addFellingLayer, setFellingVisibility } from "./mapView/layers/felling";
+import { addProtectiveLayer, setProtectiveVisibility } from "./mapView/layers/protective";
+import { addSoilLayer, setSoilVisibility } from "./mapView/layers/soil";
+import { addPlaceLabelsLayer } from "./mapView/layers/places";
+
 const _protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", _protocol.tile.bind(_protocol));
-
-// В dev PMTiles идёт напрямую к API (Vite proxy не поддерживает Range-запросы).
-// В prod файл отдаётся same-origin, поэтому используем window.location.origin.
-const API_ORIGIN = import.meta.env.DEV
-  ? (import.meta.env.VITE_API_URL ?? "http://localhost:8000")
-  : window.location.origin;
-const FOREST_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/forest.pmtiles`;
-// GeoJSON с населёнными пунктами ЛО из OSM. Маленький файл (~300 KB),
-// загружается один раз. Нужен потому что Versatiles тайлы не содержат
-// place=village/hamlet в тайлах ниже zoom 12 — layer.minzoom не помогает,
-// если в самих .pbf тайлах данных нет.
-const PLACES_URL = `${API_ORIGIN}/tiles/places.geojson`;
-const WATER_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/water.pmtiles`;
-const OOPT_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/oopt.pmtiles`;
-const ROADS_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/roads.pmtiles`;
-const WETLANDS_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/wetlands.pmtiles`;
-const FELLING_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/felling.pmtiles`;
-const PROTECTIVE_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/protective.pmtiles`;
-
-// ─── Отображение типов леса ───────────────────────────────────────────────────
-const FOREST_NAMES: Record<string, string> = {
-  pine: "Сосновый лес",
-  spruce: "Ельник",
-  larch: "Лиственничник",
-  fir: "Пихтовый лес",
-  cedar: "Кедровник",
-  birch: "Берёзовый лес",
-  aspen: "Осинник",
-  alder: "Ольшаник",
-  oak: "Дубрава",
-  linden: "Липовый лес",
-  maple: "Кленовый лес",
-  mixed_coniferous: "Смешанный хвойный",
-  mixed_broadleaved: "Смешанный лиственный",
-  mixed: "Смешанный лес",
-  unknown: "Лес (тип не определён)",
-};
-
-const EDIBILITY_STYLE: Record<string, string> = {
-  edible: "color:#2e7d32;font-weight:600",
-  conditionally_edible: "color:#e65100;font-weight:600",
-  inedible: "color:#757575",
-  toxic: "color:#c62828;font-weight:600",
-  deadly: "color:#b71c1c;font-weight:700",
-};
-
-const MONTH_SHORT = ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"];
-const ROMAN = ["", "I", "II", "III", "IV", "V"];
-
-// Виды, интересные грибникам. Остальные скрыты по умолчанию.
-const PRIORITY_SPECIES = new Set([
-  "Белый гриб",
-  "Лисичка обыкновенная",
-  "Лисичка трубчатая",
-  "Подосиновик красный",
-  "Подосиновик жёлто-бурый",
-  "Подберёзовик обыкновенный",
-  "Опёнок осенний",
-  "Опёнок летний",
-  "Сморчок настоящий",
-  "Груздь настоящий",
-  "Рыжик сосновый",
-  "Маслёнок настоящий",
-  "Маслёнок зернистый",
-]);
-
-function buildPopupHtml(data: ForestAtResponse): string {
-  if (!data.forest) {
-    return `<div style="font-family:sans-serif;padding:4px 2px;color:#555">
-      Вне лесных полигонов
-    </div>`;
-  }
-
-  const f = data.forest;
-  const forestName = FOREST_NAMES[f.dominant_species] ?? f.dominant_species;
-  const areaStr = f.area_m2 ? `${(f.area_m2 / 10_000).toFixed(1)} га` : "";
-  const curMonth = new Date().getMonth() + 1;
-
-  const metaBits: string[] = [];
-  if (f.bonitet != null && f.bonitet >= 1 && f.bonitet <= 5)
-    metaBits.push(`бонитет ${ROMAN[f.bonitet]}`);
-  if (f.timber_stock != null)
-    metaBits.push(`${Math.round(f.timber_stock)} м³/га`);
-  if (f.age_group != null)
-    metaBits.push(f.age_group);
-  const metaStr = metaBits.join(" · ");
-
-  const speciesRows = data.species_theoretical
-    .slice(0, 12)
-    .map((s) => {
-      const style = EDIBILITY_STYLE[s.edibility ?? ""] ?? "color:#333";
-      const inSeason = (s.season_months ?? []).includes(curMonth);
-      const isPriority = PRIORITY_SPECIES.has(s.name_ru);
-      const months = (s.season_months ?? [])
-        .map((m) =>
-          m === curMonth
-            ? `<b style="text-decoration:underline">${MONTH_SHORT[m - 1]}</b>`
-            : MONTH_SHORT[m - 1]
-        )
-        .join("&thinsp;");
-      const aff = s.affinity ? Math.round(s.affinity * 100) : 0;
-      return `<tr class="sp-row" data-p="${isPriority ? 1 : 0}" data-s="${inSeason ? 1 : 0}"
-          style="display:${isPriority ? "table-row" : "none"}">
-        <td style="${style};padding:2px 6px 2px 0">${s.name_ru}</td>
-        <td style="color:#aaa;font-size:10px;padding:2px 6px 2px 0;font-style:italic">${s.name_lat ?? ""}</td>
-        <td style="font-size:10px;color:#555;padding:2px 6px 2px 0;white-space:nowrap">${months}</td>
-        <td style="font-size:10px;color:#888;padding:2px 0">${aff}%</td>
-      </tr>`;
-    })
-    .join("");
-
-  return `<div style="font-family:sans-serif;font-size:13px;min-width:0;max-width:100%;line-height:1.4">
-    <div style="margin-bottom:6px">
-      <strong style="font-size:14px">${forestName}</strong>
-      ${areaStr ? `<span style="font-size:11px;color:#aaa;margin-left:8px">${areaStr}</span>` : ""}
-      ${metaStr ? `<div style="font-size:11px;color:#888;margin-top:2px">${metaStr}</div>` : ""}
-    </div>
-    ${speciesRows ? `
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:11px;color:#888">Виды грибов</span>
-        <div style="display:flex;gap:8px;align-items:center">
-          <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
-            <input type="checkbox" id="sp-all-cb" style="margin:0"
-              onchange="const ns=document.getElementById('sp-filter-cb').checked;document.querySelectorAll('.sp-row').forEach(r=>{r.style.display=(this.checked||r.dataset.p=='1')&&(!ns||r.dataset.s=='1')?'table-row':'none'})">
-            все виды
-          </label>
-          <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
-            <input type="checkbox" id="sp-filter-cb" style="margin:0"
-              onchange="const all=document.getElementById('sp-all-cb').checked;document.querySelectorAll('.sp-row').forEach(r=>{r.style.display=(all||r.dataset.p=='1')&&(!this.checked||r.dataset.s=='1')?'table-row':'none'})">
-            в сезоне
-          </label>
-        </div>
-      </div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="font-size:10px;color:#aaa;border-bottom:1px solid #eee">
-          <th style="text-align:left;padding:0 6px 3px 0">Гриб</th>
-          <th></th>
-          <th style="text-align:left;padding:0 6px 3px 0">Сезон</th>
-          <th style="text-align:left">Афф.</th>
-        </tr></thead>
-        <tbody>${speciesRows}</tbody>
-      </table>`
-    : `<p style="color:#aaa;font-size:12px;margin:0">Нет данных о видах для этого типа леса</p>`}
-  </div>`;
-}
-
-/**
- * Ищет id самого нижнего symbol-слоя (текст/иконки) в текущем стиле —
- * чтобы вставить наш forest-слой под ним. Так надписи городов, улиц,
- * озёр остаются поверх лесной раскраски.
- *
- * OpenFreeMap Bright использует slug'и вроде `label_country`, `place_city`,
- * `road_label_*`, но единственный надёжный инвариант — `layer.type === "symbol"`.
- */
-function findFirstSymbolLayerId(m: Map): string | undefined {
-  const layers = m.getStyle().layers ?? [];
-  for (const l of layers) {
-    if (l.type === "symbol") return l.id;
-  }
-  return undefined;
-}
-
-/**
- * Добавляет лесной слой с flat-цветами. Тайлы PMTiles подгружаются лениво.
- * Если findFirstSymbolLayerId вернёт undefined (в стиле вообще нет символов),
- * слой вставляется в самый верх — он всё равно будет виден.
- */
-function addForestLayer(m: Map) {
-  if (m.getLayer("forest-fill")) return;
-  try {
-    if (!m.getSource("forest")) {
-      m.addSource("forest", {
-        type: "vector",
-        url: FOREST_PMTILES_URL,
-      });
-    }
-    const beforeId = findFirstSymbolLayerId(m);
-    m.addLayer(
-      {
-        id: "forest-fill",
-        type: "fill",
-        source: "forest",
-        "source-layer": "forest",
-        paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
-      },
-      beforeId,
-    );
-  } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error("[forest] addLayer failed:", e);
-  }
-}
-
-function addOoptLayer(m: Map) {
-  if (m.getLayer("oopt-fill")) return;
-  if (!m.getSource("oopt")) {
-    m.addSource("oopt", { type: "vector", url: OOPT_PMTILES_URL });
-  }
-  const beforeId = findFirstSymbolLayerId(m);
-  m.addLayer(
-    {
-      id: "oopt-fill",
-      type: "fill",
-      source: "oopt",
-      "source-layer": "oopt",
-      paint: {
-        "fill-color": [
-          "match", ["get", "oopt_category"],
-          "zapovednik",    "#b71c1c",
-          "nat_park",      "#e65100",
-          "prirodny_park", "#f57f17",
-          "zakaznik",      "#558b2f",
-          "pamyatnik",     "#6a1b9a",
-          "#455a64",
-        ],
-        "fill-opacity": 0.25,
-        "fill-antialias": false,
-      } as unknown as maplibregl.FillLayerSpecification["paint"],
-    },
-    beforeId,
-  );
-}
-
-function addRoadsLayer(m: Map) {
-  if (m.getLayer("roads-line")) return;
-  if (!m.getSource("roads")) {
-    m.addSource("roads", { type: "vector", url: ROADS_PMTILES_URL });
-  }
-  m.addLayer({
-    id: "roads-line",
-    type: "line",
-    source: "roads",
-    "source-layer": "roads",
-    minzoom: 10,
-    paint: {
-      "line-color": "#5d4037",
-      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.8, 14, 2],
-      "line-opacity": 0.7,
-      "line-dasharray": [3, 2],
-    } as unknown as maplibregl.LineLayerSpecification["paint"],
-  });
-}
-
-function addWaterLayer(m: Map) {
-  if (m.getLayer("water-fill")) return;
-  if (!m.getSource("water")) {
-    m.addSource("water", {
-      type: "vector",
-      url: WATER_PMTILES_URL,
-    });
-  }
-  const beforeId = findFirstSymbolLayerId(m);
-  m.addLayer(
-    {
-      id: "water-fill",
-      type: "fill",
-      source: "water",
-      "source-layer": "water",
-      paint: {
-        "fill-color": "#1565C0",
-        "fill-opacity": 0.3,
-        "fill-antialias": false,
-      } as unknown as maplibregl.FillLayerSpecification["paint"],
-    },
-    beforeId,
-  );
-}
-
-function addWetlandLayer(m: Map) {
-  if (m.getLayer("wetland-fill")) return;
-  if (!m.getSource("wetland")) {
-    m.addSource("wetland", { type: "vector", url: WETLANDS_PMTILES_URL });
-  }
-  const beforeId = findFirstSymbolLayerId(m);
-  m.addLayer(
-    {
-      id: "wetland-fill",
-      type: "fill",
-      source: "wetland",
-      "source-layer": "wetland",
-      paint: {
-        // Тёмно-коричневый (цвет торфа) с высокой прозрачностью —
-        // болота видно, но не доминируют
-        "fill-color": "#795548",
-        "fill-opacity": 0.4,
-        "fill-antialias": false,
-      } as unknown as maplibregl.FillLayerSpecification["paint"],
-    },
-    beforeId,
-  );
-}
-
-function addFellingLayer(m: Map) {
-  if (m.getLayer("felling-fill")) return;
-  if (!m.getSource("felling")) {
-    m.addSource("felling", { type: "vector", url: FELLING_PMTILES_URL });
-  }
-  const beforeId = findFirstSymbolLayerId(m);
-  m.addLayer(
-    {
-      id: "felling-fill",
-      type: "fill",
-      source: "felling",
-      "source-layer": "felling",
-      paint: {
-        // Оранжево-красный — вырубки/гари выделяются как "особая экология"
-        "fill-color": [
-          "match", ["get", "area_type"],
-          "Вырубка", "#ff5722",
-          "Гарь", "#b71c1c",
-          "Погибшее насаждение", "#5d4037",
-          "#bf360c",  // default: тёмно-оранжевый
-        ],
-        "fill-opacity": 0.5,
-        "fill-antialias": false,
-      } as unknown as maplibregl.FillLayerSpecification["paint"],
-    },
-    beforeId,
-  );
-}
-
-/**
- * Слой подписей населённых пунктов из нашего OSM GeoJSON.
- * Показывается только на Схеме и Гибриде — на OSM-растре подписи уже запечены,
- * на Спутнике не нужны.
- *
- * Источник: data/tiles/places.geojson, скачанный из Overpass.
- * Все деревни/хутора видны с zoom 6 — мы сами контролируем данные
- * и не зависим от ограничений Versatiles тайлов.
- */
-function addPlaceLabelsLayer(m: Map) {
-  if (m.getLayer("places-text")) return;
-  if (!m.getSource("places")) {
-    m.addSource("places", { type: "geojson", data: PLACES_URL });
-  }
-  // Зум-фильтр: показываем только те типы мест, которые нужны на текущем зуме.
-  // Без фильтра все 7k точек конкурируют за пространство → collision detection
-  // убирает большинство. С фильтром на далёком зуме видны только города/посёлки,
-  // а деревни появляются по мере приближения.
-  //
-  // step(zoom, default, break1, out1, break2, out2, ...)
-  //  zoom < 6  → только city
-  //  zoom 6–7  → city, town
-  //  zoom 8–9  → + village, suburb, locality
-  //  zoom 10+  → все типы (hamlet, farm, isolated_dwelling, ...)
-  m.addLayer({
-    id: "places-text",
-    type: "symbol",
-    source: "places",
-    minzoom: 4,
-    filter: [
-      "step", ["zoom"],
-      ["in", ["get", "place"], ["literal", ["city"]]],
-      6,  ["in", ["get", "place"], ["literal", ["city", "town"]]],
-      8,  ["in", ["get", "place"], ["literal", ["city", "town", "village", "suburb", "locality"]]],
-      10, true,
-    ],
-    layout: {
-      "text-field": ["get", "name"],
-      // Размер зависит и от зума и от типа места: города крупнее деревень
-      "text-size": [
-        "interpolate", ["linear"], ["zoom"],
-        4, ["match", ["get", "place"], ["city"], 11, ["town"], 9, 7],
-        8, ["match", ["get", "place"], ["city"], 14, ["town"], 12, 10],
-        12, ["match", ["get", "place"], ["city"], 16, ["town"], 14, 12],
-      ],
-      "text-font": versatilesFonts,
-      "text-anchor": "center",
-      "text-max-width": 8,
-      "text-allow-overlap": false,
-      "text-padding": 2,
-      // priority=0 (city) побеждает в collision detection над priority=7 (hamlet)
-      "symbol-sort-key": ["get", "priority"],
-    },
-    paint: {
-      "text-color": ["match", ["get", "place"], "city", "#111", "town", "#222", "#444"],
-      "text-halo-color": "rgba(255,255,255,0.95)",
-      "text-halo-width": 1.5,
-    },
-  } as unknown as maplibregl.SymbolLayerSpecification);
-}
-
-function addProtectiveLayer(m: Map) {
-  if (m.getLayer("protective-fill")) return;
-  if (!m.getSource("protective")) {
-    m.addSource("protective", { type: "vector", url: PROTECTIVE_PMTILES_URL });
-  }
-  const beforeId = findFirstSymbolLayerId(m);
-  m.addLayer(
-    {
-      id: "protective-fill",
-      type: "fill",
-      source: "protective",
-      "source-layer": "protective",
-      paint: {
-        "fill-color": "#6a1b9a",  // фиолетовый — "юридический" слой
-        "fill-opacity": 0.25,
-        "fill-antialias": false,
-      } as unknown as maplibregl.FillLayerSpecification["paint"],
-    },
-    beforeId,
-  );
-}
-
-// ─── Встроенный стиль (fallback если внешний недоступен) ─────────────────────
-const INLINE_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    osm: {
-      type: "raster",
-      tiles: [
-        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png",
-      ],
-      tileSize: 256,
-      attribution: "© OpenStreetMap contributors",
-    },
-  },
-  layers: [{ id: "osm", type: "raster", source: "osm" }],
-  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-};
-
-// ─── Спутниковый стиль (ESRI World Imagery, бесплатно, без ключа) ────────────
-const SATELLITE_STYLE: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    esri: {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution:
-        "Imagery © Esri, Maxar, Earthstar Geographics, USDA FSA, USGS, AeroGRID, IGN, GIS Community",
-    },
-  },
-  layers: [{ id: "esri", type: "raster", source: "esri" }],
-  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-};
-
-// ─── Схема — Versatiles Colorful (векторный стиль, ретина-чёткие подписи) ────
-// Правильный путь — через /assets/styles/colorful/style.json (не просто
-// colorful.json — тот отдаёт 404).
-const SCHEME_STYLE_URL = "https://tiles.versatiles.org/assets/styles/colorful/style.json";
-
-// Шрифты из Versatiles-стиля — инициализируются при первом buildSchemeStyle().
-// Нужны для addPlaceLabelsLayer, чтобы text-font совпадал с glyphs-хостом стиля.
-let versatilesFonts: string[] = ["Noto Sans Regular", "Arial Unicode MS Regular"];
-
-// Масштаб текста по типу слоя.
-//
-// КЛЮЧЕВОЕ ПРАВИЛО: мелкие населённые пункты (village/hamlet/...) НЕ увеличиваем.
-// Чем крупнее текст деревни — тем меньше деревень MapLibre показывает,
-// потому что collision detection убирает перекрывающиеся надписи.
-// Оригинальный Versatiles-размер (~10-12px) оптимален для показа сотен деревень
-// на одном экране. Дороги и POI можно увеличить — их меньше.
-const ROAD_POI_LABEL_SCALE  = 1.5;   // дороги, POI, прочие символы
-const LARGE_PLACE_SCALE     = 1.3;   // города, посёлки городского типа
-const SMALL_PLACE_SCALE     = 1.0;   // деревни, хутора, сёла — НЕ трогаем
-
-// Regex для категорий мест
-const SMALL_PLACE_RE = /^label-place-(village|hamlet|suburb|quarter|neighbourhood|locality|farm|isolated_dwelling)$/;
-const LARGE_PLACE_RE = /^label-place-(city|town|capital|statecapital)$/;
-
-// minzoom: явные переопределения. Для незнакомых label-place-* применяем
-// catchall в buildSchemeStyle (-5 от дефолта).
-const LABEL_MINZOOM_OVERRIDES: Record<string, number> = {
-  "label-place-capital":            3,
-  "label-place-statecapital":       4,
-  "label-place-city":               5,
-  "label-place-town":               6,
-  "label-place-village":            6,   // ГЛАВНОЕ — деревни с zoom 6
-  "label-place-hamlet":             7,
-  "label-place-suburb":             7,
-  "label-place-quarter":            9,
-  "label-place-neighbourhood":     10,
-  "label-place-locality":           7,
-  "label-place-isolated_dwelling":  8,
-  "label-place-farm":               7,
-};
-
-/**
- * Фетчит Versatiles Colorful, патчит под MapLibre 4.5 и увеличивает подписи.
- *
- * 1. sprite приходит массивом `[{id, url}]` (MapLibre 5.x multi-sprite format) —
- *    для 4.x нужна строка, берём первый url.
- * 2. text-size в 23 из 30 symbol-слоёв — legacy-формат `{stops: [[z, v], ...]}`,
- *    который нельзя обернуть в ["*", k, expr]. Мутируем stops напрямую.
- *    Остальные — плоский number, умножаем в лоб.
- * 3. minzoom для label-place-* уменьшаем согласно LABEL_MINZOOM_OVERRIDES —
- *    хотим видеть деревни и посёлки при отдалённом просмотре.
- */
-async function buildSchemeStyle(): Promise<maplibregl.StyleSpecification> {
-  const resp = await fetch(SCHEME_STYLE_URL);
-  if (!resp.ok) throw new Error(`versatiles ${resp.status}`);
-  const style = await resp.json() as {
-    sprite?: string | Array<{ id: string; url: string }>;
-    sources: Record<string, unknown>;
-    layers: Array<{
-      id?: string;
-      type: string;
-      minzoom?: number;
-      layout?: Record<string, unknown>;
-      [k: string]: unknown;
-    }>;
-    [k: string]: unknown;
-  };
-
-  // (1) sprite → строка
-  if (Array.isArray(style.sprite) && style.sprite.length > 0) {
-    style.sprite = style.sprite[0].url;
-  }
-
-  // (1b) Извлекаем шрифты из первого symbol-слоя с text-font — они нужны
-  // для addPlaceLabelsLayer (наш кастомный слой должен использовать те же glyphs).
-  for (const layer of style.layers) {
-    if (layer.type === "symbol" && layer.layout?.["text-font"]) {
-      const fonts = layer.layout["text-font"];
-      if (Array.isArray(fonts) && fonts.length > 0 && typeof fonts[0] === "string") {
-        versatilesFonts = fonts as string[];
-        break;
-      }
-    }
-  }
-
-  for (const layer of style.layers) {
-    if (layer.type !== "symbol") continue;
-    const layerId = layer.id ?? "";
-
-    // (2) text-size: разный масштаб для разных типов слоёв.
-    // Деревни/хутора — scale=1.0 (не трогаем), города — 1.3, остальное — 1.5.
-    const scale = SMALL_PLACE_RE.test(layerId) ? SMALL_PLACE_SCALE
-                : LARGE_PLACE_RE.test(layerId) ? LARGE_PLACE_SCALE
-                : ROAD_POI_LABEL_SCALE;
-
-    if (scale !== 1.0 && layer.layout) {
-      const ts = layer.layout["text-size"];
-      if (ts != null) {
-        if (typeof ts === "number") {
-          layer.layout["text-size"] = ts * scale;
-        } else if (typeof ts === "object" && !Array.isArray(ts) && Array.isArray((ts as { stops?: unknown }).stops)) {
-          const stops = (ts as { stops: Array<[number, number]> }).stops;
-          layer.layout["text-size"] = {
-            ...(ts as object),
-            stops: stops.map(([z, v]) => [z, v * scale] as [number, number]),
-          };
-        } else if (Array.isArray(ts)) {
-          layer.layout["text-size"] = ["*", scale, ts];
-        }
-      }
-    }
-
-    // (3) minzoom: явные overrides + catchall для любых label-place-* слоёв.
-    if (layerId.startsWith("label-place-")) {
-      if (layerId in LABEL_MINZOOM_OVERRIDES) {
-        layer.minzoom = LABEL_MINZOOM_OVERRIDES[layerId];
-      } else {
-        // Неизвестный тип места — снижаем minzoom на 5 от дефолта Versatiles
-        layer.minzoom = Math.max(0, (layer.minzoom ?? 12) - 5);
-      }
-    }
-  }
-
-  return style as unknown as maplibregl.StyleSpecification;
-}
-
-const SCHEME_STYLE_FALLBACK: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    esri_topo: {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: "© Esri, USGS, NOAA",
-    },
-  },
-  layers: [{ id: "esri_topo", type: "raster", source: "esri_topo" }],
-  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-};
-
-// ─── Гибрид — ESRI спутник + векторные подписи Versatiles ────────────────────
-// Переиспользуем buildSchemeStyle (уже пропатченный sprite + увеличенные labels),
-// инжектим ESRI satellite как самый нижний raster-слой, и оставляем только
-// line-слои (дороги) + symbol-слои (подписи) — fill-слои из Versatiles
-// (land cover, water, building) закроют спутник.
-async function buildHybridStyle(): Promise<maplibregl.StyleSpecification> {
-  const style = await buildSchemeStyle();
-  (style.sources as Record<string, unknown>)["esri-satellite"] = {
-    type: "raster",
-    tiles: ["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
-    tileSize: 256,
-    maxzoom: 19,
-    attribution: "Imagery © Esri, Maxar",
-  };
-  const kept = style.layers.filter(l => l.type === "symbol" || l.type === "line");
-  style.layers = [
-    { id: "esri-satellite-layer", type: "raster", source: "esri-satellite" } as maplibregl.RasterLayerSpecification,
-    ...kept,
-  ];
-  return style;
-}
-
-// ─── Гибрид фоллбэк — ESRI спутник + ESRI Reference labels ───────────────────
-const HYBRID_STYLE_FALLBACK: maplibregl.StyleSpecification = {
-  version: 8,
-  sources: {
-    satellite: {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: "Imagery © Esri, Maxar",
-    },
-    labels: {
-      type: "raster",
-      tiles: [
-        "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
-      ],
-      tileSize: 256,
-      maxzoom: 14,
-      attribution: "Labels © Esri",
-    },
-  },
-  layers: [
-    { id: "satellite", type: "raster", source: "satellite" },
-    { id: "labels", type: "raster", source: "labels" },
-  ],
-  glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
-};
-
-// ─── Компонент ────────────────────────────────────────────────────────────────
-
-function setForestVisibility(m: Map, visible: boolean) {
-  if (m.getLayer("forest-fill"))
-    m.setLayoutProperty("forest-fill", "visibility", visible ? "visible" : "none");
-}
-
-function setWaterVisibility(m: Map, visible: boolean) {
-  if (m.getLayer("water-fill"))
-    m.setLayoutProperty("water-fill", "visibility", visible ? "visible" : "none");
-}
-
-function setOoptVisibility(m: Map, visible: boolean) {
-  if (m.getLayer("oopt-fill"))
-    m.setLayoutProperty("oopt-fill", "visibility", visible ? "visible" : "none");
-}
-
-function setWetlandVisibility(m: Map, visible: boolean) {
-  if (m.getLayer("wetland-fill"))
-    m.setLayoutProperty("wetland-fill", "visibility", visible ? "visible" : "none");
-}
-
-function setFellingVisibility(m: Map, visible: boolean) {
-  if (m.getLayer("felling-fill"))
-    m.setLayoutProperty("felling-fill", "visibility", visible ? "visible" : "none");
-}
-
-function setProtectiveVisibility(m: Map, visible: boolean) {
-  if (m.getLayer("protective-fill"))
-    m.setLayoutProperty("protective-fill", "visibility", visible ? "visible" : "none");
-}
-
-function setRoadsVisibility(m: Map, visible: boolean) {
-  if (m.getLayer("roads-line"))
-    m.setLayoutProperty("roads-line", "visibility", visible ? "visible" : "none");
-}
 
 export function MapView() {
   const mobile = useIsMobile();
@@ -715,9 +56,10 @@ export function MapView() {
   const [fellingLoaded, setFellingLoaded] = useState(false);
   const [protectiveVisible, setProtectiveVisible] = useState(true);
   const [protectiveLoaded, setProtectiveLoaded] = useState(false);
+  const [soilVisible, setSoilVisible] = useState(true);
+  const [soilLoaded, setSoilLoaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Refs для доступа из стабильных колбэков без пересоздания
   const forestVisibleRef = useRef(forestVisible);
   forestVisibleRef.current = forestVisible;
   const forestLoadedRef = useRef(false);
@@ -739,18 +81,17 @@ export function MapView() {
   const protectiveVisibleRef = useRef(protectiveVisible);
   protectiveVisibleRef.current = protectiveVisible;
   const protectiveLoadedRef = useRef(false);
-  // Отслеживаем уже применённый baseMap. Изначально — INLINE_STYLE (osm),
-  // а useState инициализируется как "scheme", поэтому первый раз useEffect
-  // сработает и переключит с osm на scheme.
+  const soilVisibleRef = useRef(soilVisible);
+  soilVisibleRef.current = soilVisible;
+  const soilLoadedRef = useRef(false);
+  // Изначально INLINE_STYLE (osm), useState инициализирован "scheme" → первый
+  // useEffect переключит с osm на scheme.
   const appliedBaseMap = useRef<BaseMapMode>("osm");
 
-  // Вызывается при смене стиля — переaddит лесной и водоохранный слои если они загружены.
-  // Перед добавлением принудительно удаляем остатки предыдущего стиля: setStyle с
-  // diff=true может оставить source живым но снести layer, что приводит к тому что
-  // addForestLayer видит source и делает early-return не добавив layer.
+  // setStyle с diff=true может оставить source живым, но снести layer →
+  // addLayer делает early-return и слой пропадает. Принудительно сносим
+  // и source, и layer перед re-add.
   const setupForestAndInteractions = useCallback((m: Map) => {
-    // Подписи населённых пунктов: только для Схемы и Гибрида.
-    // На OSM-растре подписи уже в тайлах, на Спутнике не нужны.
     if (m.getLayer("places-text")) m.removeLayer("places-text");
     if (m.getSource("places"))    m.removeSource("places");
     if (appliedBaseMap.current === "scheme" || appliedBaseMap.current === "hybrid") {
@@ -799,11 +140,16 @@ export function MapView() {
       addProtectiveLayer(m);
       setProtectiveVisibility(m, protectiveVisibleRef.current);
     }
+    if (soilLoadedRef.current) {
+      if (m.getLayer("soil-fill")) m.removeLayer("soil-fill");
+      if (m.getSource("soil")) m.removeSource("soil");
+      addSoilLayer(m);
+      setSoilVisibility(m, soilVisibleRef.current);
+    }
   }, []);
 
-  // Единый обработчик кнопки: первый клик — загружает, последующие — тоглят.
   // Если стиль ещё переключается (buildHybridStyle в полёте) — откладываем
-  // addForestLayer до события idle, иначе MapLibre сотрёт наш layer при setStyle.
+  // addLayer до события idle, иначе MapLibre сотрёт наш layer при setStyle.
   const handleForestToggle = useCallback(() => {
     const m = map.current;
     if (!m) return;
@@ -842,34 +188,7 @@ export function MapView() {
     }
   }, []);
 
-  const handleOoptToggle = useCallback(async () => {
-    const m = map.current;
-    if (!m) return;
-    if (!ooptLoadedRef.current) {
-      try {
-        const resp = await fetch(`${API_ORIGIN}/tiles/oopt.pmtiles`, { method: "HEAD" });
-        if (!resp.ok) {
-          setErrorMsg("Данные ООПТ не загружены — запустите ingest_oopt.py и build_oopt_tiles.py");
-          setTimeout(() => setErrorMsg(null), 5000);
-          return;
-        }
-      } catch {
-        setErrorMsg("Не удалось проверить наличие тайлов ООПТ");
-        setTimeout(() => setErrorMsg(null), 4000);
-        return;
-      }
-      ooptLoadedRef.current = true; setOoptLoaded(true);
-      addOoptLayer(m);
-      ooptVisibleRef.current = true; setOoptVisible(true);
-      setOoptVisibility(m, true);
-    } else {
-      const next = !ooptVisibleRef.current;
-      ooptVisibleRef.current = next; setOoptVisible(next);
-      setOoptVisibility(m, next);
-    }
-  }, []);
-
-  // Generic toggle handler для слоёв с HEAD-проверкой pmtiles-файла
+  // Generic toggle с HEAD-проверкой pmtiles-файла.
   const toggleLayerWithCheck = useCallback(
     async (
       pmtilesName: string,
@@ -910,6 +229,28 @@ export function MapView() {
     [],
   );
 
+  const handleOoptToggle = useCallback(
+    () => toggleLayerWithCheck(
+      "oopt.pmtiles",
+      "Данные ООПТ не загружены — запустите ingest_oopt.py и build_oopt_tiles.py",
+      ooptLoadedRef, ooptVisibleRef,
+      setOoptLoaded, setOoptVisible,
+      addOoptLayer, setOoptVisibility,
+    ),
+    [toggleLayerWithCheck],
+  );
+
+  const handleRoadsToggle = useCallback(
+    () => toggleLayerWithCheck(
+      "roads.pmtiles",
+      "Данные дорог не загружены — запустите ingest_osm_roads.py и build_roads_tiles.py",
+      roadsLoadedRef, roadsVisibleRef,
+      setRoadsLoaded, setRoadsVisible,
+      addRoadsLayer, setRoadsVisibility,
+    ),
+    [toggleLayerWithCheck],
+  );
+
   const handleWetlandToggle = useCallback(
     () => toggleLayerWithCheck(
       "wetlands.pmtiles",
@@ -939,6 +280,17 @@ export function MapView() {
       protectiveLoadedRef, protectiveVisibleRef,
       setProtectiveLoaded, setProtectiveVisible,
       addProtectiveLayer, setProtectiveVisibility,
+    ),
+    [toggleLayerWithCheck],
+  );
+
+  const handleSoilToggle = useCallback(
+    () => toggleLayerWithCheck(
+      "soil.pmtiles",
+      "Данные почв не загружены — запустите ingest_soil.py и build_soil_tiles.py",
+      soilLoadedRef, soilVisibleRef,
+      setSoilLoaded, setSoilVisible,
+      addSoilLayer, setSoilVisibility,
     ),
     [toggleLayerWithCheck],
   );
@@ -984,33 +336,6 @@ export function MapView() {
     }
   }, []);
 
-  const handleRoadsToggle = useCallback(async () => {
-    const m = map.current;
-    if (!m) return;
-    if (!roadsLoadedRef.current) {
-      try {
-        const resp = await fetch(`${API_ORIGIN}/tiles/roads.pmtiles`, { method: "HEAD" });
-        if (!resp.ok) {
-          setErrorMsg("Данные дорог не загружены — запустите ingest_osm_roads.py и build_roads_tiles.py");
-          setTimeout(() => setErrorMsg(null), 5000);
-          return;
-        }
-      } catch {
-        setErrorMsg("Не удалось проверить наличие тайлов дорог");
-        setTimeout(() => setErrorMsg(null), 4000);
-        return;
-      }
-      roadsLoadedRef.current = true; setRoadsLoaded(true);
-      addRoadsLayer(m);
-      roadsVisibleRef.current = true; setRoadsVisible(true);
-      setRoadsVisibility(m, true);
-    } else {
-      const next = !roadsVisibleRef.current;
-      roadsVisibleRef.current = next; setRoadsVisible(next);
-      setRoadsVisibility(m, next);
-    }
-  }, []);
-
   useEffect(() => {
     if (!mapRef.current || map.current) return;
 
@@ -1028,10 +353,9 @@ export function MapView() {
 
     const m = map.current;
 
-    // Добавляем лесной слой как только стиль обработан (isStyleLoaded = true),
-    // но НЕ ждём загрузки тайлов подложки (load ждёт тайлы — если CDN завис,
-    // load никогда не стреляет). styledata может выстрелить до того как стиль
-    // применён, поэтому проверяем isStyleLoaded() в каждом вызове.
+    // НЕ ждём load (он ждёт тайлы — если CDN завис, load никогда не стреляет).
+    // styledata может выстрелить ДО того как стиль применён, поэтому
+    // проверяем isStyleLoaded() в каждом вызове.
     const onStyleReady = () => {
       if (m.isStyleLoaded()) {
         m.off("styledata", onStyleReady);
@@ -1046,10 +370,8 @@ export function MapView() {
       "bottom-right",
     );
 
-    // Координаты под курсором
     m.on("mousemove", (e) => setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng }));
 
-    // Синхронизация URL
     const syncUrl = () => {
       const { lat, lng } = m.getCenter();
       const z = Math.round(m.getZoom() * 10) / 10;
@@ -1061,7 +383,6 @@ export function MapView() {
     };
     m.on("moveend", syncUrl);
 
-    // ─── Popup по клику ───────────────────────────────────────────────────────
     m.on("click", "forest-fill", async (e) => {
       if (!e.lngLat) return;
       const { lng, lat } = e.lngLat;
@@ -1074,8 +395,11 @@ export function MapView() {
         .addTo(m);
 
       try {
-        const data = await fetchForestAt(lat, lng);
-        popup.setHTML(buildPopupHtml(data));
+        const [forest, soil] = await Promise.all([
+          fetchForestAt(lat, lng),
+          fetchSoilAt(lat, lng).catch(() => null),
+        ]);
+        popup.setHTML(buildPopupHtml(forest, soil));
       } catch {
         popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
       }
@@ -1093,22 +417,15 @@ export function MapView() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Смена базовой подложки.
-  //
-  // Исторически было 2 бага:
-  //   Task 1: `appliedBaseMap.current = baseMap` ставилось В НАЧАЛЕ effect'а →
-  //   в React StrictMode при double-invocation второй раз ref уже совпадал с
-  //   baseMap и effect возвращался раньше, реальный setStyle никогда не
-  //   вызывался на scheme как дефолтной подложке. Стартовая OSM оставалась.
-  //
-  //   Task 2: styledata + isStyleLoaded() иногда промахивается — listener
-  //   регистрируется до setStyle, но первый styledata firing может прийти
-  //   с isStyleLoaded=false, а второй не приходит потому что внешняя загрузка
-  //   зависла → setupForestAndInteractions никогда не вызывается → после
-  //   смены basemap forest-fill layer не восстанавливается.
-  //
-  // Фикс: RAF-polling `isStyleLoaded()` вместо styledata listener'а; запись
-  // appliedBaseMap происходит ПОСЛЕ успешного m.setStyle.
+  // Смена базовой подложки. Исторически были два бага:
+  // 1) `appliedBaseMap.current = baseMap` ставилось В НАЧАЛЕ effect'а → в
+  //    React StrictMode при double-invocation второй раз ref уже совпадал
+  //    с baseMap и effect возвращался раньше, реальный setStyle не вызывался.
+  // 2) styledata + isStyleLoaded() иногда промахивается: первый styledata firing
+  //    с isStyleLoaded=false, второй не приходит (внешняя загрузка зависла) →
+  //    оверлеи не восстанавливаются.
+  // Фикс: RAF-polling вместо styledata listener'а; appliedBaseMap пишем
+  // ПОСЛЕ успешного setStyle.
   useEffect(() => {
     const m = map.current;
     if (!m) return;
@@ -1118,17 +435,12 @@ export function MapView() {
 
     const apply = (style: maplibregl.StyleSpecification) => {
       if (cancelled) return;
-      // diff: false — полная замена стиля. Без этого MapLibre пытается
-      // вычислить минимальный дифф между старым и новым стилем, что с
-      // тяжёлыми стилями (Versatiles 60+ слоёв + патчи sprite/text-size)
-      // приводит к артефактам: часть тайлов рендерится старым стилем,
-      // часть — новым, пока diff не завершится.
+      // diff: false — полная замена. С тяжёлыми стилями (Versatiles 60+ слоёв
+      // + патчи sprite/text-size) diff приводит к артефактам: часть тайлов
+      // рендерится старым стилем, часть новым.
       m.setStyle(style, { diff: false });
       appliedBaseMap.current = baseMap;
 
-      // RAF-poll до готовности стиля, потом восстанавливаем оверлейные слои
-      // (forest/water/oopt/roads). Надёжнее styledata т.к. не зависит от
-      // частоты событий MapLibre.
       const poll = () => {
         if (cancelled) return;
         if (m.isStyleLoaded()) {
@@ -1181,6 +493,9 @@ export function MapView() {
         protectiveVisible={protectiveVisible}
         protectiveLoaded={protectiveLoaded}
         onProtectiveToggle={handleProtectiveToggle}
+        soilVisible={soilVisible}
+        soilLoaded={soilLoaded}
+        onSoilToggle={handleSoilToggle}
         onShare={handleShare}
       />
 
@@ -1188,7 +503,7 @@ export function MapView() {
 
       {forestLoaded && <Legend colorMode={forestColorMode} />}
 
-      {/* Координаты под курсором — скрыты на тач-устройствах (mousemove там бесполезен) */}
+      {/* Координаты под курсором — скрыты на тач-устройствах */}
       {cursor && !mobile && (
         <div style={{
           position: "absolute", bottom: 28, right: 50,
@@ -1201,7 +516,6 @@ export function MapView() {
         </div>
       )}
 
-      {/* Тост «ссылка скопирована» */}
       {shareToast && (
         <div style={{
           position: "absolute", bottom: 50, left: "50%", transform: "translateX(-50%)",
@@ -1213,7 +527,6 @@ export function MapView() {
         </div>
       )}
 
-      {/* Ошибка загрузки слоя */}
       {errorMsg && (
         <div style={{
           position: "absolute", bottom: 50, left: "50%", transform: "translateX(-50%)",
@@ -1225,7 +538,6 @@ export function MapView() {
         </div>
       )}
 
-      {/* Баннер активного фильтра по виду */}
       {speciesFilterLabel && (
         <div style={{
           position: "absolute", top: 56, left: "50%", transform: "translateX(-50%)",

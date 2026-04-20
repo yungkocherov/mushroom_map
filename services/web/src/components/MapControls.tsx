@@ -37,6 +37,9 @@ interface Props {
   protectiveVisible: boolean;
   protectiveLoaded: boolean;
   onProtectiveToggle: () => void;
+  soilVisible: boolean;
+  soilLoaded: boolean;
+  onSoilToggle: () => void;
   onShare: () => void;
 }
 
@@ -233,6 +236,16 @@ export function MapControls(props: Props) {
               title={mobile ? undefined : "Защитные леса (ФГИС ЛК): запретные полосы, городские леса. Возможны ограничения на посещение."}
             >
               {!props.protectiveLoaded ? "Защитные леса" : props.protectiveVisible ? "Защитные: вкл" : "Защитные: выкл"}
+            </button>
+          </div>
+
+          <div style={cardStyle(mobile)}>
+            <button
+              onClick={props.onSoilToggle}
+              style={layerBtn(props.soilLoaded, props.soilVisible, "#c9a96e", mobile)}
+              title={mobile ? undefined : "Почвы (Докучаевский ин-т, 1:2.5М). Тип почвы — сильный предиктор для грибников: подзолы (лисички/моховики), дерново-карбонатные (белые/грузди), болотные (клюква/морошка)."}
+            >
+              {!props.soilLoaded ? "Почвы" : props.soilVisible ? "Почвы: вкл" : "Почвы: выкл"}
             </button>
           </div>
 

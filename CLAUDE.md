@@ -76,10 +76,19 @@ cd services/web && export PATH="/c/Program Files/nodejs:$PATH" && npx tsc --noEm
 
 # API container logs (for 500 errors that manifest as CORS in the browser)
 docker compose logs --tail 50 api
+
+# Run all tests (smoke API + unit). Smoke skipped if docker not up.
+.venv/Scripts/python.exe -m pytest -q
 ```
 
 ## Architecture — the contract
 
+- **`soil_polygon` + `soil_profile` + lookups (`soil_type`, `soil_parent`)**
+  — почвенная карта Докучаевского ин-та (1:2.5М, EGRPR/soil-db.ru). Полигоны
+  с soil0/1/2/3 (комплекс) и parent1/2 (порода); 9 точечных разрезов в bbox
+  ЛО+Карелия с pH/CORG. Слой `soil.pmtiles` (1.9 МБ); endpoint `/api/soil/at`
+  возвращает polygon + profile_nearest. Используется как feature-extractor
+  для модели в sister-репо `ik_mushrooms_parser`.
 - **`forest_polygon` table** holds raw polygons from multiple sources
   (osm, terranorte, copernicus, rosleshoz). Each row has
   `source`, `source_version`, `source_feature_id` (composite unique key),
@@ -105,9 +114,10 @@ docker compose logs --tail 50 api
    `services/geodata/src/geodata/db.py` COPY+DELETE pattern.
 4. **Tile build** `pipelines/build_<name>_tiles.py` — PostGIS → MVT →
    `data/tiles/<name>.pmtiles`. Use `build_water_tiles.py` as template.
-5. **Frontend** — `MapView.tsx` adds source + layer in `add<Name>Layer`,
-   `handle<Name>Toggle` with HEAD check on `/tiles/<name>.pmtiles` before
-   loading (graceful error if tiles not built yet).
+5. **Frontend** — add `services/web/src/components/mapView/layers/<name>.ts`
+   exporting `add<Name>Layer` + `set<Name>Visibility` (use existing layers
+   as template). Wire it in `MapView.tsx` via `toggleLayerWithCheck` with
+   HEAD check on `/tiles/<name>.pmtiles` for graceful "tiles not built" UX.
 
 Python normalize must stay thin. If profiling shows shapely/wkt/area in
 the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
@@ -144,10 +154,82 @@ the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
 - **Hybrid mode** = Versatiles Colorful with ESRI satellite raster
   injected as the bottom layer and all fill layers removed (so only
   line + symbol vector layers draw over the imagery). The patch lives
-  in `buildHybridStyle()` in MapView.tsx.
+  in `buildHybridStyle()` in `mapView/styles/hybrid.ts`.
 - **Forest layer z-order**: forest-fill is inserted before the first
   symbol layer (`findFirstSymbolLayerId`), so labels stay on top.
   Same pattern for water/oopt overlays.
+
+## VK photo classification pipeline
+
+`pipelines/ingest_vk.py` — four stages run in sequence or individually via `--step`.
+
+```bash
+# Full pipeline
+.venv/Scripts/python.exe -u pipelines/ingest_vk.py --group grib_spb --region lenoblast
+
+# Single stage (e.g. re-run photos only)
+.venv/Scripts/python.exe -u pipelines/ingest_vk.py --group grib_spb --region lenoblast --step photos
+
+# Report (random 500 posts with filter panel)
+.venv/Scripts/python.exe pipelines/vk_photos_report.py --limit 500 --random --out vk_photos_report_random500.html
+```
+
+### Model & workers
+
+- Model: `qwen/qwen3.5-9b` via LM Studio on `localhost:1234`. Default, no `--model` flag needed.
+- Workers: `--workers 5` (default). LM Studio must have **Parallel = 5** set for the loaded model.
+- Thinking must be disabled: `chat_template_kwargs.enable_thinking=False` is set in `_ask_model`. The `/no_think` prefix alone is not enough through LM Studio.
+- `PHOTO_PROMPT_VERSION` controls reprocessing: when code version != DB version, photos_stage reruns all posts automatically.
+- **Prompt + JSON Schema живут в `pipelines/prompts/vk_classify_v9.txt` и
+  `vk_classify_schema_v9.json`** — версионированы по имени файла. Новая
+  версия → создать `vk_classify_v10.{txt,json}`, бампнуть `PHOTO_PROMPT_VERSION`,
+  обновить пути в `ingest_vk.py` (две строки).
+
+### Current prompt version: `v9-merge-chanterelle-allphotos-2026-04-19`
+
+History:
+- v7: baseline Gemma prompt, 13 species
+- v8: Qwen, added mokhovik/pine_bolete/fly_agaric/berries, soft species limit, count cap 150
+- v9: merged chanterelle group (trumpet+вороночник→chanterelle), loosened pine_bolete (porcini is default), 6-photo sampling (was 4)
+
+### CLASSIFY_SCHEMA species enum (18 keys)
+
+```
+porcini, pine_bolete,
+aspen_bolete, birch_bolete, mokhovik,
+chanterelle,
+saffron_milkcap, white_milkcap, woolly_milkcap,
+spring_mushroom, honey_fungus, oyster, russula, fly_agaric,
+blueberry, cloudberry, cranberry,
+other
+```
+
+### GROUP_TO_SLUGS (what promotes to species table)
+
+| key | slugs |
+|---|---|
+| porcini | boletus-edulis |
+| pine_bolete | boletus-edulis (same slug — разделение только для статистики) |
+| aspen_bolete | leccinum-aurantiacum, leccinum-versipelle |
+| birch_bolete | leccinum-scabrum |
+| mokhovik | xerocomus-subtomentosus |
+| chanterelle | cantharellus-cibarius, craterellus-tubaeformis |
+| saffron_milkcap | lactarius-deliciosus |
+| white_milkcap | lactarius-resimus |
+| woolly_milkcap | lactarius-torminosus |
+| spring_mushroom | morchella-esculenta, verpa-bohemica, gyromitra-esculenta |
+| honey_fungus | armillaria-mellea, kuehneromyces-mutabilis |
+| oyster | pleurotus-ostreatus |
+| russula | russula-vesca |
+| fly_agaric | amanita-muscaria |
+| blueberry / cloudberry / cranberry | (нет маппинга — в отчёты, но не в species) |
+
+### Key model prompting rules
+
+- `porcini` = default для любого белого гриба с коричневой шляпой. `pine_bolete` только если шляпа UNMISTAKABLY very dark (near-black, mahogany).
+- `chanterelle` = все лисички: обычная, трубчатая, вороночник. Один ключ — один entry с суммой.
+- Берёт до 6 фото на пост равномерно (если > 6 фото), иначе все.
+- `max_tokens = 1000`, schema-constrained JSON output.
 
 ## Gotchas you will hit
 
