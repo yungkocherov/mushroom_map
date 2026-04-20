@@ -1,0 +1,28 @@
+{
+  "type": "array",
+  "items": {
+    "type": "object",
+    "properties": {
+      "species": {
+        "type": "string",
+        "enum": [
+          "porcini", "pine_bolete",
+          "aspen_bolete", "birch_bolete", "mokhovik",
+          "chanterelle",
+          "saffron_milkcap", "white_milkcap", "woolly_milkcap",
+          "spring_mushroom", "honey_fungus", "oyster", "russula",
+          "fly_agaric",
+          "blueberry", "cloudberry", "cranberry",
+          "other"
+        ]
+      },
+      "count": {"type": "integer", "minimum": 0, "maximum": 500},
+      "scene": {
+        "type": "string",
+        "enum": ["basket", "kitchen", "forest", "other"]
+      }
+    },
+    "required": ["species", "count", "scene"],
+    "additionalProperties": false
+  }
+}

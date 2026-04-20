@@ -43,15 +43,7 @@ DEFAULT_H3_RES = 7
 DATA_ROOT = REPO_ROOT / "data" / "vk"
 
 
-def _build_database_url() -> str:
-    if url := os.getenv("DATABASE_URL"):
-        return url
-    user = os.getenv("POSTGRES_USER", "mushroom")
-    pw = os.getenv("POSTGRES_PASSWORD", "mushroom_dev")
-    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv("POSTGRES_PORT", "5434")
-    db = os.getenv("POSTGRES_DB", "mushroom_map")
-    return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
+from db_utils import build_dsn as _build_database_url
 
 
 def _load_posts(group: str) -> dict[str, dict]:

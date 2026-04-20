@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -102,17 +101,7 @@ def _to_wkt_multi(geom: dict) -> str | None:
 # Main
 # ---------------------------------------------------------------------------
 
-def _build_dsn(args_dsn: str | None) -> str:
-    if args_dsn:
-        return args_dsn
-    if url := os.environ.get("DATABASE_URL"):
-        return url
-    user = os.environ.get("POSTGRES_USER", "mushroom")
-    pw   = os.environ.get("POSTGRES_PASSWORD", "mushroom_dev")
-    host = os.environ.get("POSTGRES_HOST", "127.0.0.1")
-    port = os.environ.get("POSTGRES_PORT", "5434")
-    db   = os.environ.get("POSTGRES_DB", "mushroom_map")
-    return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
+from db_utils import resolve_dsn
 
 
 def main() -> None:
@@ -127,7 +116,7 @@ def main() -> None:
     except ImportError:
         sys.exit("psycopg (v3) is required: pip install psycopg[binary]")
 
-    dsn = _build_dsn(args.dsn)
+    dsn = resolve_dsn(args.dsn)
     geojson_path = Path(args.file)
     if not geojson_path.exists():
         sys.exit(f"file not found: {geojson_path}")

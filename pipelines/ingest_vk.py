@@ -10,7 +10,7 @@ VK → observation pipeline (DB-backed, инкрементальный).
                 INSERT INTO vk_post ON CONFLICT DO NOTHING.
   2. dates    — для vk_post.foray_date IS NULL: regex-парсинг текста;
                 --llm добавляет Claude-фоллбэк на не распознанное.
-  3. photos   — для vk_post.photo_processed_at IS NULL: LM Studio (Gemma).
+  3. photos   — для vk_post.photo_processed_at IS NULL: LM Studio (Qwen3.5).
                 Пропускает зимние месяцы и «нерелевантные» по тексту.
   4. promote  — INSERT INTO observation из vk_post, где есть и foray_date
                 и photo_species; флаг observation_written = TRUE.
@@ -26,7 +26,7 @@ Env (.env):
   VK_TOKEN          — токен ВК API
   DATABASE_URL      — postgresql://... (или POSTGRES_* переменные)
   LM_STUDIO_URL     — http://127.0.0.1:1234/v1/chat/completions
-  LM_STUDIO_MODEL   — google/gemma-3-12b
+  LM_STUDIO_MODEL   — qwen/qwen3.5-9b (по умолчанию)
   ANTHROPIC_API_KEY — опционально, для даты-фоллбэка
 """
 
@@ -60,82 +60,41 @@ VK_DELAY_SEC    = 0.35
 
 LM_STUDIO_URL   = os.getenv("LM_STUDIO_URL",
                             "http://127.0.0.1:1234/v1/chat/completions")
-LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "google/gemma-3-12b")
+LM_STUDIO_MODEL = os.getenv("LM_STUDIO_MODEL", "qwen/qwen3.5-9b")
+# Thinking-режим (Qwen3 etc) на классификации картинок не помогает и сильно
+# замедляет прогон. Безвреден для моделей без thinking mode.
+DISABLE_THINKING = os.getenv("DISABLE_THINKING", "1") == "1"
 
 
-def build_database_url() -> str:
-    if url := os.getenv("DATABASE_URL"):
-        return url
-    user = os.getenv("POSTGRES_USER",     "mushroom")
-    pw   = os.getenv("POSTGRES_PASSWORD", "mushroom_dev")
-    host = os.getenv("POSTGRES_HOST",     "127.0.0.1")
-    port = os.getenv("POSTGRES_PORT",     "5434")
-    db   = os.getenv("POSTGRES_DB",       "mushroom_map")
-    return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
+from db_utils import build_dsn as build_database_url
 
 
-# Версия промпта и маппинга — при изменении бампается, photos-stage
-# автоматически перегоняет все посты где photo_prompt_version != текущей.
-PHOTO_PROMPT_VERSION = "v6-schema-2026-04-17"
+# Контракт с DB: при изменении бампаем — photos-stage автоматически перегоняет
+# посты с photo_prompt_version != текущей. Файлы промпта/схемы версионируются
+# по имени (vk_classify_v9.txt → vk_classify_v10.txt при новой версии).
+PHOTO_PROMPT_VERSION = "v9-merge-chanterelle-allphotos-2026-04-19"
+_PROMPTS_DIR = Path(__file__).parent / "prompts"
+CLASSIFY_PROMPT = (_PROMPTS_DIR / "vk_classify_v9.txt").read_text(encoding="utf-8")
+CLASSIFY_SCHEMA = json.loads((_PROMPTS_DIR / "vk_classify_schema_v9.json").read_text(encoding="utf-8"))
 
-# JSON Schema для structured output в LM Studio. Constrained sampling
-# гарантирует валидную структуру и species/scene только из enum — не
-# нужно валидировать парсить.
-#
-# Сохраняем схему здесь же чтобы версионирование промпта её тоже покрывало:
-# меняется набор видов → бампается PHOTO_PROMPT_VERSION → автоперегон.
-CLASSIFY_SCHEMA = {
-    "type": "array",
-    "items": {
-        "type": "object",
-        "properties": {
-            "species": {
-                "type": "string",
-                "enum": [
-                    "porcini", "aspen_bolete", "birch_bolete", "butter_bolete",
-                    "chanterelle", "trumpet_chanterelle",
-                    "saffron_milkcap", "white_milkcap", "woolly_milkcap",
-                    "spring_mushroom", "honey_fungus", "oyster", "russula",
-                    "other",
-                ],
-            },
-            "count": {"type": "integer", "minimum": 0, "maximum": 500},
-            "scene": {
-                "type": "string",
-                "enum": ["basket", "kitchen", "forest", "other"],
-            },
-        },
-        "required": ["species", "count", "scene"],
-        "additionalProperties": False,
-    },
-}
-
-# Маппинг ключей от Gemma → slug'и в таблице species.
-# Добавлены 4 вида которые реально часто встречаются в ЛО и имеют
-# distinctive визуальные признаки: маслёнок (блестящая шляпка),
-# рыжик (концентрические кольца), груздь (белый волнистый край),
-# волнушка (розовый с зонами).
-#
-# Один ключ → несколько slug'ов там где Gemma не может различить
-# (подосиновик красный vs жёлто-бурый — пишем оба; сморчок/шапочка/
-# строчок — все три; опёнок осенний vs летний — оба).
+# Один ключ → несколько slug'ов там где Gemma/Qwen не различают визуально
+# (подосиновик красный vs жёлто-бурый; сморчок/шапочка/строчок; опёнок
+# осенний vs летний). Ягоды без маппинга — promote их игнорирует.
 GROUP_TO_SLUGS: dict[str, list[str]] = {
-    "porcini":             ["boletus-edulis"],                               # Белый
-    "aspen_bolete":        ["leccinum-aurantiacum", "leccinum-versipelle"],  # Подосиновик
-    "birch_bolete":        ["leccinum-scabrum"],                             # Подберёзовик
-    "butter_bolete":       ["suillus-luteus", "suillus-granulatus"],         # Маслёнок
-    "chanterelle":         ["cantharellus-cibarius"],                        # Лисичка
-    "trumpet_chanterelle": ["craterellus-tubaeformis"],                      # Лисичка трубчатая
-    "saffron_milkcap":     ["lactarius-deliciosus"],                         # Рыжик
-    "white_milkcap":       ["lactarius-resimus"],                            # Груздь
-    "woolly_milkcap":      ["lactarius-torminosus"],                         # Волнушка
-    "spring_mushroom":     ["morchella-esculenta",                           # Сморчок /
-                            "verpa-bohemica",                                # сморчковая шапочка /
-                            "gyromitra-esculenta"],                          # строчок
-    "honey_fungus":        ["armillaria-mellea", "kuehneromyces-mutabilis"], # Опята
-    "oyster":              ["pleurotus-ostreatus"],                          # Вешенка
-    "russula":             ["russula-vesca"],                                # Сыроежка
-    # "other" / "none" → игнорируем (нет соответствующего slug'а)
+    "porcini":             ["boletus-edulis"],
+    "pine_bolete":         ["boletus-edulis"],
+    "aspen_bolete":        ["leccinum-aurantiacum", "leccinum-versipelle"],
+    "birch_bolete":        ["leccinum-scabrum"],
+    "mokhovik":            ["xerocomus-subtomentosus"],
+    "chanterelle":         ["cantharellus-cibarius", "craterellus-tubaeformis"],
+    "saffron_milkcap":     ["lactarius-deliciosus"],
+    "white_milkcap":       ["lactarius-resimus"],
+    "woolly_milkcap":      ["lactarius-torminosus"],
+    "spring_mushroom":     ["morchella-esculenta", "verpa-bohemica", "gyromitra-esculenta"],
+    "honey_fungus":        ["armillaria-mellea", "kuehneromyces-mutabilis"],
+    "oyster":              ["pleurotus-ostreatus"],
+    "russula":             ["russula-vesca"],
+    "fly_agaric":          ["amanita-muscaria"],
 }
 
 # Нерелевантные посты на стадии фото (не про реальный сбор грибов).
@@ -171,81 +130,6 @@ SKIP_DATE_RE = re.compile("|".join([
     r"с\s+новым\s+год|новогодн",
     r"8\s*марта|23\s*февраля|день\s+защитника",
 ]), re.IGNORECASE)
-
-CLASSIFY_PROMPT = """Classify mushrooms in this photo from a Leningrad Oblast
-(Russia) VK foraging group. Expect boreal/temperate species.
-
-RULES:
-1. No mushrooms visible (landscape, recipe, berries, fish, people alone)
-   → return empty array.
-2. Mushrooms visible → ALWAYS classify. Use a specific KEY when you're
-   confident about its match; use "other" when mushroom is visible but
-   unsure which key. Don't skip mushrooms.
-3. Multiple species in one photo → multiple entries.
-4. count = TOTAL mushrooms of that species visible in the WHOLE photo,
-   SUMMED ACROSS ALL containers/piles/areas. Never per-basket.
-   Hints: full basket ≈ 30-50, half ≈ 15-25, handful ≈ 5-10, few ≈ 1-3.
-5. scene tells how the photo was taken:
-   - basket = in basket/bucket/pan/container, or cut and stacked
-   - kitchen = cooking prep, cleaning, drying
-   - forest = growing, being picked, held in hand in the woods
-   - other = close-up on neutral background, else
-
-KEYS (13 mushrooms commonly collected in Ленобласть):
-
-BOLETES (sponge/tubes under cap, fleshy stem):
-- porcini — THICK BULBOUS stem with fine WHITE NETTING, brown cap,
-  cream pores. "Белый гриб / боровик"
-- aspen_bolete — ORANGE or red-orange cap + dark speckled stem.
-  "Подосиновик"
-- birch_bolete — GREY-BROWN smooth cap (NOT orange) + dark speckled
-  stem. "Подберёзовик"
-- butter_bolete — SHINY/WET/STICKY brown cap, yellow pores, often a
-  ring on stem, young pine forest. "Маслёнок"
-
-CHANTERELLES (trumpet shape, false gills running DOWN the stem):
-- chanterelle — BRIGHT GOLDEN-YELLOW trumpet. "Лисичка"
-- trumpet_chanterelle — SMALL BROWN-GREY funnel, HOLLOW stem, autumn.
-  "Лисичка трубчатая"
-
-MILKCAPS (brittle, milky juice when broken):
-- saffron_milkcap — ORANGE cap with CONCENTRIC RINGS, in pine/spruce.
-  "Рыжик"
-- white_milkcap — WHITE cap with WAVY/FRINGED edges, often stacked in
-  basket. "Груздь"
-- woolly_milkcap — PINK cap with CONCENTRIC ZONES and HAIRY/FRINGED
-  edge. "Волнушка"
-
-OTHER:
-- spring_mushroom — WRINKLED HONEYCOMB or BRAIN cap, spring (Apr-May).
-  Сморчок/сморчковая шапочка/строчок (all similar).
-- honey_fungus — CLUSTERS of small tan caps on WOOD or at tree base.
-  "Опёнок"
-- oyster — LARGE SHELL/FAN caps growing SIDEWAYS from tree trunks,
-  no central stem. "Вешенка"
-- russula — BRITTLE flat cap, bright colours (red/yellow/green/purple),
-  white stem, NO ring. "Сыроежка"
-
-- other — mushroom not clearly matching above. Use for мухоморы,
-  польский гриб, моховики, зонтик, трутовики, горькушки, rare species.
-
-Key choice examples (visual → key):
-- Cream cap with thick netted stem → porcini
-- Orange cap with dark speckled stem → aspen_bolete
-- Shiny brown cap with yellow pores → butter_bolete
-- Orange cap with concentric rings → saffron_milkcap
-- White wavy-edged cap → white_milkcap
-- Pink zoned cap with hairy edge → woolly_milkcap
-- Tan caps clustering on a stump → honey_fungus
-- Shelf-like white cap on tree trunk → oyster
-- Wrinkled honeycomb cap, April-May → spring_mushroom
-- Red cap with white dots → other (fly agaric, not in our list)
-
-Multi-container examples (totals):
-- 3 baskets × ~30 chanterelles → [{species:chanterelle, count:90, scene:basket}]
-- Porcini basket + chanterelle basket → 2 entries, one per species
-- Mixed pile of 40 aspen_bolete + 5 porcini → 2 entries with those totals"""
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 #  СТАДИЯ 1: COLLECT — fetch новых постов из VK
@@ -608,23 +492,39 @@ def _download_photo(url: str, timeout: int = 15) -> Optional[bytes]:
     return None
 
 
-def _ask_model(image_bytes: bytes, retries: int = 3) -> list[dict]:
+def _resize_image(image_bytes: bytes, max_side: int = 768) -> bytes:
+    """Уменьшает изображение до max_side px по длинной стороне (JPEG, q=85)."""
+    from PIL import Image
+    import io
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    w, h = img.size
+    if max(w, h) > max_side:
+        scale = max_side / max(w, h)
+        img = img.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=85)
+    return buf.getvalue()
+
+
+def _ask_model(image_bytes: bytes, model: Optional[str] = None, retries: int = 3) -> list[dict]:
     """Отправляет фото в LM Studio. Возвращает список {species, count, scene}.
 
     Использует constrained sampling через response_format=json_schema,
     поэтому ответ ГАРАНТИРОВАННО валиден по CLASSIFY_SCHEMA — парсить
     regex'ами и чинить "count":30-50 больше не нужно.
     """
+    image_bytes = _resize_image(image_bytes)
     img_b64 = base64.b64encode(image_bytes).decode()
+    prompt_text = ("/no_think\n\n" if DISABLE_THINKING else "") + CLASSIFY_PROMPT
     payload = {
-        "model": LM_STUDIO_MODEL,
+        "model": model or LM_STUDIO_MODEL,
         "messages": [{"role": "user", "content": [
             {"type": "image_url",
              "image_url": {"url": f"data:image/jpeg;base64,{img_b64}"}},
-            {"type": "text", "text": CLASSIFY_PROMPT},
+            {"type": "text", "text": prompt_text},
         ]}],
         "temperature": 0.1,
-        "max_tokens": 400,
+        "max_tokens": 1000,
         "response_format": {
             "type": "json_schema",
             "json_schema": {
@@ -634,6 +534,11 @@ def _ask_model(image_bytes: bytes, retries: int = 3) -> list[dict]:
             },
         },
     }
+    if DISABLE_THINKING:
+        # Документированный способ Qwen3: параметр chat-шаблона.
+        # `/no_think` в тексте пользователя LM Studio игнорирует.
+        # Для моделей без thinking-mode этот параметр безвреден.
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
 
     for attempt in range(retries):
         try:
@@ -645,14 +550,41 @@ def _ask_model(image_bytes: bytes, retries: int = 3) -> list[dict]:
                 time.sleep(2 ** attempt)
                 continue
 
-            content = resp.json()["choices"][0]["message"]["content"]
-            # Schema enforces valid JSON — но на всякий случай ловим ошибку
+            data = resp.json()
+            msg = data["choices"][0]["message"]
+            content = msg.get("content") or ""
+            reasoning = msg.get("reasoning_content") or ""
+            finish_reason = data["choices"][0].get("finish_reason")
+
+            # Qwen3 через LM Studio кладёт ответ в reasoning_content, а
+            # content оставляет пустым (считает всё «размышлением»).
+            # /no_think не всегда убирает это — просто падаем в reasoning.
+            raw = content.strip() or reasoning.strip()
+            if not raw:
+                print(f"  empty output: finish={finish_reason} "
+                      f"usage={data.get('usage', {})}")
+                return []
+
+            # На всякий случай вырезаем <think>...</think> если модель
+            # выдала их внутри поля (редко)
+            raw = re.sub(r"<think>.*?</think>\s*", "", raw, flags=re.DOTALL)
+            # ...и ```json … ``` обёртку
+            m = re.search(r"\[.*\]", raw, re.DOTALL)
+            if m:
+                raw = m.group(0)
+
             try:
-                out = json.loads(content)
+                out = json.loads(raw)
                 if isinstance(out, list):
+                    # Клипаем выбросы вроде «count»: 9999 — реальные сборы
+                    # редко превышают 100-150 штук одного вида в кадре.
+                    for it in out:
+                        c = it.get("count")
+                        if isinstance(c, int) and c > 150:
+                            it["count"] = 150
                     return out
             except json.JSONDecodeError as e:
-                print(f"  unexpected non-JSON despite schema: {e}\n  content={content[:200]}")
+                print(f"  non-JSON: {e}\n  raw[:200]={raw[:200]}")
             return []
 
         except (requests.exceptions.ConnectionError,
@@ -688,27 +620,36 @@ def photos_stage(
     conn: psycopg.Connection,
     group: Optional[str],
     limit: Optional[int],
-    n_workers: int = 4,
+    n_workers: int = 5,
     reprocess: bool = False,
+    date_from: Optional[date] = None,
+    date_to: Optional[date] = None,
+    model: Optional[str] = None,
 ) -> int:
-    """Классифицирует фото. Обрабатывает посты где photo_processed_at IS NULL
-    или photo_prompt_version отличается от текущей PHOTO_PROMPT_VERSION.
+    """Классифицирует фото через LM Studio.
 
-    При reprocess=True — берёт ВСЕ посты этой группы (игнорируя фильтры),
-    даже если они уже были обработаны с текущей версией.
+    Результаты пишутся в vk_post_model_result (одна строка на (пост, модель))
+    и дублируются в vk_post.photo_species для совместимости со стадией promote.
 
-    Пропускает зимние месяцы, посты без фото, посты с нерелевантным текстом
-    (для них ставит photo_species = [] и помечает текущую версию).
+    При reprocess=True — перегоняет все посты, даже уже обработанные.
     """
+    run_model = model or LM_STUDIO_MODEL
+
     try:
         base = LM_STUDIO_URL.rsplit("/chat/completions", 1)[0]
-        requests.get(f"{base}/models", timeout=5)
+        r = requests.get(f"{base}/models", timeout=5)
+        loaded = [m["id"] for m in r.json().get("data", [])]
     except Exception:
         print(f"LM Studio недоступна: {LM_STUDIO_URL}")
         print("Запустите сервер LM Studio и укажите LM_STUDIO_URL в .env")
         sys.exit(1)
-    print(f"  LM Studio: {LM_STUDIO_URL}  model: {LM_STUDIO_MODEL}")
-    print(f"  prompt version: {PHOTO_PROMPT_VERSION}")
+    if run_model not in loaded:
+        print(f"\n  ⚠  модель {run_model!r} НЕ загружена в LM Studio.")
+        print(f"  Загружены: {loaded}")
+        print(f"  Либо подгрузи нужную модель, либо укажи --model с ID из списка.\n")
+        sys.exit(1)
+    print(f"  LM Studio: {LM_STUDIO_URL}  model: {run_model}")
+    print(f"  prompt version: {PHOTO_PROMPT_VERSION}  thinking: {'OFF' if DISABLE_THINKING else 'ON'}")
 
     sql = """
         SELECT id, post_id, date_ts, text, photo_urls
@@ -717,64 +658,105 @@ def photos_stage(
     """
     params: list = []
     if not reprocess:
+        # Пост нужно обработать если для этой (модели, версии) ещё нет строки
         sql += """
-            AND (photo_processed_at IS NULL
-                 OR photo_prompt_version IS DISTINCT FROM %s)
+            AND NOT EXISTS (
+                SELECT 1 FROM vk_post_model_result r
+                WHERE r.vk_post_id = vk_post.id
+                  AND r.model = %s
+                  AND r.prompt_version = %s
+            )
         """
-        params.append(PHOTO_PROMPT_VERSION)
+        params.extend([run_model, PHOTO_PROMPT_VERSION])
     if group:
         sql += " AND vk_group = %s"
         params.append(group)
-    sql += " ORDER BY date_ts DESC"
+    if date_from:
+        sql += " AND date_ts >= %s"
+        params.append(date_from)
+    if date_to:
+        sql += " AND date_ts < %s"
+        params.append(date_to)
+    sql += " ORDER BY date_ts DESC, id DESC"  # id для детерминированности при ties
     if limit:
         sql += " LIMIT %s"
         params.append(limit)
 
     rows = conn.execute(sql, params).fetchall()
-    print(f"  {len(rows)} posts to process"
+    range_note = ""
+    if date_from or date_to:
+        range_note = f" [{date_from or '...'} .. {date_to or '...'}]"
+    print(f"  {len(rows)} posts to process{range_note}"
           f"{' (reprocessing all)' if reprocess else ''}")
     if not rows:
         return 0
 
-    # Разделяем: сразу помечаем «пусто» либо отправляем модели
-    skip_updates = []
-    to_process = []
-    for pk, _post_id, date_ts, text, photo_urls in rows:
-        if not photo_urls:
-            skip_updates.append((json.dumps([]), PHOTO_PROMPT_VERSION, pk))
-            continue
-        if date_ts.month in WINTER_MONTHS:
-            skip_updates.append((json.dumps([]), PHOTO_PROMPT_VERSION, pk))
-            continue
-        if text and SKIP_PHOTO_RE.search(text):
-            skip_updates.append((json.dumps([]), PHOTO_PROMPT_VERSION, pk))
-            continue
-        to_process.append((pk, photo_urls))
-
-    if skip_updates:
+    def _write_results(
+        results: list[tuple],  # (json_str, pk)
+    ) -> None:
+        """Пишет в vk_post_model_result и обновляет vk_post.photo_species."""
+        model_rows = [
+            (pk, run_model, PHOTO_PROMPT_VERSION, species_json)
+            for species_json, pk in results
+        ]
+        vk_rows = [
+            (species_json, PHOTO_PROMPT_VERSION, pk)
+            for species_json, pk in results
+        ]
         with conn.cursor() as cur:
+            cur.executemany(
+                """INSERT INTO vk_post_model_result
+                     (vk_post_id, model, prompt_version, photo_species)
+                   VALUES (%s, %s, %s, %s::jsonb)
+                   ON CONFLICT (vk_post_id, model)
+                   DO UPDATE SET prompt_version = EXCLUDED.prompt_version,
+                                 photo_species  = EXCLUDED.photo_species,
+                                 processed_at   = now()""",
+                model_rows,
+            )
             cur.executemany(
                 """UPDATE vk_post SET
                      photo_species = %s::jsonb,
                      photo_processed_at = now(),
                      photo_prompt_version = %s
                    WHERE id = %s""",
-                skip_updates,
+                vk_rows,
             )
         conn.commit()
+
+    # Разделяем: сразу помечаем «пусто» либо отправляем модели
+    skip_updates: list[tuple] = []
+    to_process = []
+    for pk, _post_id, date_ts, text, photo_urls in rows:
+        empty = json.dumps([])
+        if not photo_urls:
+            skip_updates.append((empty, pk))
+            continue
+        if date_ts.month in WINTER_MONTHS:
+            skip_updates.append((empty, pk))
+            continue
+        if text and SKIP_PHOTO_RE.search(text):
+            skip_updates.append((empty, pk))
+            continue
+        to_process.append((pk, photo_urls))
+
+    if skip_updates:
+        _write_results(skip_updates)
         print(f"  {len(skip_updates)} posts skipped (winter / no photos / irrelevant)")
 
     print(f"  {len(to_process)} posts go to LM Studio")
 
-    def process_one(pk: int, urls: list[str]) -> tuple[int, list[dict]]:
-        # Семплирование по числу фото: до 4 вызовов на пост.
+    def process_one(pk: int, urls: list[str]) -> tuple[int, list[dict], str]:
+        # Семплирование до 6 фото на пост, равномерно по индексам. Если фото
+        # ≤ 6 — берём все. Раньше было ≤ 4, но на многофотных постах
+        # пропускали виды, попавшие только в середину галереи.
         n = len(urls)
-        if n <= 2:
+        MAX_PHOTOS = 6
+        if n <= MAX_PHOTOS:
             sample_urls = list(urls)
-        elif n <= 5:
-            sample_urls = [urls[0], urls[n // 2], urls[-1]]
         else:
-            sample_urls = [urls[0], urls[n // 3], urls[2 * n // 3], urls[-1]]
+            step = (n - 1) / (MAX_PHOTOS - 1)
+            sample_urls = [urls[round(i * step)] for i in range(MAX_PHOTOS)]
 
         # Собираем результаты по фото в сыром виде (не сразу мерджим)
         per_photo: list[list[dict]] = []
@@ -782,21 +764,14 @@ def photos_stage(
             img = _download_photo(url)
             if img is None:
                 continue
-            items = _ask_model(img)
+            items = _ask_model(img, model=run_model)
             per_photo.append(items)
 
-        # Scene-aware агрегация:
-        #   Если у вида есть basket/kitchen фото — доверяем самому большому
-        #   такому снимку (это «итоговая корзина»), forest-фото игнорируются
-        #   (на них тот же урожай до укладки). Это MAX_basket.
-        #
-        #   Если у вида ТОЛЬКО forest/other сцены — суммируем, предполагая
-        #   что каждое фото — отдельная находка. Под-оценка возможна если
-        #   одно и то же грибное тело сняли дважды, но для случая «несколько
-        #   разных грибов показывают по одному» (типично при walk-and-pick)
-        #   SUM точнее чем MAX.
-        basket_counts: dict[str, int] = {}     # sp -> max count across basket/kitchen photos
-        forest_counts: dict[str, list[int]] = {}  # sp -> list of counts from forest/other
+        # Scene-aware: если есть basket/kitchen фото — берём MAX (один такой
+        # снимок = итоговая корзина); если только forest/other — суммируем
+        # (walk-and-pick: каждое фото = отдельная находка).
+        basket_counts: dict[str, int] = {}
+        forest_counts: dict[str, list[int]] = {}
         n_photos_with_sp: dict[str, int] = {}
 
         for items in per_photo:
@@ -834,34 +809,34 @@ def photos_stage(
             })
         return pk, result
 
-    BATCH = 100
+    # Чекпоинт каждые CHECKPOINT постов — если прервёшь Ctrl+C, прогресс
+    # сохраняется (уже записанные (post, model) не будут процесситься при
+    # рестарте благодаря WHERE NOT EXISTS).
+    # Лог образца каждые LOG_EVERY постов — видно что реально находит модель.
+    CHECKPOINT = 10
+
     total_updated = len(skip_updates)
+    pending: list[tuple] = []
+    done = 0
 
-    for start in range(0, len(to_process), BATCH):
-        batch = to_process[start : start + BATCH]
-        photo_updates = []
-        with ThreadPoolExecutor(max_workers=n_workers) as ex:
-            futures = {ex.submit(process_one, pk, urls): pk for pk, urls in batch}
+    with ThreadPoolExecutor(max_workers=n_workers) as ex:
+        futures = {ex.submit(process_one, pk, urls): pk for pk, urls in to_process}
+        try:
             for fut in tqdm(as_completed(futures), total=len(futures),
-                            desc=f"photos {start}/{len(to_process)}", unit="post"):
+                            desc="photos", unit="post"):
                 pk, result = fut.result()
-                photo_updates.append((
-                    json.dumps(result, ensure_ascii=False),
-                    PHOTO_PROMPT_VERSION,
-                    pk,
-                ))
+                pending.append((json.dumps(result, ensure_ascii=False), pk))
+                done += 1
 
-        with conn.cursor() as cur:
-            cur.executemany(
-                """UPDATE vk_post SET
-                     photo_species = %s::jsonb,
-                     photo_processed_at = now(),
-                     photo_prompt_version = %s
-                   WHERE id = %s""",
-                photo_updates,
-            )
-        conn.commit()
-        total_updated += len(photo_updates)
+                if len(pending) >= CHECKPOINT:
+                    _write_results(pending)
+                    total_updated += len(pending)
+                    pending = []
+        finally:
+            if pending:
+                _write_results(pending)
+                total_updated += len(pending)
+                pending = []
 
     print(f"  processed {total_updated} posts")
     return total_updated
@@ -1009,9 +984,15 @@ def main() -> None:
     ap.add_argument("--limit",  type=int, help="ограничение на стадиях dates/photos")
     ap.add_argument("--llm",    action="store_true",
                     help="Claude-фоллбэк для даты")
-    ap.add_argument("--workers", type=int, default=4, help="параллельность LM Studio")
+    ap.add_argument("--workers", type=int, default=5, help="параллельность LM Studio (Qwen3.5-9b loaded with Parallel=5)")
+    ap.add_argument("--date-from", help="фильтр photos: ISO дата (YYYY-MM-DD), включая")
+    ap.add_argument("--date-to",   help="фильтр photos: ISO дата (YYYY-MM-DD), исключая")
+    ap.add_argument("--model",     help="переопределить LM_STUDIO_MODEL для этого прогона")
     ap.add_argument("--dsn", default=build_database_url())
     args = ap.parse_args()
+
+    date_from = datetime.strptime(args.date_from, "%Y-%m-%d").date() if args.date_from else None
+    date_to   = datetime.strptime(args.date_to,   "%Y-%m-%d").date() if args.date_to   else None
 
     if args.step:
         run = [args.step]
@@ -1035,7 +1016,10 @@ def main() -> None:
             dates_stage(conn, args.group, use_llm=args.llm, limit=args.limit)
         if "photos" in run:
             print("\n── stage 3: photos (LM Studio) ──")
-            photos_stage(conn, args.group, limit=args.limit, n_workers=args.workers)
+            photos_stage(conn, args.group, limit=args.limit,
+                         n_workers=args.workers,
+                         date_from=date_from, date_to=date_to,
+                         model=args.model)
         if "promote" in run:
             print("\n── stage 4: promote → observation ──")
             promote_stage(conn, args.group, args.region)

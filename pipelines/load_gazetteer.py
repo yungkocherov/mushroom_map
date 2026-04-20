@@ -35,15 +35,7 @@ from placenames.gazetteer import (  # noqa: E402
 load_dotenv(REPO_ROOT / ".env")
 
 
-def _build_database_url() -> str:
-    if url := os.getenv("DATABASE_URL"):
-        return url
-    user = os.getenv("POSTGRES_USER", "mushroom")
-    pw = os.getenv("POSTGRES_PASSWORD", "mushroom_dev")
-    host = os.getenv("POSTGRES_HOST", "127.0.0.1")
-    port = os.getenv("POSTGRES_PORT", "5434")
-    db = os.getenv("POSTGRES_DB", "mushroom_map")
-    return f"postgresql://{user}:{pw}@{host}:{port}/{db}"
+from db_utils import build_dsn as _build_database_url
 
 
 def _region_bbox(conn, region_code: str) -> tuple[int, tuple[float, float, float, float]]:

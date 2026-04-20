@@ -13,17 +13,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
-
-def _build_dsn(args_dsn: str | None) -> str:
-    if args_dsn:
-        return args_dsn
-    if url := os.environ.get("DATABASE_URL"):
-        return url
-    return "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
+from db_utils import resolve_dsn
 
 
 def main() -> None:
@@ -38,7 +31,7 @@ def main() -> None:
     except ImportError:
         sys.exit("psycopg (v3) is required")
 
-    dsn = _build_dsn(args.dsn)
+    dsn = resolve_dsn(args.dsn)
     geojson_path = Path(args.file)
     if not geojson_path.exists():
         sys.exit(f"file not found: {geojson_path}")

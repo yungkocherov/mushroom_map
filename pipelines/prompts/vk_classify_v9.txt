@@ -1,0 +1,51 @@
+Classify mushrooms AND berries in this photo. Nothing → [].
+List ONLY items you can clearly identify. Don't guess from texture/color
+alone. Typical photo has 2-4 species — listing 8+ usually means guessing.
+One entry per species.
+
+Mushroom keys (distinctive features):
+- porcini: white mushroom with thick bulbous stem (often with white netting
+    pattern), brown cap of ANY shade from pale tan to medium chestnut-brown,
+    cream / yellow pores under cap (no gills). This is the DEFAULT choice
+    for any white-stemmed bolete — use porcini unless the cap is clearly
+    very dark.
+- pine_bolete: same shape as porcini but the cap is UNMISTAKABLY very dark
+    — almost black, deep mahogany, or darkest-chocolate. «Боровик»/
+    «колосовик». If the cap is medium brown or you are uncertain → use
+    porcini instead, NOT pine_bolete.
+- aspen_bolete: orange / red-orange cap, dark speckled stem
+- birch_bolete: grey-brown smooth cap (NOT orange), dark speckled stem
+- mokhovik: small-to-medium bolete, velvety olive / yellow-brown cap (often
+    cracked into pattern), bright yellow pores that bruise blue, slim stem
+- chanterelle: ANY chanterelle / funnel mushroom — covers all variants:
+    · classic chanterelle (bright golden-yellow, trumpet / vase shape)
+    · trumpet chanterelle (small thin funnel, grey-brown outside, yellow
+      inside, HOLLOW stem, autumn, grows in clusters in moss)
+    · horn of plenty / вороночник (dark grey-black funnel, thin flesh)
+    Key signs: funnel / trumpet / vase shape, ribbed (NOT gilled) underside,
+    false gills running down the stem. Use one «chanterelle» entry summing
+    ALL variants visible.
+- saffron_milkcap: orange cap with concentric rings, orange milk
+- white_milkcap: white cap with wavy / fringed edges, white milk
+- woolly_milkcap: pink cap with concentric zones, hairy edge
+- spring_mushroom: wrinkled honeycomb / brain-like cap (spring only)
+- honey_fungus: clusters of small tan caps on wood / stumps
+- oyster: large shell / fan caps sideways on tree trunk, no central stem
+- russula: brittle flat cap, bright color (red/yellow/green/violet), WHITE
+    stem, NO ring, NO white spots on cap
+- fly_agaric: BRIGHT RED cap with WHITE WART-LIKE SPOTS, white stem with
+    a ring (skirt) and a bulbous base. The white spots distinguish it from
+    russula. If cap is red but spotless → russula, not fly_agaric.
+
+Berry keys (only if clearly visible as the main subject):
+- blueberry: small round dark blue / purple-black berries (черника)
+- cloudberry: orange / amber raspberry-shaped berries on low plants (морошка)
+- cranberry: small round bright red berries on moss (клюква)
+
+- other: any mushroom that's clearly visible but doesn't match any key above
+
+count = TOTAL of that species across the WHOLE photo, summed across all
+baskets / piles. Full basket ≈ 30-50, half ≈ 15-25, handful ≈ 5-10.
+
+scene: basket (in container/stacked/cut) | kitchen (cooking/drying) |
+forest (growing/held outdoors) | other (close-up, neutral bg).
