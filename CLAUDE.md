@@ -89,6 +89,11 @@ docker compose logs --tail 50 api
   ЛО+Карелия с pH/CORG. Слой `soil.pmtiles` (1.9 МБ); endpoint `/api/soil/at`
   возвращает polygon + profile_nearest. Используется как feature-extractor
   для модели в sister-репо `ik_mushrooms_parser`.
+- **`osm_waterway`** — линейные водотоки из OSM (stream/river/canal/drain/ditch).
+  ~204k записей в ЛО. Слой `waterway.pmtiles` (26 МБ, zoom 9–14). Endpoint
+  `/api/water/distance/at` возвращает минимум по трём источникам (waterway /
+  water_zone / wetland) с KNN-индексом — feature-extractor для proxy
+  «расстояние до воды → влажность».
 - **`forest_polygon` table** holds raw polygons from multiple sources
   (osm, terranorte, copernicus, rosleshoz). Each row has
   `source`, `source_version`, `source_feature_id` (composite unique key),

@@ -1,4 +1,4 @@
-import type { ForestAtResponse, SoilAtResponse } from "../../../lib/api";
+import type { ForestAtResponse, SoilAtResponse, WaterDistanceResponse } from "../../../lib/api";
 
 const FOREST_NAMES: Record<string, string> = {
   pine: "Сосновый лес",
@@ -46,6 +46,33 @@ const PRIORITY_SPECIES = new Set([
   "Маслёнок зернистый",
 ]);
 
+function fmtDistance(m: number): string {
+  return m < 1000 ? `${Math.round(m)} м` : `${(m / 1000).toFixed(1)} км`;
+}
+
+const WATER_KIND_LABEL: Record<string, string> = {
+  waterway:   "ручей/река",
+  water_zone: "водоохранная зона",
+  wetland:    "болото",
+};
+
+function buildWaterHtml(water: WaterDistanceResponse | null): string {
+  if (!water || !water.nearest) return "";
+  const n = water.nearest;
+  const label = WATER_KIND_LABEL[n.kind] ?? n.kind;
+  const named = n.name ? ` «${n.name}»` : "";
+  // Покажем все три источника если они разные — даёт понимание контекста
+  const bs = water.by_source;
+  const detailBits: string[] = [];
+  if (bs.waterway && bs.waterway !== n) detailBits.push(`ручей ${fmtDistance(bs.waterway.distance_m)}`);
+  if (bs.wetland  && bs.wetland  !== n) detailBits.push(`болото ${fmtDistance(bs.wetland.distance_m)}`);
+  return `
+    <div style="margin-top:6px;font-size:11px;color:#555">
+      💧 До воды: <b>${fmtDistance(n.distance_m)}</b> (${label}${named})
+      ${detailBits.length ? `<div style="font-size:10px;color:#888;margin-top:1px">${detailBits.join(" · ")}</div>` : ""}
+    </div>`;
+}
+
 function buildSoilHtml(soil: SoilAtResponse | null): string {
   if (!soil || !soil.polygon) return "";
   const p = soil.polygon;
@@ -68,10 +95,14 @@ function buildSoilHtml(soil: SoilAtResponse | null): string {
     </div>`;
 }
 
-export function buildPopupHtml(data: ForestAtResponse, soil?: SoilAtResponse | null): string {
+export function buildPopupHtml(
+  data: ForestAtResponse,
+  soil?: SoilAtResponse | null,
+  water?: WaterDistanceResponse | null,
+): string {
   if (!data.forest) {
     return `<div style="font-family:sans-serif;padding:4px 2px;color:#555">
-      Вне лесных полигонов${buildSoilHtml(soil ?? null)}
+      Вне лесных полигонов${buildWaterHtml(water ?? null)}${buildSoilHtml(soil ?? null)}
     </div>`;
   }
 
@@ -145,6 +176,7 @@ export function buildPopupHtml(data: ForestAtResponse, soil?: SoilAtResponse | n
         <tbody>${speciesRows}</tbody>
       </table>`
     : `<p style="color:#aaa;font-size:12px;margin:0">Нет данных о видах для этого типа леса</p>`}
+    ${buildWaterHtml(water ?? null)}
     ${buildSoilHtml(soil ?? null)}
   </div>`;
 }

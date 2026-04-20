@@ -40,6 +40,9 @@ interface Props {
   soilVisible: boolean;
   soilLoaded: boolean;
   onSoilToggle: () => void;
+  waterwayVisible: boolean;
+  waterwayLoaded: boolean;
+  onWaterwayToggle: () => void;
   onShare: () => void;
 }
 
@@ -246,6 +249,16 @@ export function MapControls(props: Props) {
               title={mobile ? undefined : "Почвы (Докучаевский ин-т, 1:2.5М). Тип почвы — сильный предиктор для грибников: подзолы (лисички/моховики), дерново-карбонатные (белые/грузди), болотные (клюква/морошка)."}
             >
               {!props.soilLoaded ? "Почвы" : props.soilVisible ? "Почвы: вкл" : "Почвы: выкл"}
+            </button>
+          </div>
+
+          <div style={cardStyle(mobile)}>
+            <button
+              onClick={props.onWaterwayToggle}
+              style={layerBtn(props.waterwayLoaded, props.waterwayVisible, "#1976d2", mobile)}
+              title={mobile ? undefined : "Водотоки (OSM): реки, ручьи, каналы. Близость к воде = влажность = плодоношение. ~204k объектов в ЛО, виден с zoom 9."}
+            >
+              {!props.waterwayLoaded ? "Ручьи и реки" : props.waterwayVisible ? "Водотоки: вкл" : "Водотоки: выкл"}
             </button>
           </div>
 

@@ -9,7 +9,7 @@ import {
   FOREST_LAYER_PAINT_AGE_GROUP,
   ForestColorMode,
 } from "../lib/forestStyle";
-import { fetchForestAt, fetchSoilAt } from "../lib/api";
+import { fetchForestAt, fetchSoilAt, fetchWaterDistanceAt } from "../lib/api";
 import { useIsMobile } from "../lib/useIsMobile";
 import { MapControls, BaseMapMode } from "./MapControls";
 import { Legend } from "./Legend";
@@ -28,6 +28,7 @@ import { addWetlandLayer, setWetlandVisibility } from "./mapView/layers/wetland"
 import { addFellingLayer, setFellingVisibility } from "./mapView/layers/felling";
 import { addProtectiveLayer, setProtectiveVisibility } from "./mapView/layers/protective";
 import { addSoilLayer, setSoilVisibility } from "./mapView/layers/soil";
+import { addWaterwayLayer, setWaterwayVisibility } from "./mapView/layers/waterway";
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
 
 const _protocol = new Protocol();
@@ -58,6 +59,8 @@ export function MapView() {
   const [protectiveLoaded, setProtectiveLoaded] = useState(false);
   const [soilVisible, setSoilVisible] = useState(true);
   const [soilLoaded, setSoilLoaded] = useState(false);
+  const [waterwayVisible, setWaterwayVisible] = useState(true);
+  const [waterwayLoaded, setWaterwayLoaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const forestVisibleRef = useRef(forestVisible);
@@ -84,6 +87,9 @@ export function MapView() {
   const soilVisibleRef = useRef(soilVisible);
   soilVisibleRef.current = soilVisible;
   const soilLoadedRef = useRef(false);
+  const waterwayVisibleRef = useRef(waterwayVisible);
+  waterwayVisibleRef.current = waterwayVisible;
+  const waterwayLoadedRef = useRef(false);
   // Изначально INLINE_STYLE (osm), useState инициализирован "scheme" → первый
   // useEffect переключит с osm на scheme.
   const appliedBaseMap = useRef<BaseMapMode>("osm");
@@ -145,6 +151,12 @@ export function MapView() {
       if (m.getSource("soil")) m.removeSource("soil");
       addSoilLayer(m);
       setSoilVisibility(m, soilVisibleRef.current);
+    }
+    if (waterwayLoadedRef.current) {
+      if (m.getLayer("waterway-line")) m.removeLayer("waterway-line");
+      if (m.getSource("waterway")) m.removeSource("waterway");
+      addWaterwayLayer(m);
+      setWaterwayVisibility(m, waterwayVisibleRef.current);
     }
   }, []);
 
@@ -295,6 +307,17 @@ export function MapView() {
     [toggleLayerWithCheck],
   );
 
+  const handleWaterwayToggle = useCallback(
+    () => toggleLayerWithCheck(
+      "waterway.pmtiles",
+      "Данные водотоков не загружены — запустите ingest_waterway.py и build_waterway_tiles.py",
+      waterwayLoadedRef, waterwayVisibleRef,
+      setWaterwayLoaded, setWaterwayVisible,
+      addWaterwayLayer, setWaterwayVisibility,
+    ),
+    [toggleLayerWithCheck],
+  );
+
   const handleForestColorMode = useCallback((mode: ForestColorMode) => {
     setForestColorMode(mode);
     const m = map.current;
@@ -395,11 +418,12 @@ export function MapView() {
         .addTo(m);
 
       try {
-        const [forest, soil] = await Promise.all([
+        const [forest, soil, water] = await Promise.all([
           fetchForestAt(lat, lng),
           fetchSoilAt(lat, lng).catch(() => null),
+          fetchWaterDistanceAt(lat, lng).catch(() => null),
         ]);
-        popup.setHTML(buildPopupHtml(forest, soil));
+        popup.setHTML(buildPopupHtml(forest, soil, water));
       } catch {
         popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
       }
@@ -496,6 +520,9 @@ export function MapView() {
         soilVisible={soilVisible}
         soilLoaded={soilLoaded}
         onSoilToggle={handleSoilToggle}
+        waterwayVisible={waterwayVisible}
+        waterwayLoaded={waterwayLoaded}
+        onWaterwayToggle={handleWaterwayToggle}
         onShare={handleShare}
       />
 

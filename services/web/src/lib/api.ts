@@ -91,6 +91,33 @@ export async function fetchSoilAt(lat: number, lon: number): Promise<SoilAtRespo
   return res.json();
 }
 
+// ─── Water distance ────────────────────────────────────────────────────────
+
+export interface WaterCandidate {
+  kind: "waterway" | "water_zone" | "wetland";
+  subtype: string | null;
+  name: string | null;
+  distance_m: number;
+}
+
+export interface WaterDistanceResponse {
+  lat: number;
+  lon: number;
+  nearest: WaterCandidate | null;
+  by_source: {
+    waterway:   WaterCandidate | null;
+    water_zone: WaterCandidate | null;
+    wetland:    WaterCandidate | null;
+  };
+}
+
+export async function fetchWaterDistanceAt(lat: number, lon: number): Promise<WaterDistanceResponse> {
+  const url = `${API_BASE}/api/water/distance/at?lat=${lat}&lon=${lon}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`water/distance/at ${res.status}`);
+  return res.json();
+}
+
 export interface SpeciesSearchResult {
   slug: string;
   name_ru: string;
