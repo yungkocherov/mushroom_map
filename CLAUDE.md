@@ -151,6 +151,18 @@ docker compose logs --tail 50 api
   Поля в `vk_post`: `district_admin_area_id`, `district_confidence`,
   `place_extracted_at`, `place_match JSONB`. **Это ключевая фича для forecast-модели**
   (район × день × группа).
+- **Regex-fallback** `scripts/regex_district_check.py` — 18 ЛО-районов + Карелия +
+  Новгородская/Псковская/Тверская/Вологодская + СПб-районы (Курортный, Приморский,
+  Колпинский, Пушкинский, Красносельский, Невский) + города (СПб, Москва).
+  Паттерны на корне прилагательного (`\bвыборгск\w*`) + донор-топонимы
+  (Лемболово → Всеволожский, Рощино → Выборгский и т.д.). Обходит недостатки NER
+  с хештегами и прилагательными формами. Все найденные места пишутся в
+  `vk_post.place_match.detected_places = [{"name":..., "kind":...}]` — kind =
+  `district_lo | subject_ru | district_spb | city`. После прогона:
+  41508 LO-district matches (60% vs NER'овские 8%), 4297 mention'ов
+  соседних субъектов, 3784 — СПб-районов, 1285 — Карелии. Решение, что из
+  этого брать в модель, принимается SQL-фильтром в mushroom-forecast
+  (по `place_match->'detected_places'`).
 - **Terrain (Copernicus GLO-30 DEM)** — файловые растры в `data/copernicus/terrain/`,
   НЕ в БД (огромный объём, сэмплинг с диска быстрее). `dem_utm.tif` + `slope.tif`
   + `aspect.tif` в EPSG:32636 UTM 36N, 30 m/px. Endpoint `/api/terrain/at`

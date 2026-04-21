@@ -55,43 +55,48 @@ from db_utils import build_dsn  # noqa: E402
 #
 # re.IGNORECASE включён глобально. \b по краям — чтобы не ловить подстроки.
 
-DISTRICT_PATTERNS: dict[str, list[str]] = {
-    "Бокситогорский район": [
+# Структура: name -> {"kind": ..., "patterns": [...]}
+# kind = "district_lo"  — один из 18 районов Ленобласти (идут в district_admin_area_id)
+#      | "subject_ru"   — соседний субъект РФ (Карелия/Новгородская/Псковская)
+#      | "district_spb" — район Санкт-Петербурга
+#      | "city"         — города-сами-субъекты или крупные (СПб, Москва)
+DISTRICT_PATTERNS: dict[str, dict] = {
+    "Бокситогорский район": {"kind": "district_lo", "patterns": [
         r"\bбокситогорск\w*",
         r"\bпикал[её]в\w*",
-    ],
-    "Волосовский район": [
+    ]},
+    "Волосовский район": {"kind": "district_lo", "patterns": [
         r"\bволосовск\w*",
-        r"\bволосов[оае]?\b",      # посёлок Волосово
+        r"\bволосов[оае]?\b",
         r"\bбегуниц\w*",
-    ],
-    "Волховский район": [
+    ]},
+    "Волховский район": {"kind": "district_lo", "patterns": [
         r"\bволховск\w*",
-        r"\bволхов\w*",             # и город, и река
+        r"\bволхов\w*",
         r"\bновая\s+ладога\b",
         r"\bсясьстрой\w*",
-    ],
-    "Всеволожский район": [
+    ]},
+    "Всеволожский район": {"kind": "district_lo", "patterns": [
         r"\bвсеволожск\w*",
-        r"\bлемболов\w*",           # Лемболово
+        r"\bлемболов\w*",
         r"\bтоксов\w*",
         r"\bкавголов\w*",
         r"\bмурин\w*",
         r"\bколтуш\w*",
         r"\bоржицы\b",
         r"\bсертолов\w*",
-        r"\bромашк\w+\s+оз",        # Ромашки оз.
-    ],
-    "Выборгский район": [
+        r"\bромашк\w+\s+оз",
+    ]},
+    "Выборгский район": {"kind": "district_lo", "patterns": [
         r"\bвыборгск\w*",
-        r"\bвыборг[аеу]?\b",        # сам Выборг
+        r"\bвыборг[аеу]?\b",
         r"\bрощин\w*",
         r"\bзеленогорск\w*",
         r"\bкирилловск\w*",
         r"\bзаходское\b",
-        r"\bпервомайск\w*",         # пос. Первомайское
-    ],
-    "Гатчинский муниципальный округ": [
+        r"\bпервомайск\w*",
+    ]},
+    "Гатчинский муниципальный округ": {"kind": "district_lo", "patterns": [
         r"\bгатчинск\w*",
         r"\bгатчин[ае]?\b",
         r"\bвырицк?\w*",
@@ -99,88 +104,185 @@ DISTRICT_PATTERNS: dict[str, list[str]] = {
         r"\bкоммунарск?\w*",
         r"\bверевск\w*",
         r"\bорлин\w*",
-        r"\bдружн\w*\s+г",          # Дружная горка
-    ],
-    "Кингисеппский район": [
+        r"\bдружн\w*\s+г",
+    ]},
+    "Кингисеппский район": {"kind": "district_lo", "patterns": [
         r"\bкингисепп?ск\w*",
         r"\bкингисепп?\b",
         r"\bивангород\w*",
-        r"\bусть[- ]лу\w*",         # Усть-Луга
-    ],
-    "Киришский район": [
+        r"\bусть[- ]лу\w*",
+    ]},
+    "Киришский район": {"kind": "district_lo", "patterns": [
         r"\bкиришск\w*",
         r"\bкириш[аеуи]?\b",
-    ],
-    "Кировский район": [
+    ]},
+    "Кировский район": {"kind": "district_lo", "patterns": [
         r"\bкировск\w*\s+р",        # «Кировский район»
         r"\bкировск\b",             # Кировск-город
-        r"\bмга\b",                 # ж/д станция Мга
+        r"\bмга\b",
         r"\bшлиссельбург\w*",
         r"\bпутилов\w*",
         r"\bсинявин\w*",
         r"\bназия\b",
-    ],
-    "Лодейнопольский район": [
+    ]},
+    "Лодейнопольский район": {"kind": "district_lo", "patterns": [
         r"\bлодейнопол\w*",
         r"\bлодейное\s+поле\b",
         r"\bсвирьстрой\w*",
         r"\bяндеб\w*",
-    ],
-    "Ломоносовский район": [
+    ]},
+    "Ломоносовский район": {"kind": "district_lo", "patterns": [
         r"\bломоносовск\w*",
-        r"\bнизин\w*",              # Низино
+        r"\bнизин\w*",
         r"\bлопухинк\w*",
         r"\bгостилицк?\w*",
         r"\bбольшая\s+ижор\w*",
-        r"\bкопорск?\w*",           # Копорье
-    ],
-    "Лужский район": [
+        r"\bкопорск?\w*",
+    ]},
+    "Лужский район": {"kind": "district_lo", "patterns": [
         r"\bлужск\w*",
-        r"\b(?:в|из|под)\s+лу[ге]\w*",  # в Луге, из Луги, под Лугой
+        r"\b(?:в|из|под)\s+лу[ге]\w*",
         r"\bтолмачев\w*",
         r"\bмшинск\w*",
         r"\bоредеж\w*",
-    ],
-    "Подпорожский район": [
+    ]},
+    "Подпорожский район": {"kind": "district_lo", "patterns": [
         r"\bподпорожск\w*",
         r"\bподпорож[аеу]?\b",
         r"\bвознесен\w*\s+пос",
-    ],
-    "Приозерский район": [
+    ]},
+    "Приозерский район": {"kind": "district_lo", "patterns": [
         r"\bприозерск\w*",
-        r"\bлосев\w*",               # Лосево
-        r"\bорехов\w*",              # Орехово
+        r"\bлосев\w*",
+        r"\bорехов\w*",
         r"\bсосново\b",
         r"\bпетяярв\w*",
-        r"\bгромов\w*",              # Громово
+        r"\bгромов\w*",
         r"\bкузнечн\w*",
         r"\bпятиречь\w*",
-    ],
-    "Сланцевский район": [
+    ]},
+    "Сланцевский район": {"kind": "district_lo", "patterns": [
         r"\bсланцевск\w*",
         r"\bсланц[ыи]\b",
-    ],
-    "Сосновоборский городской округ": [
+    ]},
+    "Сосновоборский городской округ": {"kind": "district_lo", "patterns": [
         r"\bсосновоборск\w*",
         r"\bсосновый\s+бор\b",
-    ],
-    "Тихвинский район": [
+    ]},
+    "Тихвинский район": {"kind": "district_lo", "patterns": [
         r"\bтихвинск\w*",
         r"\bтихвин[аеу]?\b",
-    ],
-    "Тосненский район": [
+    ]},
+    "Тосненский район": {"kind": "district_lo", "patterns": [
         r"\bтосненск\w*",
-        r"\bтосн[оае]\b",            # Тосно
+        r"\bтосн[оае]\b",
         r"\bлюбан\w*",
         r"\bульяновк\w*",
         r"\bфорносов\w*",
-    ],
+    ]},
+
+    # ── Соседние субъекты РФ ─────────────────────────────────────────────
+    # Карелию часто упоминают как «Карельский перешеек» — формально ЛО
+    # (части Выборгского/Приозерского), но когда пост назван именно
+    # «Карелия/Республика Карелия» — это Карелия как субъект.
+    # Для однозначности используем корень «карел» в широком матче — потом
+    # фильтр в forecast-репо разрулит по контексту.
+    "Карелия": {"kind": "subject_ru", "patterns": [
+        r"\bкарел[ьияеу]\w*",            # Карелия, Карелии, карельский, Карельский
+        r"\bрусскинская\b",
+        r"\bсортавал\w*",                # Сортавала
+        r"\bпряж\w+\s+(?:пос|р-?н|район)",
+        r"\bмедвежьегорск\w*",
+        r"\bкондопо[жг]\w*",
+        r"\bолонец\w*",
+    ]},
+    "Новгородская область": {"kind": "subject_ru", "patterns": [
+        r"\bновгородск\w*",
+        r"\bновгородчин\w*",
+        r"\b(?:великий\s+)?новгород[аеу]?\b",
+        r"\bстарая\s+русса\b",
+        r"\bваллдай\w*",
+    ]},
+    "Псковская область": {"kind": "subject_ru", "patterns": [
+        r"\bпсковск\w*",
+        r"\bпсков[аеу]?\b",
+        r"\bпечор\w*",
+        r"\bопочк\w*",
+    ]},
+    "Тверская область": {"kind": "subject_ru", "patterns": [
+        r"\bтверск\w*",
+        r"\bтверь\b",
+    ]},
+    "Вологодская область": {"kind": "subject_ru", "patterns": [
+        r"\bвологодск\w*",
+        r"\bвологд\w*",
+    ]},
+
+    # ── Санкт-Петербург: сам город и его административные районы ─────────
+    # Район СПб ≠ район ЛО — другой admin_level=5. Сохраняем отдельным
+    # kind. «Приморский», «Кировский» совпадают по имени с районами ЛО,
+    # но в СПб они требуют контекста «Приморский район» (иначе не
+    # различить); на LO-district их матчи выше имеют приоритет когда
+    # упомянут ЛО-корневой топоним.
+    "Санкт-Петербург": {"kind": "city", "patterns": [
+        r"\bсанкт[- ]петербург\w*",
+        r"\bспб\b",
+        r"\bпитер[аеуом]?\b",
+    ]},
+    "СПб: Курортный район": {"kind": "district_spb", "patterns": [
+        r"\bкурортн\w+\s+р(?:айон)?",
+        r"\b#курортный\b",
+        r"\bсестрорецк\w*",
+        r"\bзеленогорск\w*\s+(?:пос|парк|пляж)",   # Зеленогорск тоже в Курортном СПб
+        r"\bрепино\b",
+        r"\bкомарово\b",
+    ]},
+    "СПб: Приморский район": {"kind": "district_spb", "patterns": [
+        r"\bприморск\w+\s+р(?:айон)?",
+        r"\b#приморский\b",
+        r"\bстарая\s+деревня\b",
+        r"\bколомяги\b",
+    ]},
+    "СПб: Колпинский район": {"kind": "district_spb", "patterns": [
+        r"\bколпин\w*",
+        r"\bметаллострой\w*",
+    ]},
+    "СПб: Пушкинский район": {"kind": "district_spb", "patterns": [
+        r"\bпушкинск\w+\s+р(?:айон)?",
+        r"\b#пушкинский\b",
+        r"\bцарское\s+село\b",
+        r"\bпавловск\w*",
+    ]},
+    "СПб: Красносельский район": {"kind": "district_spb", "patterns": [
+        r"\bкрасносельск\w*",
+    ]},
+    "СПб: Невский район": {"kind": "district_spb", "patterns": [
+        r"\bневск\w+\s+р(?:айон)?",
+        r"\b#невский\b",
+        r"\bрыбацкое\b",
+    ]},
+    "СПб: Выборгский район": {"kind": "district_spb", "patterns": [
+        r"\b#выборгский\s+район\s+спб\b",
+        # отдельного чёткого pattern нет — часто путают с ЛО. Оставляем пустой,
+        # если нужно — forecast-репо разрулит по контексту.
+    ]},
+
+    # ── Москва и МО (встречаются редко, но для полноты) ──────────────────
+    "Москва": {"kind": "city", "patterns": [
+        r"\bмосквич\w*",
+        r"\bмоскв[аеу]\b",
+        r"\bмосковск\w+\s+обл",
+    ]},
 }
 
 # Компилируем с re.IGNORECASE один раз
-COMPILED: dict[str, list[re.Pattern]] = {
-    name: [re.compile(p, re.IGNORECASE) for p in patterns]
-    for name, patterns in DISTRICT_PATTERNS.items()
+COMPILED: dict[str, dict] = {
+    name: {
+        "kind": meta["kind"],
+        "patterns": [re.compile(p, re.IGNORECASE) for p in meta["patterns"]],
+    }
+    for name, meta in DISTRICT_PATTERNS.items()
+    if meta["patterns"]  # СПб Выборгский имеет пустой список — пропускаем
 }
 
 
@@ -220,16 +322,22 @@ def frequency_mode(conn, limit: int | None) -> None:
 
 # ─── check mode ──────────────────────────────────────────────────────────────
 
-def match_districts(text: str) -> set[str]:
+def detect_places(text: str) -> list[dict]:
+    """Возвращает все матчи: [{"name": ..., "kind": ...}, ...]."""
     if not text:
-        return set()
-    hits: set[str] = set()
-    for name, patterns in COMPILED.items():
-        for rx in patterns:
+        return []
+    hits: list[dict] = []
+    for name, meta in COMPILED.items():
+        for rx in meta["patterns"]:
             if rx.search(text):
-                hits.add(name)
+                hits.append({"name": name, "kind": meta["kind"]})
                 break
     return hits
+
+
+def match_districts(text: str) -> set[str]:
+    """Только LO-districts (для обратной совместимости с --write)."""
+    return {h["name"] for h in detect_places(text) if h["kind"] == "district_lo"}
 
 
 def check_mode(conn, limit: int | None, write: bool) -> None:
@@ -250,81 +358,105 @@ def check_mode(conn, limit: int | None, write: bool) -> None:
             "SELECT name_ru, id FROM admin_area WHERE region_id = 1 AND level = 6"
         ).fetchall()
     )
-    missing = [n for n in DISTRICT_PATTERNS if n not in id_by_name]
-    if missing:
-        print(f"WARN: admin_area не содержит: {missing}")
+    missing_lo = [
+        name for name, meta in DISTRICT_PATTERNS.items()
+        if meta["kind"] == "district_lo" and name not in id_by_name
+    ]
+    if missing_lo:
+        print(f"WARN: admin_area не содержит LO-района: {missing_lo}")
 
+    # ── LO-статы (как раньше, для совместимости) ────────────────────────
     regex_assigned = 0
     regex_ambiguous = 0
     regex_none = 0
     regex_by_district: Counter[str] = Counter()
-
     both_same = 0
     both_differ = 0
     only_regex = 0
     only_natasha = 0
-    disagreements: list[tuple[int, str, str, str]] = []   # post_id, natasha, regex_list, text_preview
-    write_candidates: list[tuple[int, int]] = []           # (post_id, new_district_id)
+    disagreements: list[tuple[int, str, str, str]] = []
+    lo_write_candidates: list[tuple[int, int]] = []
+
+    # ── Outside-LO / СПб / Карелия статы ────────────────────────────────
+    by_kind: Counter[str] = Counter()
+    by_place: Counter[str] = Counter()
+    place_update_rows: list[tuple[int, list[dict]]] = []
 
     for post_id, text, natasha_id, natasha_name in rows:
-        hits = match_districts(text)
+        places = detect_places(text)
+        lo_hits = {p["name"] for p in places if p["kind"] == "district_lo"}
 
-        if len(hits) == 0:
+        # LO-матчинг (как раньше)
+        if len(lo_hits) == 0:
             regex_none += 1
-        elif len(hits) == 1:
+        elif len(lo_hits) == 1:
             regex_assigned += 1
-            only_name = next(iter(hits))
-            regex_by_district[only_name] += 1
+            regex_by_district[next(iter(lo_hits))] += 1
         else:
             regex_ambiguous += 1
 
-        # Сравнение с Natasha
-        if natasha_name is None and len(hits) == 1:
+        if natasha_name is None and len(lo_hits) == 1:
             only_regex += 1
-            aid = id_by_name.get(next(iter(hits)))
+            aid = id_by_name.get(next(iter(lo_hits)))
             if aid is not None:
-                write_candidates.append((post_id, aid))
-        elif natasha_name is not None and len(hits) == 0:
+                lo_write_candidates.append((post_id, aid))
+        elif natasha_name is not None and len(lo_hits) == 0:
             only_natasha += 1
-        elif natasha_name is not None and len(hits) >= 1:
-            if natasha_name in hits:
+        elif natasha_name is not None and len(lo_hits) >= 1:
+            if natasha_name in lo_hits:
                 both_same += 1
             else:
                 both_differ += 1
                 if len(disagreements) < 10:
                     preview = (text[:140] or "").replace("\n", " ")
-                    disagreements.append((post_id, natasha_name, "|".join(sorted(hits)), preview))
+                    disagreements.append((post_id, natasha_name, "|".join(sorted(lo_hits)), preview))
+
+        # Все kind'ы для общей статистики и detected_places
+        for p in places:
+            by_kind[p["kind"]] += 1
+            by_place[p["name"]] += 1
+
+        # detected_places пишем для каждого поста, у которого хоть что-то нашлось
+        if places:
+            place_update_rows.append((post_id, places))
 
     total = len(rows)
-    print(f"\n== regex stats ==")
-    print(f"  total                {total}")
-    print(f"  assigned (unique)    {regex_assigned}  ({regex_assigned/total*100:.1f}%)")
-    print(f"  ambiguous (>1)       {regex_ambiguous} ({regex_ambiguous/total*100:.1f}%)")
-    print(f"  no match             {regex_none}      ({regex_none/total*100:.1f}%)")
+    print(f"\n== LO district stats ==")
+    print(f"  total                 {total}")
+    print(f"  assigned (unique LO)  {regex_assigned}  ({regex_assigned/total*100:.1f}%)")
+    print(f"  ambiguous (>1 LO)     {regex_ambiguous} ({regex_ambiguous/total*100:.1f}%)")
+    print(f"  no LO match           {regex_none}      ({regex_none/total*100:.1f}%)")
 
-    print(f"\n== regex vs natasha ==")
-    print(f"  both agree           {both_same}")
-    print(f"  both differ          {both_differ}")
-    print(f"  only regex           {only_regex}")
-    print(f"  only natasha         {only_natasha}")
+    print(f"\n== all detected_places by kind ==")
+    for kind, n in by_kind.most_common():
+        print(f"  {kind:18s} {n}")
 
-    print(f"\n== top regex-districts ==")
-    for name, n in regex_by_district.most_common():
-        print(f"  {name:40s} {n}")
+    print(f"\n== regex vs natasha (LO only) ==")
+    print(f"  both agree            {both_same}")
+    print(f"  both differ           {both_differ}")
+    print(f"  only regex            {only_regex}")
+    print(f"  only natasha          {only_natasha}")
+
+    print(f"\n== top places (all kinds) ==")
+    for name, n in by_place.most_common(30):
+        kind = DISTRICT_PATTERNS[name]["kind"]
+        print(f"  [{kind:14s}] {name:40s} {n}")
 
     if disagreements:
-        print(f"\n== sample disagreements (natasha != regex) ==")
+        print(f"\n== sample LO-disagreements (natasha != regex) ==")
         for pid, nat, rg, preview in disagreements:
             print(f"  post {pid}: natasha={nat}, regex={rg}")
             print(f"    text: {preview}")
 
-    if write:
-        if not write_candidates:
-            print("\n(nothing to write)")
-            return
-        print(f"\n== writing {len(write_candidates)} regex-only matches to vk_post ==")
+    if not write:
+        return
+
+    # ── Запись ──────────────────────────────────────────────────────────
+    # 1. LO-unique матчи в district_admin_area_id (только где natasha=NULL)
+    if lo_write_candidates:
+        print(f"\n== writing {len(lo_write_candidates)} LO-only regex matches to district_admin_area_id ==")
         with conn.transaction():
-            for post_id, aid in write_candidates:
+            for post_id, aid in lo_write_candidates:
                 conn.execute(
                     """
                     UPDATE vk_post
@@ -341,7 +473,24 @@ def check_mode(conn, limit: int | None, write: bool) -> None:
                     (aid, post_id),
                 )
         conn.commit()
-        print("  done")
+
+    # 2. detected_places пишем для ВСЕХ постов с матчами
+    #    (в т.ч. где district уже проставлен Natasha — добавляем outside-LO
+    #    и другие findings; это не конфликтует с district_admin_area_id).
+    print(f"\n== writing detected_places for {len(place_update_rows)} posts ==")
+    with conn.transaction():
+        for post_id, places in place_update_rows:
+            conn.execute(
+                """
+                UPDATE vk_post
+                SET place_match = COALESCE(place_match, '{}'::jsonb)
+                                  || jsonb_build_object('detected_places', %s::jsonb)
+                WHERE id = %s
+                """,
+                (json.dumps(places, ensure_ascii=False), post_id),
+            )
+    conn.commit()
+    print("  done")
 
 
 def main() -> None:
