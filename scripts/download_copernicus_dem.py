@@ -16,13 +16,15 @@ BBOX: 58..67 N, 28..37 E = 9 x 9 = 81 тайл, ~30 МБ каждый ~= 2.4 Г�
 
 from __future__ import annotations
 
+import argparse
 import sys
 import time
 import urllib.error
 import urllib.request
 from pathlib import Path
 
-# bbox ЛО + Карелия (integer tile edges).
+# bbox ЛО + Карелия (integer tile edges) — дефолт из первой загрузки.
+# Расширение на Новгород/Псков: --lat-min 57 --lon-min 26.
 LAT_MIN, LAT_MAX = 58, 67  # covers N58..N66 tile rows
 LON_MIN, LON_MAX = 28, 37  # covers E028..E036 tile cols
 
@@ -59,10 +61,17 @@ def download(url: str, dst: Path) -> tuple[bool, str]:
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--lat-min", type=int, default=LAT_MIN)
+    ap.add_argument("--lat-max", type=int, default=LAT_MAX, help="exclusive upper bound")
+    ap.add_argument("--lon-min", type=int, default=LON_MIN)
+    ap.add_argument("--lon-max", type=int, default=LON_MAX, help="exclusive upper bound")
+    args = ap.parse_args()
+
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     tiles = [(lat, lon)
-             for lat in range(LAT_MIN, LAT_MAX)
-             for lon in range(LON_MIN, LON_MAX)]
+             for lat in range(args.lat_min, args.lat_max)
+             for lon in range(args.lon_min, args.lon_max)]
     total = len(tiles)
     ok = skipped = missing = failed = 0
     start = time.time()

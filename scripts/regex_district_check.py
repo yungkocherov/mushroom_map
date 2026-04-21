@@ -340,7 +340,7 @@ def match_districts(text: str) -> set[str]:
     return {h["name"] for h in detect_places(text) if h["kind"] == "district_lo"}
 
 
-def check_mode(conn, limit: int | None, write: bool) -> None:
+def check_mode(conn, limit: int | None, write: bool, rewrite_disagreements: bool = False) -> None:
     limit_sql = f" LIMIT {int(limit)}" if limit else ""
     rows = conn.execute(
         f"""
@@ -376,6 +376,7 @@ def check_mode(conn, limit: int | None, write: bool) -> None:
     only_natasha = 0
     disagreements: list[tuple[int, str, str, str]] = []
     lo_write_candidates: list[tuple[int, int]] = []
+    disagreement_rewrites: list[tuple[int, int, str, str]] = []   # (post_id, new_aid, old_name, new_name)
 
     # ── Outside-LO / СПб / Карелия статы ────────────────────────────────
     by_kind: Counter[str] = Counter()
@@ -410,6 +411,12 @@ def check_mode(conn, limit: int | None, write: bool) -> None:
                 if len(disagreements) < 10:
                     preview = (text[:140] or "").replace("\n", " ")
                     disagreements.append((post_id, natasha_name, "|".join(sorted(lo_hits)), preview))
+                # Для --rewrite-disagreements: если regex дал ровно 1 район, берём его.
+                if len(lo_hits) == 1:
+                    new_name = next(iter(lo_hits))
+                    new_aid = id_by_name.get(new_name)
+                    if new_aid is not None:
+                        disagreement_rewrites.append((post_id, new_aid, natasha_name, new_name))
 
         # Все kind'ы для общей статистики и detected_places
         for p in places:
@@ -447,6 +454,32 @@ def check_mode(conn, limit: int | None, write: bool) -> None:
         for pid, nat, rg, preview in disagreements:
             print(f"  post {pid}: natasha={nat}, regex={rg}")
             print(f"    text: {preview}")
+
+    # ── Перезапись disagreement'ов ──────────────────────────────────────
+    if rewrite_disagreements and disagreement_rewrites:
+        print(f"\n== rewriting {len(disagreement_rewrites)} disagreements (natasha -> regex) ==")
+        with conn.transaction():
+            for post_id, new_aid, old_name, new_name in disagreement_rewrites:
+                conn.execute(
+                    """
+                    UPDATE vk_post
+                    SET district_admin_area_id = %s,
+                        district_confidence    = 0.80,
+                        place_match            = COALESCE(place_match, '{}'::jsonb)
+                                                 || jsonb_build_object(
+                                                     'regex_override',
+                                                     jsonb_build_object(
+                                                         'from', %s::text,
+                                                         'to',   %s::text,
+                                                         'source', 'regex_district_check'
+                                                     )
+                                                 )
+                    WHERE id = %s
+                    """,
+                    (new_aid, old_name, new_name, post_id),
+                )
+        conn.commit()
+        print("  done")
 
     if not write:
         return
@@ -501,6 +534,9 @@ def main() -> None:
                     help="прогнать regex-словарь и сравнить с Natasha (default)")
     ap.add_argument("--write", action="store_true",
                     help="записать regex-only матчи в vk_post (только где Natasha вернула NULL)")
+    ap.add_argument("--rewrite-disagreements", action="store_true",
+                    help="ПЕРЕТРЕТЬ district_admin_area_id в постах, где Natasha и regex "
+                         "дали разные районы (regex надёжнее: проверено на sample'ах)")
     ap.add_argument("--limit", type=int, default=None)
     args = ap.parse_args()
 
@@ -512,7 +548,7 @@ def main() -> None:
         if args.frequency:
             frequency_mode(conn, args.limit)
         if args.check:
-            check_mode(conn, args.limit, args.write)
+            check_mode(conn, args.limit, args.write, args.rewrite_disagreements)
 
 
 if __name__ == "__main__":

@@ -17,8 +17,18 @@ import sys
 import time
 import urllib.request
 
-BBOX = (58.5, 27.8, 61.8, 33.0)  # (south, west, north, east)
+BBOX = (58.5, 27.8, 61.8, 33.0)  # (south, west, north, east) — default LO
 SPLIT = 3
+
+# Расширенный bbox для захвата Новгорода/Пскова/Карельского перешейка.
+# Переключатель — переменная окружения WATERWAY_BBOX (south,west,north,east).
+_env_bbox = os.environ.get("WATERWAY_BBOX")
+if _env_bbox:
+    parts = [float(x) for x in _env_bbox.split(",")]
+    if len(parts) == 4:
+        BBOX = tuple(parts)
+        SPLIT = int(os.environ.get("WATERWAY_SPLIT", "4"))
+        print(f"override BBOX={BBOX} SPLIT={SPLIT}")
 
 ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",

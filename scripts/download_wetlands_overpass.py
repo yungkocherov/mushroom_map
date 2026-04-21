@@ -26,6 +26,16 @@ import urllib.request
 BBOX = (58.5, 27.8, 61.8, 33.0)
 SPLIT = 2  # болот меньше чем дорог — 2×2 достаточно
 
+# Override через env-переменную (для расширения bbox на Новгород/Псков/
+# Карельский перешеек). Пример: WETLAND_BBOX=57.5,25.5,62.5,37.0
+_env_bbox = os.environ.get("WETLAND_BBOX")
+if _env_bbox:
+    parts = [float(x) for x in _env_bbox.split(",")]
+    if len(parts) == 4:
+        BBOX = tuple(parts)
+        SPLIT = int(os.environ.get("WETLAND_SPLIT", "4"))
+        print(f"override BBOX={BBOX} SPLIT={SPLIT}")
+
 ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
