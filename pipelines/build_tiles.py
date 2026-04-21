@@ -105,36 +105,61 @@ def build_tile_bytes(
     Требует предварительно вызванного prepare_projected_source(conn).
     `min_area` — нижний порог area_m2 (для уменьшения файла на низких зумах).
     """
-    # tile_env вычисляется один раз и переиспользуется в WHERE и ST_AsMVTGeom,
-    # чтобы PostGIS не считал ST_TileEnvelope трижды на каждый тайл.
+    # Dissolve: ST_Union группой по (species, bonitet, age_group) объединяет
+    # смежные/перекрывающиеся выделы одинаковых атрибутов в один полигон.
+    # Убирает два артефакта сразу:
+    #   1) микрощели между соседними выделами при MVT-квантовании (hairlines);
+    #   2) тёмные полосы на общих рёбрах из-за 3м-overlap от ST_Buffer в
+    #      forest_3857 (две полупрозрачные заливки наложены → темнее).
+    # Атрибуты полигон-специфичные (id, timber_stock) теряются; кликабельность
+    # через /api/forest/at не ломается — она лезет в БД по координате, не в тайл.
     row = conn.execute(
         """
         WITH tile_env AS (
             SELECT ST_TileEnvelope(%s, %s, %s) AS env
         ),
-        mvt_src AS (
+        candidates AS (
             SELECT
-                f.id,
                 f.dominant_species,
-                f.source,
-                f.confidence,
-                f.area_m2,
                 (f.meta->>'bonitet')::int       AS bonitet,
-                (f.meta->>'timber_stock')::real AS timber_stock,
                 f.meta->>'age_group'            AS age_group,
-                ST_AsMVTGeom(f.geom, tile_env.env, %s, %s, true) AS geom
+                f.area_m2,
+                (f.meta->>'timber_stock')::real AS timber_stock,
+                f.geom
             FROM forest_3857 f, tile_env
             WHERE f.area_m2 >= %s
               AND f.geom && tile_env.env
+        ),
+        dissolved AS (
+            SELECT
+                dominant_species,
+                bonitet,
+                age_group,
+                SUM(area_m2)                    AS area_m2,
+                AVG(timber_stock)               AS timber_stock,
+                ST_Union(ST_MakeValid(geom))    AS geom
+            FROM candidates
+            GROUP BY dominant_species, bonitet, age_group
+        ),
+        mvt_src AS (
+            SELECT
+                ROW_NUMBER() OVER ()            AS id,
+                dominant_species,
+                bonitet,
+                age_group,
+                area_m2,
+                timber_stock,
+                ST_AsMVTGeom(geom, tile_env.env, %s, %s, true) AS geom
+            FROM dissolved, tile_env
         )
         SELECT ST_AsMVT(mvt_src, %s, %s, 'geom')
         FROM mvt_src
         WHERE geom IS NOT NULL
         """,
         (
-            z, x, y,                    # ST_TileEnvelope (один раз)
-            extent, buffer,             # ST_AsMVTGeom
+            z, x, y,                    # ST_TileEnvelope
             min_area,                   # area filter
+            extent, buffer,             # ST_AsMVTGeom
             layer, extent,              # ST_AsMVT
         ),
     ).fetchone()
@@ -163,6 +188,9 @@ def main() -> None:
     print(f"region={args.region} zoom={args.minzoom}..{args.maxzoom} out={out_path}")
 
     with psycopg.connect(dsn, autocommit=True) as conn:
+        # Safety: один тайл с крайне сложной геометрией не должен повесить
+        # всю сборку. На замерах ST_Union худшего тайла ~1.5с, 60s — 40x запас.
+        conn.execute("SET statement_timeout = '60s'")
         bbox = region_bbox(conn, args.region)
         min_lon, min_lat, max_lon, max_lat = bbox
         print(f"bbox: {bbox}")
@@ -201,15 +229,23 @@ def main() -> None:
                 last_log = t_z
                 done_in_z = 0
 
+                z_errors = 0
                 for x in range(x_min, x_max + 1):
                     for y in range(y_min, y_max + 1):
-                        data = build_tile_bytes(
-                            conn, z, x, y,
-                            layer=args.layer,
-                            extent=args.extent,
-                            buffer=args.buffer,
-                            min_area=min_area_z,
-                        )
+                        try:
+                            data = build_tile_bytes(
+                                conn, z, x, y,
+                                layer=args.layer,
+                                extent=args.extent,
+                                buffer=args.buffer,
+                                min_area=min_area_z,
+                            )
+                        except psycopg.errors.QueryCanceled:
+                            # statement_timeout — пропускаем тайл, не роняем сборку.
+                            z_errors += 1
+                            done_in_z += 1
+                            print(f"     [timeout] z={z} x={x} y={y}", flush=True)
+                            continue
                         done_in_z += 1
                         if data is None:
                             z_empty += 1
@@ -233,7 +269,7 @@ def main() -> None:
                 dt = time.monotonic() - t_z
                 rate = n_tiles / dt if dt > 0 else 0.0
                 print(
-                    f"     done: ok={z_ok} empty={z_empty} "
+                    f"     done: ok={z_ok} empty={z_empty} errors={z_errors} "
                     f"({rate:.0f} tile/s, {dt:.1f}s)",
                     flush=True,
                 )

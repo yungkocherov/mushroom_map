@@ -34,6 +34,7 @@ services:
     volumes:
       - ./services/api:/app
       - ./data/tiles:/tiles:ro
+      - ./data/copernicus/terrain:/terrain:ro
     profiles: ["full"]
 
   web:

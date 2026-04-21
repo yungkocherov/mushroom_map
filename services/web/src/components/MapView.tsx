@@ -9,7 +9,7 @@ import {
   FOREST_LAYER_PAINT_AGE_GROUP,
   ForestColorMode,
 } from "../lib/forestStyle";
-import { fetchForestAt, fetchSoilAt, fetchWaterDistanceAt } from "../lib/api";
+import { fetchForestAt, fetchSoilAt, fetchWaterDistanceAt, fetchTerrainAt } from "../lib/api";
 import { useIsMobile } from "../lib/useIsMobile";
 import { MapControls, BaseMapMode } from "./MapControls";
 import { Legend } from "./Legend";
@@ -29,6 +29,8 @@ import { addFellingLayer, setFellingVisibility } from "./mapView/layers/felling"
 import { addProtectiveLayer, setProtectiveVisibility } from "./mapView/layers/protective";
 import { addSoilLayer, setSoilVisibility } from "./mapView/layers/soil";
 import { addWaterwayLayer, setWaterwayVisibility } from "./mapView/layers/waterway";
+import { addHillshadeLayer, setHillshadeVisibility } from "./mapView/layers/hillshade";
+import { addDistrictsLayer, setDistrictsVisibility } from "./mapView/layers/districts";
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
 
 const _protocol = new Protocol();
@@ -61,7 +63,15 @@ export function MapView() {
   const [soilLoaded, setSoilLoaded] = useState(false);
   const [waterwayVisible, setWaterwayVisible] = useState(true);
   const [waterwayLoaded, setWaterwayLoaded] = useState(false);
+  const [hillshadeVisible, setHillshadeVisible] = useState(true);
+  const [hillshadeLoaded, setHillshadeLoaded] = useState(false);
+  const [districtsVisible, setDistrictsVisible] = useState(true);
+  const [districtsLoaded, setDistrictsLoaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [vpnToast, setVpnToast] = useState<"hidden" | "visible" | "fading">("hidden");
+  const vpnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [forestHint, setForestHint] = useState<"hidden" | "visible" | "fading">("hidden");
+  const forestHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const forestVisibleRef = useRef(forestVisible);
   forestVisibleRef.current = forestVisible;
@@ -90,6 +100,12 @@ export function MapView() {
   const waterwayVisibleRef = useRef(waterwayVisible);
   waterwayVisibleRef.current = waterwayVisible;
   const waterwayLoadedRef = useRef(false);
+  const hillshadeVisibleRef = useRef(hillshadeVisible);
+  hillshadeVisibleRef.current = hillshadeVisible;
+  const hillshadeLoadedRef = useRef(false);
+  const districtsVisibleRef = useRef(districtsVisible);
+  districtsVisibleRef.current = districtsVisible;
+  const districtsLoadedRef = useRef(false);
   // Изначально INLINE_STYLE (osm), useState инициализирован "scheme" → первый
   // useEffect переключит с osm на scheme.
   const appliedBaseMap = useRef<BaseMapMode>("osm");
@@ -123,7 +139,8 @@ export function MapView() {
       setOoptVisibility(m, ooptVisibleRef.current);
     }
     if (roadsLoadedRef.current) {
-      if (m.getLayer("roads-line")) m.removeLayer("roads-line");
+      if (m.getLayer("roads-line"))   m.removeLayer("roads-line");
+      if (m.getLayer("roads-casing")) m.removeLayer("roads-casing");
       if (m.getSource("roads")) m.removeSource("roads");
       addRoadsLayer(m);
       setRoadsVisibility(m, roadsVisibleRef.current);
@@ -158,6 +175,18 @@ export function MapView() {
       addWaterwayLayer(m);
       setWaterwayVisibility(m, waterwayVisibleRef.current);
     }
+    if (hillshadeLoadedRef.current) {
+      if (m.getLayer("hillshade-raster")) m.removeLayer("hillshade-raster");
+      if (m.getSource("hillshade")) m.removeSource("hillshade");
+      addHillshadeLayer(m);
+      setHillshadeVisibility(m, hillshadeVisibleRef.current);
+    }
+    if (districtsLoadedRef.current) {
+      if (m.getLayer("districts-line")) m.removeLayer("districts-line");
+      if (m.getSource("districts")) m.removeSource("districts");
+      addDistrictsLayer(m);
+      setDistrictsVisibility(m, districtsVisibleRef.current);
+    }
   }, []);
 
   // Если стиль ещё переключается (buildHybridStyle в полёте) — откладываем
@@ -176,6 +205,9 @@ export function MapView() {
       };
       if (m.isStyleLoaded()) doAdd();
       else m.once("idle", doAdd);
+      if (forestHintTimerRef.current) clearTimeout(forestHintTimerRef.current);
+      setForestHint("visible");
+      forestHintTimerRef.current = setTimeout(() => setForestHint("fading"), 4000);
     } else {
       const next = !forestVisibleRef.current;
       forestVisibleRef.current = next;
@@ -318,6 +350,36 @@ export function MapView() {
     [toggleLayerWithCheck],
   );
 
+  const handleHillshadeToggle = useCallback(
+    () => toggleLayerWithCheck(
+      "hillshade.pmtiles",
+      "Hillshade не собран — запустите scripts/download_copernicus_dem.py, build_terrain.py и build_hillshade_tiles.py",
+      hillshadeLoadedRef, hillshadeVisibleRef,
+      setHillshadeLoaded, setHillshadeVisible,
+      addHillshadeLayer, setHillshadeVisibility,
+    ),
+    [toggleLayerWithCheck],
+  );
+
+  // Districts — GeoJSON из /api/districts, не PMTiles. HEAD-проверки не нужно:
+  // если API доступен — данные загрузятся, если нет — MapLibre тихо покажет
+  // пустой слой и в консоль упадёт ошибка fetch (приемлемо для optional слоя).
+  const handleDistrictsToggle = useCallback(() => {
+    const m = map.current;
+    if (!m) return;
+    if (!districtsLoadedRef.current) {
+      districtsLoadedRef.current = true; setDistrictsLoaded(true);
+      districtsVisibleRef.current = true; setDistrictsVisible(true);
+      const doAdd = () => { addDistrictsLayer(m); setDistrictsVisibility(m, true); };
+      if (m.isStyleLoaded()) doAdd();
+      else m.once("idle", doAdd);
+    } else {
+      const next = !districtsVisibleRef.current;
+      districtsVisibleRef.current = next; setDistrictsVisible(next);
+      setDistrictsVisibility(m, next);
+    }
+  }, []);
+
   const handleForestColorMode = useCallback((mode: ForestColorMode) => {
     setForestColorMode(mode);
     const m = map.current;
@@ -328,6 +390,28 @@ export function MapView() {
       FOREST_LAYER_PAINT_COLOR["fill-color"];
     m.setPaintProperty("forest-fill", "fill-color", paint);
   }, []);
+
+  useEffect(() => {
+    if (baseMap === "satellite" || baseMap === "hybrid") {
+      if (vpnTimerRef.current) clearTimeout(vpnTimerRef.current);
+      setVpnToast("visible");
+      vpnTimerRef.current = setTimeout(() => setVpnToast("fading"), 3500);
+    }
+  }, [baseMap]);
+
+  useEffect(() => {
+    if (vpnToast === "fading") {
+      const t = setTimeout(() => setVpnToast("hidden"), 800);
+      return () => clearTimeout(t);
+    }
+  }, [vpnToast]);
+
+  useEffect(() => {
+    if (forestHint === "fading") {
+      const t = setTimeout(() => setForestHint("hidden"), 800);
+      return () => clearTimeout(t);
+    }
+  }, [forestHint]);
 
   const handleShare = useCallback(() => {
     const m = map.current;
@@ -406,11 +490,16 @@ export function MapView() {
     };
     m.on("moveend", syncUrl);
 
-    m.on("click", "forest-fill", async (e) => {
+    // Общий click по карте — показываем попап везде (в т.ч. на почвах/воде/
+    // болотах, где нет forest-полигона). forest/soil/water/terrain тянем
+    // параллельно; buildPopupHtml сам разберётся что показывать.
+    m.on("click", async (e) => {
       if (!e.lngLat) return;
+      // Пропускаем клики по UI-контролам внутри карты.
+      if ((e.originalEvent.target as HTMLElement | null)?.closest(".maplibregl-popup"))
+        return;
       const { lng, lat } = e.lngLat;
 
-      // На мобильном popup занимает ширину экрана минус по 16px с каждой стороны
       const popupMaxWidth = window.innerWidth < 600 ? `${window.innerWidth - 32}px` : "380px";
       const popup = new maplibregl.Popup({ maxWidth: popupMaxWidth })
         .setLngLat([lng, lat])
@@ -418,21 +507,17 @@ export function MapView() {
         .addTo(m);
 
       try {
-        const [forest, soil, water] = await Promise.all([
+        const [forest, soil, water, terrain] = await Promise.all([
           fetchForestAt(lat, lng),
           fetchSoilAt(lat, lng).catch(() => null),
           fetchWaterDistanceAt(lat, lng).catch(() => null),
+          fetchTerrainAt(lat, lng).catch(() => null),
         ]);
-        popup.setHTML(buildPopupHtml(forest, soil, water));
+        popup.setHTML(buildPopupHtml(forest, soil, water, terrain));
       } catch {
         popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
       }
     });
-
-    m.on("mouseenter", "forest-fill", () => { m.getCanvas().style.cursor = "pointer"; });
-    m.on("mouseleave", "forest-fill", () => { m.getCanvas().style.cursor = ""; });
-    m.on("mouseenter", "water-fill", () => { m.getCanvas().style.cursor = "pointer"; });
-    m.on("mouseleave", "water-fill", () => { m.getCanvas().style.cursor = ""; });
 
     return () => {
       map.current?.remove();
@@ -523,12 +608,23 @@ export function MapView() {
         waterwayVisible={waterwayVisible}
         waterwayLoaded={waterwayLoaded}
         onWaterwayToggle={handleWaterwayToggle}
+        hillshadeVisible={hillshadeVisible}
+        hillshadeLoaded={hillshadeLoaded}
+        onHillshadeToggle={handleHillshadeToggle}
+        districtsVisible={districtsVisible}
+        districtsLoaded={districtsLoaded}
+        onDistrictsToggle={handleDistrictsToggle}
         onShare={handleShare}
       />
 
       <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={handleSpeciesFilter} />
 
-      {forestLoaded && <Legend colorMode={forestColorMode} />}
+      {(forestLoaded || (soilLoaded && soilVisible)) && (
+        <Legend
+          mode={soilLoaded && soilVisible ? "soil" : "forest"}
+          colorMode={forestColorMode}
+        />
+      )}
 
       {/* Координаты под курсором — скрыты на тач-устройствах */}
       {cursor && !mobile && (
@@ -562,6 +658,55 @@ export function MapView() {
           fontFamily: "system-ui, sans-serif",
         }}>
           {errorMsg}
+        </div>
+      )}
+
+      {forestHint !== "hidden" && (
+        <div style={{
+          position: "absolute",
+          bottom: mobile ? 60 : 50,
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "#2e7d32",
+          color: "white",
+          borderRadius: 8,
+          padding: "14px 22px",
+          fontSize: mobile ? 15 : 17,
+          fontFamily: "system-ui, sans-serif",
+          zIndex: 30,
+          maxWidth: "calc(100vw - 32px)",
+          textAlign: "center",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+          opacity: forestHint === "fading" ? 0 : 1,
+          transition: forestHint === "fading" ? "opacity 0.8s ease" : "none",
+          pointerEvents: "none",
+        }}>
+          Нажмите на любую точку карты, чтобы увидеть подробную информацию
+        </div>
+      )}
+
+      {vpnToast !== "hidden" && (
+        <div style={{
+          position: "absolute",
+          top: mobile ? 90 : 52,
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "white",
+          color: "#333",
+          borderRadius: 8,
+          padding: "14px 22px",
+          fontSize: mobile ? 16 : 18,
+          fontFamily: "system-ui, sans-serif",
+          zIndex: 30,
+          maxWidth: "calc(100vw - 32px)",
+          textAlign: "center",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
+          border: "1px solid rgba(0,0,0,0.08)",
+          opacity: vpnToast === "fading" ? 0 : 1,
+          transition: vpnToast === "fading" ? "opacity 0.8s ease" : "none",
+          pointerEvents: "none",
+        }}>
+          ℹ️ Спутниковые снимки могут не загружаться при активном VPN-соединении
         </div>
       )}
 

@@ -1,4 +1,9 @@
-import type { ForestAtResponse, SoilAtResponse, WaterDistanceResponse } from "../../../lib/api";
+import type {
+  ForestAtResponse,
+  SoilAtResponse,
+  WaterDistanceResponse,
+  TerrainAtResponse,
+} from "../../../lib/api";
 
 const FOREST_NAMES: Record<string, string> = {
   pine: "Сосновый лес",
@@ -73,6 +78,24 @@ function buildWaterHtml(water: WaterDistanceResponse | null): string {
     </div>`;
 }
 
+const ASPECT_RU: Record<string, string> = {
+  N: "С", NE: "СВ", E: "В", SE: "ЮВ",
+  S: "Ю", SW: "ЮЗ", W: "З", NW: "СЗ",
+};
+
+function buildTerrainHtml(t: TerrainAtResponse | null): string {
+  if (!t || t.elevation_m == null) return "";
+  const bits: string[] = [`${Math.round(t.elevation_m)} м`];
+  if (t.slope_deg != null && t.slope_deg >= 0.5) {
+    const aspect = t.aspect_cardinal ? ASPECT_RU[t.aspect_cardinal] ?? t.aspect_cardinal : null;
+    bits.push(`склон ${t.slope_deg.toFixed(1)}°${aspect ? ` на ${aspect}` : ""}`);
+  }
+  return `
+    <div style="margin-top:6px;font-size:11px;color:#555">
+      ⛰ Рельеф: <b>${bits.join(" · ")}</b>
+    </div>`;
+}
+
 function buildSoilHtml(soil: SoilAtResponse | null): string {
   if (!soil || !soil.polygon) return "";
   const p = soil.polygon;
@@ -99,10 +122,11 @@ export function buildPopupHtml(
   data: ForestAtResponse,
   soil?: SoilAtResponse | null,
   water?: WaterDistanceResponse | null,
+  terrain?: TerrainAtResponse | null,
 ): string {
   if (!data.forest) {
     return `<div style="font-family:sans-serif;padding:4px 2px;color:#555">
-      Вне лесных полигонов${buildWaterHtml(water ?? null)}${buildSoilHtml(soil ?? null)}
+      Вне лесных полигонов${buildTerrainHtml(terrain ?? null)}${buildWaterHtml(water ?? null)}${buildSoilHtml(soil ?? null)}
     </div>`;
   }
 
@@ -176,6 +200,7 @@ export function buildPopupHtml(
         <tbody>${speciesRows}</tbody>
       </table>`
     : `<p style="color:#aaa;font-size:12px;margin:0">Нет данных о видах для этого типа леса</p>`}
+    ${buildTerrainHtml(terrain ?? null)}
     ${buildWaterHtml(water ?? null)}
     ${buildSoilHtml(soil ?? null)}
   </div>`;

@@ -118,6 +118,24 @@ export async function fetchWaterDistanceAt(lat: number, lon: number): Promise<Wa
   return res.json();
 }
 
+// ─── Terrain (elevation / slope / aspect) ─────────────────────────────────
+
+export interface TerrainAtResponse {
+  lat: number;
+  lon: number;
+  elevation_m: number | null;
+  slope_deg: number | null;
+  aspect_deg: number | null;
+  aspect_cardinal: string | null;  // "N" / "NE" / ... / "NW" или null для плоских
+}
+
+export async function fetchTerrainAt(lat: number, lon: number): Promise<TerrainAtResponse> {
+  const url = `${API_BASE}/api/terrain/at?lat=${lat}&lon=${lon}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`terrain/at ${res.status}`);
+  return res.json();
+}
+
 export interface SpeciesSearchResult {
   slug: string;
   name_ru: string;

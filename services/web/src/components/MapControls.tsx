@@ -43,6 +43,12 @@ interface Props {
   waterwayVisible: boolean;
   waterwayLoaded: boolean;
   onWaterwayToggle: () => void;
+  hillshadeVisible: boolean;
+  hillshadeLoaded: boolean;
+  onHillshadeToggle: () => void;
+  districtsVisible: boolean;
+  districtsLoaded: boolean;
+  onDistrictsToggle: () => void;
   onShare: () => void;
 }
 
@@ -173,13 +179,44 @@ export function MapControls(props: Props) {
         )}
       </div>
 
+      {/* Основные слои: вода/болота/почвы вынесены из «Доп.» — это
+          сильные сигналы для грибника. */}
+      <div style={cardStyle(mobile)}>
+        <button
+          onClick={props.onWaterwayToggle}
+          style={layerBtn(props.waterwayLoaded, props.waterwayVisible, "#1976d2", mobile)}
+          title={mobile ? undefined : "Водотоки (OSM): реки, ручьи, каналы. Близость к воде = влажность = плодоношение. ~204k объектов в ЛО, виден с zoom 9."}
+        >
+          {!props.waterwayLoaded ? "Ручьи и реки" : props.waterwayVisible ? "Водотоки: вкл" : "Водотоки: выкл"}
+        </button>
+      </div>
+
+      <div style={cardStyle(mobile)}>
+        <button
+          onClick={props.onWetlandToggle}
+          style={layerBtn(props.wetlandLoaded, props.wetlandVisible, "#795548", mobile)}
+          title={mobile ? undefined : "Болотные массивы (OSM). Часто непроходимы. Зоны клюквы, морошки, моховиков."}
+        >
+          {!props.wetlandLoaded ? "Болота" : props.wetlandVisible ? "Болота: вкл" : "Болота: выкл"}
+        </button>
+      </div>
+
+      <div style={cardStyle(mobile)}>
+        <button
+          onClick={props.onSoilToggle}
+          style={layerBtn(props.soilLoaded, props.soilVisible, "#c9a96e", mobile)}
+          title={mobile ? undefined : "Почвы (Докучаевский ин-т, 1:2.5М). Карта низкого разрешения — полигоны покрывают десятки км². Тип почвы = сильный предиктор для грибов."}
+        >
+          {!props.soilLoaded ? "Почвы" : props.soilVisible ? "Почвы: вкл" : "Почвы: выкл"}
+        </button>
+      </div>
+
       {/* Кнопка «Доп. слои» */}
       <button style={expandBtnStyle(mobile)} onClick={() => setLayersOpen(o => !o)}>
         <span>Доп. слои</span>
         <span style={{ fontSize: 10, marginLeft: 6 }}>{layersOpen ? "▲" : "▼"}</span>
       </button>
 
-      {/* Дополнительные слои — раскрываются */}
       {layersOpen && (
         <>
           <div style={cardStyle(mobile)}>
@@ -205,20 +242,10 @@ export function MapControls(props: Props) {
           <div style={cardStyle(mobile)}>
             <button
               onClick={props.onRoadsToggle}
-              style={layerBtn(props.roadsLoaded, props.roadsVisible, "#5d4037", mobile)}
+              style={layerBtn(props.roadsLoaded, props.roadsVisible, "#4a2c20", mobile)}
               title={mobile ? undefined : "Лесные дороги, просеки, тропы и грунтовки (OSM). Полезно при планировании маршрута."}
             >
               {!props.roadsLoaded ? "Лесные дороги" : props.roadsVisible ? "Дороги: вкл" : "Дороги: выкл"}
-            </button>
-          </div>
-
-          <div style={cardStyle(mobile)}>
-            <button
-              onClick={props.onWetlandToggle}
-              style={layerBtn(props.wetlandLoaded, props.wetlandVisible, "#795548", mobile)}
-              title={mobile ? undefined : "Болотные массивы (OSM). Часто непроходимы. Зоны клюквы, морошки, моховиков."}
-            >
-              {!props.wetlandLoaded ? "Болота" : props.wetlandVisible ? "Болота: вкл" : "Болота: выкл"}
             </button>
           </div>
 
@@ -244,21 +271,21 @@ export function MapControls(props: Props) {
 
           <div style={cardStyle(mobile)}>
             <button
-              onClick={props.onSoilToggle}
-              style={layerBtn(props.soilLoaded, props.soilVisible, "#c9a96e", mobile)}
-              title={mobile ? undefined : "Почвы (Докучаевский ин-т, 1:2.5М). Тип почвы — сильный предиктор для грибников: подзолы (лисички/моховики), дерново-карбонатные (белые/грузди), болотные (клюква/морошка)."}
+              onClick={props.onHillshadeToggle}
+              style={layerBtn(props.hillshadeLoaded, props.hillshadeVisible, "#4e342e", mobile)}
+              title={mobile ? undefined : "Рельеф (hillshade) из Copernicus GLO-30 DEM. Затенение склонов — помогает читать формы ландшафта. В попапе — высота и экспозиция склона."}
             >
-              {!props.soilLoaded ? "Почвы" : props.soilVisible ? "Почвы: вкл" : "Почвы: выкл"}
+              {!props.hillshadeLoaded ? "Рельеф" : props.hillshadeVisible ? "Рельеф: вкл" : "Рельеф: выкл"}
             </button>
           </div>
 
           <div style={cardStyle(mobile)}>
             <button
-              onClick={props.onWaterwayToggle}
-              style={layerBtn(props.waterwayLoaded, props.waterwayVisible, "#1976d2", mobile)}
-              title={mobile ? undefined : "Водотоки (OSM): реки, ручьи, каналы. Близость к воде = влажность = плодоношение. ~204k объектов в ЛО, виден с zoom 9."}
+              onClick={props.onDistrictsToggle}
+              style={layerBtn(props.districtsLoaded, props.districtsVisible, "#4a148c", mobile)}
+              title={mobile ? undefined : "Границы районов ЛО (OSM admin_level=6). 17 районов + Сосновоборский ГО. Основа для будущего слоя прогноза плодоношения."}
             >
-              {!props.waterwayLoaded ? "Ручьи и реки" : props.waterwayVisible ? "Водотоки: вкл" : "Водотоки: выкл"}
+              {!props.districtsLoaded ? "Районы ЛО" : props.districtsVisible ? "Районы: вкл" : "Районы: выкл"}
             </button>
           </div>
 

@@ -16,8 +16,7 @@ node_modules/
 data/tiles/
 data/raw/
 data/processed/
-data/copernicus/tree_species/
-data/copernicus/tcd/
+data/copernicus/
 data/terranorte/*.tif
 data/terranorte/*.tiff
 data/terranorte/*.aux.xml

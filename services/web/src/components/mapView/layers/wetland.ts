@@ -18,10 +18,8 @@ export function addWetlandLayer(m: Map): void {
       source: "wetland",
       "source-layer": "wetland",
       paint: {
-        // Тёмно-коричневый (цвет торфа), высокая прозрачность — болота видно,
-        // но они не доминируют над основной раскраской.
-        "fill-color": "#795548",
-        "fill-opacity": 0.4,
+          "fill-color": "#00bcd4",
+        "fill-opacity": 0.5,
         "fill-antialias": false,
       } as unknown as maplibregl.FillLayerSpecification["paint"],
     },

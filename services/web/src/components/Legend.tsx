@@ -5,6 +5,7 @@ import {
   BONITET_LEGEND,
   AGE_GROUP_LEGEND,
 } from "../lib/forestStyle";
+import { SOIL_LEGEND } from "../lib/soilStyle";
 import { useIsMobile } from "../lib/useIsMobile";
 
 const SPECIES_LEGEND = [
@@ -20,7 +21,12 @@ const SPECIES_LEGEND = [
   { slug: "unknown",          label: "Неизвестно" },
 ] as const;
 
+// Что показывать в легенде. Если включена почва — её легенда важнее
+// (перекрывает лес визуально), иначе — лес по выбранному режиму.
+export type LegendMode = "soil" | "forest";
+
 interface Props {
+  mode: LegendMode;
   colorMode: ForestColorMode;
 }
 
@@ -55,7 +61,7 @@ const SWATCH = (color: string): React.CSSProperties => ({
   flexShrink: 0,
 });
 
-export function Legend({ colorMode }: Props) {
+export function Legend({ mode, colorMode }: Props) {
   const mobile = useIsMobile();
   // На мобильном легенда сворачивается в иконку, чтобы не закрывать карту.
   const [open, setOpen] = useState(!mobile);
@@ -63,7 +69,10 @@ export function Legend({ colorMode }: Props) {
   let title = "";
   let items: Array<{ label: string; color: string }> = [];
 
-  if (colorMode === "species") {
+  if (mode === "soil") {
+    title = "Почва";
+    items = SOIL_LEGEND.map(({ label, color }) => ({ label, color }));
+  } else if (colorMode === "species") {
     title = "Порода";
     items = SPECIES_LEGEND.map(({ slug, label }) => ({
       label,

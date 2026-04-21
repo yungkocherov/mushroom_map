@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 
 from api.db import close_pool, init_pool
 from api.settings import settings
-from api.routes import forest, species, regions, tiles, soil, water
+from api.routes import forest, species, regions, tiles, soil, water, terrain, districts
 
 
 @asynccontextmanager
@@ -37,8 +37,10 @@ app.add_middleware(
 app.include_router(forest.router, prefix="/api/forest", tags=["forest"])
 app.include_router(soil.router,    prefix="/api/soil",    tags=["soil"])
 app.include_router(water.router,   prefix="/api/water",   tags=["water"])
+app.include_router(terrain.router, prefix="/api/terrain", tags=["terrain"])
 app.include_router(species.router, prefix="/api/species", tags=["species"])
 app.include_router(regions.router, prefix="/api/regions", tags=["regions"])
+app.include_router(districts.router, prefix="/api/districts", tags=["districts"])
 app.include_router(tiles.router, prefix="/tiles", tags=["tiles"])
 
 # Статические PMTiles файлы (range-request support через StaticFiles).

@@ -66,10 +66,21 @@ docker compose up -d db
 DATABASE_URL="postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map" \
   .venv/Scripts/python.exe -u pipelines/build_tiles.py --region lenoblast
 
+# Build terrain from scratch: download 81 Copernicus DEM tiles (~1.6 GB) ->
+# mosaic/reproject/derive slope+aspect+hillshade -> hillshade.pmtiles (~453 MB).
+.venv/Scripts/python.exe -u scripts/download_copernicus_dem.py
+.venv/Scripts/python.exe -u pipelines/build_terrain.py --step all
+.venv/Scripts/python.exe -u pipelines/build_hillshade_tiles.py
+
 # Re-extract geojson from cached FGIS LK vector tiles
 .venv/Scripts/python.exe -u pipelines/fgislk_tiles_to_geojson.py \
   --in data/rosleshoz/fgislk_tiles \
   --out data/rosleshoz/fgislk_vydels.geojson
+
+# Districts (admin_level=6) of LO from OSM Overpass. Populates admin_area
+# and rewrites region.geometry via ST_Union of districts.
+.venv/Scripts/python.exe -u scripts/download_districts_overpass.py
+.venv/Scripts/python.exe -u pipelines/ingest_districts.py --region lenoblast
 
 # Typecheck web
 cd services/web && export PATH="/c/Program Files/nodejs:$PATH" && npx tsc --noEmit
@@ -94,6 +105,27 @@ docker compose logs --tail 50 api
   `/api/water/distance/at` возвращает минимум по трём источникам (waterway /
   water_zone / wetland) с KNN-индексом — feature-extractor для proxy
   «расстояние до воды → влажность».
+- **`admin_area` (level=6)** — 18 районов ЛО из OSM (17 муниципальных + Сосновоборский
+  ГО). Собираются через Overpass area-query (map_to_area от relation "Ленинградская
+  область" admin_level=4); outer-segments склеиваются в полигоны через
+  `shapely.polygonize + unary_union`. Endpoint `/api/districts/` отдаёт GeoJSON
+  FeatureCollection (без PMTiles — 18 фич ~0.7 МБ), `/api/districts/at?lat=&lon=`
+  матчит точку в район с `ORDER BY ST_Area ASC LIMIT 1` (inner-holes типа
+  Сосновый Бор-анклав не учтены). Используется как будущая основа
+  choropleth-слоя прогноза плодоношения (район × день × группа).
+  `region.lenoblast.geometry` пересобирается из ST_Union(admin_area) при
+  каждом ingest — исходный bbox-прямоугольник из миграции 002 заменяется
+  реальным контуром.
+- **Terrain (Copernicus GLO-30 DEM)** — файловые растры в `data/copernicus/terrain/`,
+  НЕ в БД (огромный объём, сэмплинг с диска быстрее). `dem_utm.tif` + `slope.tif`
+  + `aspect.tif` в EPSG:32636 UTM 36N, 30 m/px. Endpoint `/api/terrain/at`
+  читает через rasterio.sample — feature-extractor модели (высота/уклон/экспозиция).
+  `hillshade.pmtiles` (~453 МБ, zoom 6–11, RGBA PNG raster) — цветной рельеф:
+  гипсометрия по высоте из `dem_utm.tif` × модуляция hillshade. Собирается
+  через `pipelines/build_hillshade_tiles.py` (два WarpedVRT UTM→3857, PIL → pmtiles).
+  Alpha=0 по маске DEM nodata — убирает тёмные треугольники на углах реекции.
+  API требует `rasterio` + `pyproj` и volume mount
+  `./data/copernicus/terrain:/terrain:ro`.
 - **`forest_polygon` table** holds raw polygons from multiple sources
   (osm, terranorte, copernicus, rosleshoz). Each row has
   `source`, `source_version`, `source_feature_id` (composite unique key),

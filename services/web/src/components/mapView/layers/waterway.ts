@@ -30,8 +30,8 @@ export function addWaterwayLayer(m: Map): void {
       ],
       "line-width": [
         "interpolate", ["linear"], ["zoom"],
-        9,  ["match", ["get", "waterway"], "river", 1.0, "canal", 0.8, 0.3],
-        13, ["match", ["get", "waterway"], "river", 2.5, "canal", 2.0, "stream", 1.2, 0.7],
+        9,  ["match", ["get", "waterway"], "river", 2.0, "canal", 1.5, 0.6],
+        13, ["match", ["get", "waterway"], "river", 5.0, "canal", 4.0, "stream", 2.5, 1.5],
       ],
       "line-opacity": 0.85,
     } as unknown as maplibregl.LineLayerSpecification["paint"],
