@@ -114,21 +114,28 @@ class AdminArea:
 # ─── Overpass HTTP ────────────────────────────────────────────────────────────
 
 def _overpass_request(query: str, *, timeout_s: int = 600, max_retries: int = 3) -> dict:
+    """Попытка каждого mirror'а по очереди; ждём+ретраим только на 429/503/504."""
     last_err: Exception | None = None
+    headers = {"User-Agent": "mushroom-map/1.0"}
     for attempt in range(max_retries):
         mirror = OVERPASS_MIRRORS[attempt % len(OVERPASS_MIRRORS)]
         try:
             print(f"  Overpass [{mirror}] попытка {attempt + 1}...")
-            with httpx.Client(timeout=timeout_s) as client:
+            with httpx.Client(timeout=timeout_s, headers=headers) as client:
                 resp = client.post(mirror, data={"data": query})
             if resp.status_code == 200:
                 return resp.json()
             if resp.status_code in (429, 503, 504):
                 wait = 10 * (attempt + 1)
-                print(f"  HTTP {resp.status_code} — ждём {wait}с...")
+                print(f"  HTTP {resp.status_code} — ждём {wait}с, потом следующий mirror...")
                 time.sleep(wait)
+                last_err = RuntimeError(f"HTTP {resp.status_code}")
                 continue
-            resp.raise_for_status()
+            # 4xx (в т.ч. 406 «Not Acceptable» на тяжёлых запросах) —
+            # переключаемся на следующий mirror без ожидания.
+            print(f"  HTTP {resp.status_code} — пробуем следующий mirror")
+            last_err = RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+            continue
         except (httpx.TimeoutException, httpx.NetworkError) as e:
             last_err = e
             print(f"  Сетевая ошибка: {e}")
@@ -197,15 +204,61 @@ def _entry_popularity(tags: dict[str, str]) -> int:
     return max(base, pop)
 
 
+def _split_bbox(
+    bbox: tuple[float, float, float, float],
+    split: int,
+) -> list[tuple[float, float, float, float]]:
+    """Разбивает (south, west, north, east) на split×split тайлов."""
+    s, w, n, e = bbox
+    lat_step = (n - s) / split
+    lon_step = (e - w) / split
+    return [
+        (s + i * lat_step, w + j * lon_step,
+         s + (i + 1) * lat_step, w + (j + 1) * lon_step)
+        for i in range(split) for j in range(split)
+    ]
+
+
 def fetch_osm_places(
     bbox: tuple[float, float, float, float],
     *,
     timeout_s: int = 600,
+    split: int = 5,
 ) -> list[GazetteerEntry]:
-    """Скачивает топонимы через Overpass и нормализует их в GazetteerEntry."""
-    query = _build_places_query(bbox)
-    data = _overpass_request(query, timeout_s=timeout_s)
-    elements: list[dict] = data.get("elements", [])
+    """Скачивает топонимы через Overpass и нормализует их в GazetteerEntry.
+
+    Bbox ЛО на полный охват 27×3° плюс way/relation water/waterway — один
+    запрос стабильно даёт 406/504. Режем на split×split тайлов и собираем
+    по частям; дедуп по (osm_type, osm_id).
+    """
+    tiles = _split_bbox(bbox, split) if split > 1 else [bbox]
+    elements: list[dict] = []
+    seen_ids: set[tuple[str, int]] = set()
+    failed_tiles = 0
+    for idx, tb in enumerate(tiles, 1):
+        print(f"  tile {idx}/{len(tiles)} bbox=({tb[0]:.2f},{tb[1]:.2f},{tb[2]:.2f},{tb[3]:.2f})")
+        query = _build_places_query(tb)
+        try:
+            data = _overpass_request(query, timeout_s=timeout_s)
+        except RuntimeError as e:
+            # per-tile tolerance: центр ЛО бывает перегружен во всех mirror'ах
+            # одновременно; пропускаем проблемный квадрат, чтобы закончить
+            # остальные. Потом можно повторить только failed-тайлы.
+            print(f"    FAILED: {e}")
+            failed_tiles += 1
+            continue
+        new_elems = data.get("elements", [])
+        added = 0
+        for el in new_elems:
+            key = (el.get("type"), el.get("id"))
+            if key in seen_ids:
+                continue
+            seen_ids.add(key)
+            elements.append(el)
+            added += 1
+        print(f"    got={len(new_elems)} new={added} total={len(elements)}")
+    if failed_tiles:
+        print(f"  WARNING: {failed_tiles}/{len(tiles)} тайлов не удалось загрузить")
     print(f"  OSM places: получено {len(elements)} элементов")
 
     out: list[GazetteerEntry] = []

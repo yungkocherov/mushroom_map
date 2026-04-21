@@ -5,6 +5,21 @@ durable conventions, commands, and known gotchas. For architecture see
 `docs/architecture.md`; for roadmap see `docs/roadmap_content_ideas.md`;
 for why we ended up with Rosleshoz see `docs/forest_sources_analysis.md`.
 
+**Sibling repo `mushroom-forecast`** живёт в `C:\Users\ikoch\mushroom-forecast`
+(GitHub: yungkocherov/mushroom-forecast, private). Он владеет схемой
+`forecast.*` в этой же Postgres-базе. mushroom-map **только читает**
+`forecast.prediction` (будущий `/api/forecast/at`). В public.* из
+forecast-репо не пишем — это двусторонний контракт.
+
+## Iteration workflow — ОБЯЗАТЕЛЬНО в конце каждой итерации
+
+Чтобы любая новая сессия могла за 30 секунд понять «что сделано / что
+следующее», **не закрывай итерацию без**: (1) commit + push в origin,
+(2) апдейт `Iter-N status` / `Next up` секций этого файла, (3) апдейт
+memory-файлов (`MEMORY.md` + relevant `reference_*.md`), (4) фиксация
+exit-state в активном plan-файле если он был. Полная версия правила —
+в `mushroom-forecast/CLAUDE.md`, этот репо следует тому же протоколу.
+
 ## One-line summary
 
 Interactive mushroom map for Leningrad Oblast. PostGIS + FastAPI + React
@@ -82,6 +97,12 @@ DATABASE_URL="postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map" \
 .venv/Scripts/python.exe -u scripts/download_districts_overpass.py
 .venv/Scripts/python.exe -u pipelines/ingest_districts.py --region lenoblast
 
+# Gazetteer (OSM places/lakes/rivers/stations) + VK post -> district via Natasha NER.
+# load_gazetteer: 5x5 bbox split, per-tile tolerance; ~21k entries for LO.
+# --skip-admin keeps our 18 districts from ingest_districts.py untouched.
+PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -u pipelines/load_gazetteer.py --region lenoblast --skip-admin
+PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -u pipelines/extract_vk_districts.py --region lenoblast
+
 # Typecheck web
 cd services/web && export PATH="/c/Program Files/nodejs:$PATH" && npx tsc --noEmit
 
@@ -116,6 +137,20 @@ docker compose logs --tail 50 api
   `region.lenoblast.geometry` пересобирается из ST_Union(admin_area) при
   каждом ingest — исходный bbox-прямоугольник из миграции 002 заменяется
   реальным контуром.
+- **`gazetteer_entry` + `vk_post.district_admin_area_id`** — топонимы из OSM
+  (~21k: 6.8k settlements + 6.1k lakes + 5.8k rivers + 2k tracts + 0.4k stations)
+  + Natasha NER поверх `vk_post.text`. Скачка через `load_gazetteer.py` —
+  bbox режется 5×5 из-за 406/504/403 от Overpass на тяжёлых центральных тайлах,
+  per-tile tolerance (скипаем проблемные, собираем оставшееся). Линковка места →
+  район через `ST_Contains` при upsert (под условием `has_admin` в БД — не
+  зависит от `--skip-admin`). Пайплайн `extract_vk_districts.py`: text → Natasha
+  LOC spans → `GazetteerMatcher` (exact/alias/trgm) → лучший матч по
+  `(confidence, kind-priority)` → `admin_area_id` напрямую или ST_Contains fallback.
+  На 69k постов `grib_spb`: ~5.6k (8%) получают район, остальное — `ner_empty` +
+  stopwords ("СПб"/"Россия") + match outside districts. avg confidence 0.988.
+  Поля в `vk_post`: `district_admin_area_id`, `district_confidence`,
+  `place_extracted_at`, `place_match JSONB`. **Это ключевая фича для forecast-модели**
+  (район × день × группа).
 - **Terrain (Copernicus GLO-30 DEM)** — файловые растры в `data/copernicus/terrain/`,
   НЕ в БД (огромный объём, сэмплинг с диска быстрее). `dem_utm.tif` + `slope.tif`
   + `aspect.tif` в EPSG:32636 UTM 36N, 30 m/px. Endpoint `/api/terrain/at`

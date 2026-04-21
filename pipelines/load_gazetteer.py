@@ -90,9 +90,16 @@ def main() -> None:
             print(f"\n→ gazetteer_entry (places/natural/waterway/station)")
             entries = fetch_osm_places(bbox)
             if entries:
-                n = upsert_gazetteer(conn, region_id, entries, link_admin_area=not args.skip_admin)
+                # link_admin_area зависит от наличия admin_area в БД, не от
+                # того, скачивали ли мы её сейчас — 18 районов ЛО загружены
+                # отдельным пайплайном (ingest_districts.py) и могут уже быть.
+                has_admin = conn.execute(
+                    "SELECT 1 FROM admin_area WHERE region_id = %s LIMIT 1",
+                    (region_id,),
+                ).fetchone() is not None
+                n = upsert_gazetteer(conn, region_id, entries, link_admin_area=has_admin)
                 conn.commit()
-                print(f"  upserted: {n}")
+                print(f"  upserted: {n} (link_admin_area={has_admin})")
             else:
                 print("  пусто")
 
