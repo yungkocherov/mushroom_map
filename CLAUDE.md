@@ -46,6 +46,11 @@ fungi theoretical from species registry.
   Use `->` / `<-`.
 - **psycopg3 is `cursor.executemany()`**, not `conn.executemany()`. The
   latter silently works on psycopg2 but errors on psycopg3.
+- **psycopg3 strict-parses `%` even in SQL comments and string literals.**
+  Любой одиночный `%` в строке → `incomplete placeholder` error. Typical
+  trap: комментарий типа `-- дубли на 1-2% площади` или print(f"{x}%").
+  Решение: экранировать `%%`, или вообще избегать `%` в SQL-строках. Актуально
+  для SQL, который передаётся как Python f-string / literal с параметрами.
 - **Vite HMR on Docker + Windows needs polling**: `vite.config.ts` has
   `watch: { usePolling: true, interval: 300 }`. If file changes don't
   reload, verify that config is intact.

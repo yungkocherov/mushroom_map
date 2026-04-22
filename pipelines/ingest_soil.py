@@ -125,8 +125,7 @@ def load_polygons(conn: psycopg.Connection, region_code: str) -> None:
                    ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)),
                    ST_Area(ST_Transform(
                      ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326), 3857)))
-                ON CONFLICT (poligon_id) DO UPDATE SET
-                  region_id  = EXCLUDED.region_id,
+                ON CONFLICT (region_id, poligon_id) DO UPDATE SET
                   soil0_id   = EXCLUDED.soil0_id,
                   soil1_id   = EXCLUDED.soil1_id,
                   soil2_id   = EXCLUDED.soil2_id,
