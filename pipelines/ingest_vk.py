@@ -72,10 +72,10 @@ from db_utils import build_dsn as build_database_url
 # Контракт с DB: при изменении бампаем — photos-stage автоматически перегоняет
 # посты с photo_prompt_version != текущей. Файлы промпта/схемы версионируются
 # по имени (vk_classify_v9.txt → vk_classify_v10.txt при новой версии).
-PHOTO_PROMPT_VERSION = "v9-merge-chanterelle-allphotos-2026-04-19"
+PHOTO_PROMPT_VERSION = "v10-balance-porcini-aspen-2026-04-23"
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
-CLASSIFY_PROMPT = (_PROMPTS_DIR / "vk_classify_v9.txt").read_text(encoding="utf-8")
-CLASSIFY_SCHEMA = json.loads((_PROMPTS_DIR / "vk_classify_schema_v9.json").read_text(encoding="utf-8"))
+CLASSIFY_PROMPT = (_PROMPTS_DIR / "vk_classify_v10.txt").read_text(encoding="utf-8")
+CLASSIFY_SCHEMA = json.loads((_PROMPTS_DIR / "vk_classify_schema_v10.json").read_text(encoding="utf-8"))
 
 # Один ключ → несколько slug'ов там где Gemma/Qwen не различают визуально
 # (подосиновик красный vs жёлто-бурый; сморчок/шапочка/строчок; опёнок
@@ -297,6 +297,12 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
     """Ищет дату похода за грибами в тексте. Возвращает date или None."""
     text_lower = text.lower()
 
+    # Foray_date не может быть позже самого поста и раньше 2010 (до этого
+    # VK-сообществ про грибы практически не было). Фильтр защищает от
+    # regex-шума вида "10.08.2030" / "0202" / "15.30".
+    def _year_ok(y: int) -> bool:
+        return 2010 <= y <= post_dt.year + 1
+
     # DD.MM.YYYY / DD-MM-YYYY / DD/MM/YYYY
     m = re.search(r"(\d{1,2})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{2,4})г?", text)
     if m:
@@ -305,7 +311,7 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
             year += 2000
         if 3000 <= year <= 3099:
             year -= 1000
-        if 1 <= month <= 12 and 1 <= day <= 31:
+        if 1 <= month <= 12 and 1 <= day <= 31 and _year_ok(year):
             try:
                 return date(year, month, day)
             except ValueError:
@@ -317,7 +323,7 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
         day, month, year = int(m.group(1)), int(m.group(2)), int(m.group(3))
         if year < 100:
             year += 2000
-        if 1 <= month <= 12 and 1 <= day <= 31:
+        if 1 <= month <= 12 and 1 <= day <= 31 and _year_ok(year):
             try:
                 return date(year, month, day)
             except ValueError:
@@ -345,7 +351,7 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
         day = int(m.group(1))
         month = _month_num(m.group(2))
         year = int(m.group(3)) if m.group(3) else post_dt.year
-        if month:
+        if month and _year_ok(year):
             try:
                 d = date(year, month, day)
                 if d > post_dt:
@@ -360,7 +366,7 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
         month = _month_num(m.group(1))
         day = int(m.group(2))
         year = int(m.group(3)) if m.group(3) else post_dt.year
-        if month:
+        if month and _year_ok(year):
             try:
                 d = date(year, month, day)
                 if d > post_dt:
