@@ -15,26 +15,16 @@ import json
 import os
 import sys
 import time
-import urllib.request
 
-BBOX = (58.5, 27.8, 61.8, 33.0)  # (south, west, north, east) — default LO
-SPLIT = 3
+from _bbox import LO_BBOX_DEFAULT, load_bbox, load_split
+from _overpass import overpass_elements
 
-# Расширенный bbox для захвата Новгорода/Пскова/Карельского перешейка.
-# Переключатель — переменная окружения WATERWAY_BBOX (south,west,north,east).
-_env_bbox = os.environ.get("WATERWAY_BBOX")
-if _env_bbox:
-    parts = [float(x) for x in _env_bbox.split(",")]
-    if len(parts) == 4:
-        BBOX = tuple(parts)
-        SPLIT = int(os.environ.get("WATERWAY_SPLIT", "4"))
-        print(f"override BBOX={BBOX} SPLIT={SPLIT}")
-
-ENDPOINTS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-]
+# Расширенный bbox для захвата Новгорода/Пскова/Карельского перешейка задаётся
+# через WATERWAY_BBOX (south,west,north,east). Default — LO.
+BBOX = load_bbox("WATERWAY_BBOX", LO_BBOX_DEFAULT)
+SPLIT = load_split("WATERWAY_SPLIT", 3 if BBOX == LO_BBOX_DEFAULT else 4)
+if BBOX != LO_BBOX_DEFAULT:
+    print(f"override BBOX={BBOX} SPLIT={SPLIT}")
 
 
 def sub_bboxes() -> list[tuple[float, float, float, float]]:
@@ -59,23 +49,7 @@ out geom;
 
 
 def fetch_tile(bbox: tuple[float, float, float, float]) -> list[dict]:
-    body = build_query(bbox).encode("utf-8")
-    last_err = None
-    for ep in ENDPOINTS:
-        try:
-            req = urllib.request.Request(
-                ep, data=body,
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": "mushroom-map/1.0",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=400) as resp:
-                return json.loads(resp.read()).get("elements") or []
-        except Exception as e:
-            last_err = e
-            continue
-    raise RuntimeError(f"All endpoints failed for bbox={bbox}: {last_err}")
+    return overpass_elements(build_query(bbox), timeout_s=400)
 
 
 def main() -> None:

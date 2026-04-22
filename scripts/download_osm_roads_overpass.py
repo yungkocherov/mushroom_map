@@ -14,18 +14,12 @@ import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.request
+from _bbox import LO_BBOX_DEFAULT, load_bbox, load_split
+from _overpass import overpass_elements
 
 # (south, west, north, east)
-BBOX = (58.5, 27.8, 61.8, 33.0)
-SPLIT = 3  # 3x3 = 9 tiles, ~40k ways каждый — проходит за 30-60 сек на тайл
-
-ENDPOINTS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-]
+BBOX = load_bbox("ROADS_BBOX", LO_BBOX_DEFAULT)
+SPLIT = load_split("ROADS_SPLIT", 3)  # 3x3 = 9 tiles, ~40k ways/tile, 30-60 s
 
 
 def sub_bboxes() -> list[tuple[float, float, float, float]]:
@@ -55,25 +49,7 @@ out geom;
 
 
 def fetch_tile(bbox: tuple[float, float, float, float]) -> list[dict]:
-    body = build_query(bbox).encode("utf-8")
-    last_err = None
-    for ep in ENDPOINTS:
-        try:
-            req = urllib.request.Request(
-                ep, data=body,
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": "mushroom-map/1.0",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=400) as resp:
-                data = json.loads(resp.read())
-            elems = data.get("elements") or []
-            return elems
-        except Exception as e:
-            last_err = e
-            continue
-    raise RuntimeError(f"All endpoints failed for bbox={bbox}: {last_err}")
+    return overpass_elements(build_query(bbox), timeout_s=400)
 
 
 def main() -> None:

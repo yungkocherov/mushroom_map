@@ -14,16 +14,12 @@ import json
 import os
 import sys
 import time
-import urllib.request
+
+from _bbox import LO_BBOX_DEFAULT, load_bbox
+from _overpass import overpass_post
 
 # (south, west, north, east)
-BBOX = (58.5, 27.8, 61.8, 33.0)
-
-ENDPOINTS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-]
+BBOX = load_bbox("OOPT_BBOX", LO_BBOX_DEFAULT)
 
 QUERY = f"""[out:json][timeout:600];
 (
@@ -88,33 +84,13 @@ def relation_to_geom(rel: dict) -> dict | None:
     return {"type": "MultiPolygon", "coordinates": outers}
 
 
-def fetch(endpoint: str) -> dict:
-    req = urllib.request.Request(
-        endpoint,
-        data=QUERY.encode("utf-8"),
-        headers={
-            "Content-Type": "application/x-www-form-urlencoded",
-            "User-Agent": "mushroom-map/1.0",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=700) as resp:
-        return json.loads(resp.read())
-
-
 def main() -> None:
-    data = None
-    for ep in ENDPOINTS:
-        print(f"Querying {ep}")
-        t0 = time.time()
-        try:
-            data = fetch(ep)
-            print(f"  OK in {time.time() - t0:.1f}s")
-            break
-        except Exception as e:
-            print(f"  FAILED: {type(e).__name__}: {e}")
-            continue
-    if data is None:
-        sys.exit("All Overpass endpoints failed")
+    t0 = time.time()
+    try:
+        data = overpass_post(QUERY, timeout_s=700)
+    except RuntimeError as e:
+        sys.exit(str(e))
+    print(f"  OK in {time.time() - t0:.1f}s")
 
     elems = data.get("elements") or []
     print(f"elements: {len(elems)}")

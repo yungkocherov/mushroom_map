@@ -19,28 +19,14 @@ import json
 import os
 import sys
 import time
-import urllib.error
-import urllib.request
+from _bbox import LO_BBOX_DEFAULT, load_bbox, load_split
+from _overpass import overpass_elements
 
-# (south, west, north, east)
-BBOX = (58.5, 27.8, 61.8, 33.0)
-SPLIT = 2  # болот меньше чем дорог — 2×2 достаточно
-
-# Override через env-переменную (для расширения bbox на Новгород/Псков/
-# Карельский перешеек). Пример: WETLAND_BBOX=57.5,25.5,62.5,37.0
-_env_bbox = os.environ.get("WETLAND_BBOX")
-if _env_bbox:
-    parts = [float(x) for x in _env_bbox.split(",")]
-    if len(parts) == 4:
-        BBOX = tuple(parts)
-        SPLIT = int(os.environ.get("WETLAND_SPLIT", "4"))
-        print(f"override BBOX={BBOX} SPLIT={SPLIT}")
-
-ENDPOINTS = [
-    "https://overpass-api.de/api/interpreter",
-    "https://overpass.kumi.systems/api/interpreter",
-    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
-]
+# Override через WETLAND_BBOX=57.5,25.5,62.5,37.0 (расширение на соседние субъекты).
+BBOX = load_bbox("WETLAND_BBOX", LO_BBOX_DEFAULT)
+SPLIT = load_split("WETLAND_SPLIT", 2 if BBOX == LO_BBOX_DEFAULT else 4)
+if BBOX != LO_BBOX_DEFAULT:
+    print(f"override BBOX={BBOX} SPLIT={SPLIT}")
 
 
 def sub_bboxes() -> list[tuple[float, float, float, float]]:
@@ -71,24 +57,7 @@ out geom;
 
 
 def fetch_tile(bbox: tuple[float, float, float, float]) -> list[dict]:
-    body = build_query(bbox).encode("utf-8")
-    last_err = None
-    for ep in ENDPOINTS:
-        try:
-            req = urllib.request.Request(
-                ep, data=body,
-                headers={
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "User-Agent": "mushroom-map/1.0",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=400) as resp:
-                data = json.loads(resp.read())
-            return data.get("elements") or []
-        except Exception as e:
-            last_err = e
-            continue
-    raise RuntimeError(f"All endpoints failed for bbox={bbox}: {last_err}")
+    return overpass_elements(build_query(bbox), timeout_s=400)
 
 
 def way_to_polygon(way: dict) -> dict | None:

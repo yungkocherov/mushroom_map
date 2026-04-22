@@ -79,8 +79,13 @@ ingest-forest:
 ingest-vk:
 	python pipelines/ingest_vk.py --region $(REGION)
 
+# DEPRECATED: extract_places работает со старой таблицей observation. Для
+# района-уровня привязки см. pipelines/extract_vk_districts.py.
 extract-places:
 	python pipelines/extract_places.py --region $(REGION)
+
+extract-vk-districts:
+	python pipelines/extract_vk_districts.py --region $(REGION)
 
 build-tiles:
 	python pipelines/build_tiles.py --region $(REGION)

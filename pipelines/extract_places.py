@@ -1,6 +1,15 @@
 """
 extract_places: привязка VK-наблюдений к геометрии через NER + газеттир.
 
+DEPRECATED (2026-04-22). Работает со старой таблицей `observation` (сейчас
+пустой) и mat-view `observation_h3_species_stats`. VK-flow теперь хранит
+текст и предсказания species прямо в `vk_post`, а район берётся через
+`pipelines/extract_vk_districts.py` (Natasha + regex fallback) → колонка
+`vk_post.district_admin_area_id`. Текущий пайплайн ничего никуда не пишет
+полезного и не вызывается ни из одного активного места кроме legacy
+`Makefile` target'а. Файл оставлен как reference для будущего, если
+понадобится точечная привязка к POI (озеро/тракт), а не район.
+
 Что делает:
     1. Читает data/vk/{group}/raw_posts.json (полный текст постов).
     2. Для каждой observation в БД без point/h3_cell, берёт её source_ref,

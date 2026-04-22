@@ -118,6 +118,32 @@ docker compose logs --tail 50 api
 .venv/Scripts/python.exe -m pytest -q
 ```
 
+## Deprecated (don't extend, don't rely on)
+
+- **`observation` table + `vk_post.observation_written` column.** Старый
+  flow «продвигать VK-пост в наблюдение с координатой» так и не дошёл до
+  Stage-4: таблица всегда пустая, `observation_written` вечно FALSE. Район
+  у поста живёт в `vk_post.district_admin_area_id` (см. `extract_vk_districts.py`).
+  Mat-view `observation_h3_species_stats` и API-endpoint'ы вокруг него
+  тоже мёртвые. Не дропаем (потенциально пригодится для POI-уровня), но
+  ничего туда не пишем и тестов на это не вешаем.
+- **`pipelines/extract_places.py`.** Часть deprecated flow выше. Заменён
+  `pipelines/extract_vk_districts.py`. Не вызывается из активных пайплайнов.
+
+## Shared script utilities
+
+- `scripts/_bbox.py` — `LO_BBOX_DEFAULT` + `load_bbox(env_var)` /
+  `load_split(env_var, default)`. Все `download_*_overpass.py` (oopt /
+  roads / waterway / wetland) читают bbox через эти helpers.
+  Env-имена: `OOPT_BBOX`, `ROADS_BBOX` / `ROADS_SPLIT`, `WATERWAY_BBOX` /
+  `WATERWAY_SPLIT`, `WETLAND_BBOX` / `WETLAND_SPLIT`. Формат:
+  `south,west,north,east`. Не задано → default LO `(58.5, 27.8, 61.8, 33.0)`.
+- `scripts/_overpass.py` — `overpass_post(query, timeout_s=...)` и
+  `overpass_elements(query, ...)`. Stdlib-only клиент (urllib) с
+  mirror-rotation + 429/503/504 retry. Канонический httpx-based клиент
+  для пакета `placenames` живёт в `services/placenames/.../gazetteer.py`
+  — это два separate-by-design (scripts остаются zero-dep).
+
 ## Architecture — the contract
 
 - **`soil_polygon` + `soil_profile` + lookups (`soil_type`, `soil_parent`)**
