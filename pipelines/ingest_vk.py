@@ -36,6 +36,7 @@ import argparse
 import base64
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -375,6 +376,25 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
             except ValueError:
                 pass
 
+    # «октябрь 2023» / «в октябре 2023» / «октября 2023 года» — без дня.
+    # День — случайный из [10, 25], чтобы downstream-агрегации не получали
+    # искусственный пик на 15-м числе. Date_source стейдж проставит «regex».
+    # Откат на год назад только если (year, month) строго позже поста.
+    m = re.search(
+        rf"\bв?\s*{MONTHS_RU_PATTERN}\s+(\d{{4}})(?:\s*г\.?|\s+года?)?\b",
+        text_lower,
+    )
+    if m:
+        month = _month_num(m.group(1))
+        year = int(m.group(2))
+        if month and _year_ok(year):
+            if (year, month) > (post_dt.year, post_dt.month):
+                year -= 1
+            try:
+                return date(year, month, random.randint(10, 25))
+            except ValueError:
+                pass
+
     # день недели («в субботу»)
     m = re.search(r"\bв\s+(" + "|".join(WEEKDAYS_RU) + r")\b", text_lower)
     if m:
@@ -392,6 +412,17 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
         return post_dt - timedelta(days=2)
 
     return None
+
+
+def has_unanchored_other_year(text: str, post_dt: date) -> bool:
+    """True, если в тексте упоминается 4-значный год, отличный от года поста,
+    и при этом parse_date_regex не нашёл ничего — то есть конкретного месяца/
+    числа рядом с этим годом нет. Такие посты ссылаются на «прошлый сезон»
+    в общем, без точной даты — для forecast-модели они бесполезны как
+    датированные наблюдения, помечаем отдельным `date_source`.
+    """
+    years = [int(g) for g in re.findall(r"\b(20[1-2]\d)\b", text)]
+    return any(2010 <= y <= post_dt.year and y != post_dt.year for y in years)
 
 
 def parse_date_llm(text: str, post_dt: date) -> Optional[date]:
@@ -443,7 +474,8 @@ def dates_stage(
     print(f"  {len(rows)} posts to process")
 
     updates: list[tuple] = []
-    stats = {"regex": 0, "llm": 0, "skipped": 0, "no_text": 0, "not_found": 0}
+    stats = {"regex": 0, "llm": 0, "skipped": 0, "no_text": 0,
+             "year_only_other": 0, "not_found": 0}
 
     for row in tqdm(rows, desc="dates", unit="post"):
         pk, _post_id, date_ts, text = row
@@ -462,6 +494,9 @@ def dates_stage(
                 source = "llm" if foray else "not_found"
             else:
                 source = "not_found"
+            if foray is None and source == "not_found" \
+                    and has_unanchored_other_year(text, post_dt):
+                source = "year_only_other"
 
         stats[source if source in stats else "not_found"] += 1
         updates.append((foray, source, pk))
@@ -477,6 +512,7 @@ def dates_stage(
     n = len(updates)
     print(f"  updated {n}: regex={stats['regex']} llm={stats['llm']} "
           f"skipped={stats['skipped']} no_text={stats['no_text']} "
+          f"year_only_other={stats['year_only_other']} "
           f"not_found={stats['not_found']}")
     return n
 

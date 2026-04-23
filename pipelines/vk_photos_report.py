@@ -111,6 +111,12 @@ def main() -> None:
                     help="случайная выборка вместо последних по дате")
     ap.add_argument("--month", type=int, nargs="+",
                     help="фильтр по месяцам (1-12), например --month 7 8 9")
+    ap.add_argument("--prompt-version",
+                    help="SQL LIKE-паттерн для vk_post.photo_prompt_version, "
+                         "например 'v9%%' или 'v10-balance%%'")
+    ap.add_argument("--species", nargs="+",
+                    help="оставить только посты, в которых ХОТЯ БЫ ОДНА модель "
+                         "вернула что-то из этого списка видов")
     ap.add_argument("--no-open", action="store_true")
     args = ap.parse_args()
 
@@ -142,6 +148,16 @@ def main() -> None:
     if args.month:
         posts_sql += " AND EXTRACT(MONTH FROM p.date_ts) = ANY(%s)"
         params.append(args.month)
+    if args.prompt_version:
+        posts_sql += " AND p.photo_prompt_version LIKE %s"
+        params.append(args.prompt_version)
+    if args.species:
+        posts_sql += (
+            " AND EXISTS (SELECT 1 FROM vk_post_model_result r2,"
+            " LATERAL jsonb_array_elements(COALESCE(r2.photo_species,'[]'::jsonb)) s"
+            " WHERE r2.vk_post_id = p.id AND s->>'species' = ANY(%s))"
+        )
+        params.append(args.species)
     if args.random:
         posts_sql += " ORDER BY random() LIMIT %s"
     else:
