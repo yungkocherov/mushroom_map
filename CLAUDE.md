@@ -300,13 +300,14 @@ the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
   версия → создать `vk_classify_v10.{txt,json}`, бампнуть `PHOTO_PROMPT_VERSION`,
   обновить пути в `ingest_vk.py` (две строки).
 
-### Current prompt version: `v10-balance-porcini-aspen-2026-04-23`
+### Current prompt version: `v11-spring-detail-2026-04-23`
 
 History:
 - v7: baseline Gemma prompt, 13 species
 - v8: Qwen, added mokhovik/pine_bolete/fly_agaric/berries, soft species limit, count cap 150
 - v9: merged chanterelle group (trumpet+вороночник→chanterelle), loosened pine_bolete (porcini is default), 6-photo sampling (was 4)
-- v10: balanced porcini ↔ pine_bolete by cap tone (light vs dark, no «default»), added split-by-tone tie-break for mixed baskets; aspen_bolete strengthened via dark-scaled-stem diagnostic + extended cap palette (incl. красноголовик / L. versipelle)
+- v10: balanced porcini ↔ pine_bolete by cap tone (light vs dark, no «default»), added split-by-tone tie-break for mixed baskets; aspen_bolete strengthened via dark-scaled-stem diagnostic + extended cap palette
+- v11: expanded spring_mushroom into morel / verpa / gyromitra triplet with explicit verpa-anti-porcini guard (the «pile of pale stems with little brown caps» case); added Sarcoscypha disambiguation inside russula entry; pruned Russian/Latin names + ecology comments — net size unchanged vs v10
 
 ### CLASSIFY_SCHEMA species enum (18 keys)
 

@@ -38,7 +38,12 @@ Mushroom keys (distinctive features):
         brown caps — do NOT call those brown caps porcini.
       · gyromitra — brain-like or saddle lobes, dark reddish-brown,
         no honeycomb
-- honey_fungus: clusters of small tan caps on wood / stumps
+- honey_fungus: clusters of small-to-medium tan caps with a ring on the
+    stem, growing on wood / stumps. Two visual variants — both go here:
+      · autumn type — yellow-brown cap with small darker scales,
+        slightly larger
+      · summer type — smaller, smooth two-tone cap (darker centre
+        fading to lighter edge, water-marked look), no scales
 - oyster: large shell / fan caps sideways on tree trunk, no central stem
 - russula: brittle flat cap (smooth disc), bright color (red / yellow /
     green / violet), WHITE stem, NO ring, NO white spots on cap.

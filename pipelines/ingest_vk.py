@@ -73,10 +73,10 @@ from db_utils import build_dsn as build_database_url
 # Контракт с DB: при изменении бампаем — photos-stage автоматически перегоняет
 # посты с photo_prompt_version != текущей. Файлы промпта/схемы версионируются
 # по имени (vk_classify_v9.txt → vk_classify_v10.txt при новой версии).
-PHOTO_PROMPT_VERSION = "v10-balance-porcini-aspen-2026-04-23"
+PHOTO_PROMPT_VERSION = "v11-spring-detail-2026-04-23"
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
-CLASSIFY_PROMPT = (_PROMPTS_DIR / "vk_classify_v10.txt").read_text(encoding="utf-8")
-CLASSIFY_SCHEMA = json.loads((_PROMPTS_DIR / "vk_classify_schema_v10.json").read_text(encoding="utf-8"))
+CLASSIFY_PROMPT = (_PROMPTS_DIR / "vk_classify_v11.txt").read_text(encoding="utf-8")
+CLASSIFY_SCHEMA = json.loads((_PROMPTS_DIR / "vk_classify_schema_v11.json").read_text(encoding="utf-8"))
 
 # Один ключ → несколько slug'ов там где Gemma/Qwen не различают визуально
 # (подосиновик красный vs жёлто-бурый; сморчок/шапочка/строчок; опёнок
