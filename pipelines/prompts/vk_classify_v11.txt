@@ -4,71 +4,56 @@ alone. Typical photo has 2-4 species — listing 8+ usually means guessing.
 One entry per species.
 
 Mushroom keys (distinctive features):
-- porcini: white-stemmed bolete with thick bulbous stem (often with white
-    netting pattern), cream / yellow pores under cap (no gills), and a
-    LIGHT-toned cap: pale tan, cream-brown, light hazel, light olive-brown.
+- porcini: white-stemmed bolete, thick bulbous stem (often with white
+    netting), cream / yellow pores under cap (no gills), LIGHT cap —
+    pale tan, cream-brown, light hazel, or light olive-brown.
 - pine_bolete: same shape and white-netted stem as porcini, but with a
-    DARK-toned cap: chestnut, reddish-brown, mahogany, dark-brown,
-    rust-brown. «Боровик» / «колосовик». Don't require near-black —
-    a clearly dark-chestnut or mahogany cap is enough.
-- TIE-BREAK porcini vs pine_bolete: judge by dominant cap tone of the
-    visible mushrooms. If a basket / pile mixes light AND dark caps
-    (typical mixed haul), split into BOTH entries with proportional
-    counts — do not lump everything into one.
-- aspen_bolete: bolete with a STEM covered in dark / black scales (this
-    is the diagnostic — porcini and pine_bolete never have black scales,
-    they have white netting). Cap color spans bright orange, red-orange,
-    brick-red, rusty-brown, and yellow-orange (the «красноголовик» /
-    L. versipelle form). If you can clearly see black scales on a white
-    stem, choose aspen_bolete even when the cap leans brown.
+    DARK cap: chestnut, reddish-brown, mahogany, dark-brown, rust-brown.
+    Clearly dark is enough — does not need to be near-black.
+- TIE-BREAK porcini vs pine_bolete: judge by dominant cap tone. If a
+    basket / pile mixes light AND dark caps, split into BOTH entries
+    with proportional counts.
+- aspen_bolete: bolete with DARK / BLACK SCALES on a white stem (this
+    is the diagnostic — porcini and pine_bolete only have white netting).
+    Cap: bright orange, red-orange, brick-red, rusty-brown, or
+    yellow-orange. Dark-scaled stem trumps brownish cap.
 - birch_bolete: grey-brown smooth cap (NOT orange, NOT red), stem with
     dark scales like aspen_bolete but cap is muted brown / grey-brown.
-- mokhovik: small-to-medium bolete, velvety olive / yellow-brown cap (often
-    cracked into pattern), bright yellow pores that bruise blue, slim stem
-- chanterelle: ANY chanterelle / funnel mushroom — covers all variants:
-    · classic chanterelle (bright golden-yellow, trumpet / vase shape)
-    · trumpet chanterelle (small thin funnel, grey-brown outside, yellow
-      inside, HOLLOW stem, autumn, grows in clusters in moss)
-    · horn of plenty / вороночник (dark grey-black funnel, thin flesh)
-    Key signs: funnel / trumpet / vase shape, ribbed (NOT gilled) underside,
-    false gills running down the stem. Use one «chanterelle» entry summing
-    ALL variants visible.
+- mokhovik: small-to-medium bolete, velvety olive / yellow-brown cap
+    (often cracked), bright yellow pores that bruise blue, slim stem.
+- chanterelle: ANY chanterelle / funnel mushroom — funnel / trumpet /
+    vase shape with ribbed (NOT gilled) underside and false gills
+    running down the stem. Variants: classic (bright golden-yellow),
+    trumpet (small grey-brown funnel, yellow inside, hollow stem),
+    horn of plenty (dark grey-black). One entry summing all.
 - saffron_milkcap: orange cap with concentric rings, orange milk
 - white_milkcap: white cap with wavy / fringed edges, white milk
 - woolly_milkcap: pink cap with concentric zones, hairy edge
-- spring_mushroom: ANY morel, verpa («сморчковая шапочка»), or gyromitra
-    («строчок»). DIAGNOSTIC: the cap is NOT a smooth disc — it is wrinkled,
-    pitted, lobed, brain-like, saddle-shaped, or honeycomb-textured.
-      · morel (сморчок) — honeycomb / sponge-like cap with vertical ridges
-        and deep pits, brown to dark brown, hollow inside; cap fused to
-        a pale stem
-      · verpa / шапочка (сморчковая шапочка) — small brown wrinkled
-        thimble-like cap that hangs FREE from a tall pale-cream HOLLOW
-        stem (cap is attached only at the very top). In baskets they
-        appear as a pile of pale stems topped with little brown caps —
-        VERY characteristic, do NOT mistake the brown caps for porcini.
-      · gyromitra (строчок) — irregular brain-like or saddle-shaped lobes,
-        dark reddish-brown to chestnut, no honeycomb pattern
-    Use spring_mushroom whenever ANY of these wrinkled/lobed/honeycomb
-    features is visible. The wrinkled cap is the giveaway — never call
-    these porcini, pine_bolete, or «other».
+- spring_mushroom: ANY morel, verpa, or gyromitra. DIAGNOSTIC: the cap
+    is NOT a smooth disc — it is wrinkled, pitted, lobed, brain-like,
+    saddle-shaped, or honeycomb-textured.
+      · morel — honeycomb cap with deep pits, brown, hollow, fused to stem
+      · verpa — small brown wrinkled thimble cap hanging FREE from a tall
+        pale HOLLOW stem. Baskets look like pale stems topped with little
+        brown caps — do NOT call those brown caps porcini.
+      · gyromitra — brain-like or saddle lobes, dark reddish-brown,
+        no honeycomb
 - honey_fungus: clusters of small tan caps on wood / stumps
 - oyster: large shell / fan caps sideways on tree trunk, no central stem
-- russula: brittle flat cap (smooth disc), bright color (red/yellow/green/
-    violet), WHITE stem, NO ring, NO white spots on cap.
-    DO NOT confuse with: small bright-red CUP / bowl shape sitting on
-    the ground or wood with no real stem (Sarcoscypha / саркосцифа алая,
-    a spring cup-fungus) — that is NOT russula → use «other».
-- fly_agaric: BRIGHT RED cap with WHITE WART-LIKE SPOTS, white stem with
-    a ring (skirt) and a bulbous base. The white spots distinguish it from
-    russula. If cap is red but spotless → russula, not fly_agaric.
+- russula: brittle flat cap (smooth disc), bright color (red / yellow /
+    green / violet), WHITE stem, NO ring, NO white spots on cap.
+    NOT russula: small bright-red CUP / bowl with no real stem sitting
+    on ground or wood (a spring cup-fungus) → use «other».
+- fly_agaric: BRIGHT RED cap with WHITE WART-LIKE SPOTS, white stem
+    with a ring and a bulbous base. The white spots distinguish it
+    from russula. If cap is red but spotless → russula, not fly_agaric.
 
 Berry keys (only if clearly visible as the main subject):
-- blueberry: small round dark blue / purple-black berries (черника)
-- cloudberry: orange / amber raspberry-shaped berries on low plants (морошка)
-- cranberry: small round bright red berries on moss (клюква)
+- blueberry: small round dark blue / purple-black berries
+- cloudberry: orange / amber raspberry-shaped berries on low plants
+- cranberry: small round bright red berries on moss
 
-- other: any mushroom that's clearly visible but doesn't match any key above
+- other: any mushroom that's clearly visible but doesn't match any key
 
 count = TOTAL of that species across the WHOLE photo, summed across all
 baskets / piles. Full basket ≈ 30-50, half ≈ 15-25, handful ≈ 5-10.
