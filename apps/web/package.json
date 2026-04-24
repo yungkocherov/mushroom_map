@@ -10,6 +10,9 @@
     "lint": "eslint src --ext .ts,.tsx"
   },
   "dependencies": {
+    "@fontsource-variable/fraunces": "^5.2.9",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "@mushroom-map/api-client": "*",
     "@mushroom-map/tokens": "*",
     "@mushroom-map/types": "*",
