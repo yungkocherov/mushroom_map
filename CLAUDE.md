@@ -300,7 +300,7 @@ the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
   версия → создать `vk_classify_v10.{txt,json}`, бампнуть `PHOTO_PROMPT_VERSION`,
   обновить пути в `ingest_vk.py` (две строки).
 
-### Current prompt version: `v12-leccinum-split-2026-04-23`
+### Current prompt version: `v13-birch-strict-pine-softer-2026-04-24`
 
 History:
 - v7: baseline Gemma prompt, 13 species
@@ -309,6 +309,7 @@ History:
 - v10: balanced porcini ↔ pine_bolete by cap tone (light vs dark, no «default»), added split-by-tone tie-break for mixed baskets; aspen_bolete strengthened via dark-scaled-stem diagnostic + extended cap palette
 - v11: expanded spring_mushroom into morel / verpa / gyromitra triplet with explicit verpa-anti-porcini guard (the «pile of pale stems with little brown caps» case); added Sarcoscypha disambiguation inside russula entry; pruned Russian/Latin names + ecology comments — net size unchanged vs v10
 - v12: split Leccinum palettes — pine_bolete is now pure brown (chestnut/mahogany/dark-brown, explicit «not orange/red/rust»); aspen_bolete is strictly orange/red (combination of dark-scaled stem AND orange/red cap is the diagnostic, not stem alone); birch_bolete expanded (pale beige / grey-brown / tan / mushroom-brown / medium / dark brown — «same Leccinum stem as aspen, but cap plain brown/grey-brown»). Fixes systematic aspen → pine_bolete misclassification observed in v11.
+- v13: fixes v12 over-detection of birch_bolete + slightly softens pine_bolete. birch_bolete palette trimmed (only grey-brown / tan / mushroom-brown; removed pale beige, medium brown, dark brown that overlapped with porcini/pine) and now requires VISIBLE dark scales on the stem — no stem, no birch call. pine_bolete tightened: «clearly DARK cap», and new rule «if cap is only medium brown and could be porcini, prefer porcini»; same lean into porcini in the TIE-BREAK.
 
 ### CLASSIFY_SCHEMA species enum (18 keys)
 

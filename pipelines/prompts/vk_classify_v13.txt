@@ -1,0 +1,73 @@
+Classify mushrooms AND berries in this photo. Nothing → [].
+List ONLY items you can clearly identify. Don't guess from texture/color
+alone. Typical photo has 2-4 species — listing 8+ usually means guessing.
+One entry per species.
+
+Mushroom keys (distinctive features):
+- porcini: white-stemmed bolete, thick bulbous stem (often with white
+    netting), cream / yellow pores under cap (no gills), LIGHT cap —
+    pale tan, cream-brown, light hazel, or light olive-brown.
+- pine_bolete: same shape and white-netted stem as porcini, but with a
+    clearly DARK cap: chestnut, mahogany, dark-brown. If the cap is
+    only medium brown and could be porcini, prefer porcini. NOT orange,
+    NOT red, NOT rust-toned — those are aspen_bolete, not pine_bolete.
+- TIE-BREAK porcini vs pine_bolete: judge by dominant cap tone. If a
+    basket / pile mixes light AND dark caps, split into BOTH entries
+    with proportional counts. When truly uncertain between the two,
+    prefer porcini.
+- aspen_bolete: Leccinum-type bolete — white stem with DARK / BLACK
+    SCALES, AND an orange / red cap. The combination is diagnostic.
+    Cap colors: bright orange, red-orange, brick-red, yellow-orange.
+    If you see dark scales on a white stem together with a clearly
+    orange or red cap, call aspen_bolete — do not downgrade to
+    pine_bolete on the basis of cap tone.
+- birch_bolete: Leccinum-type bolete with dark-scaled white stem AND
+    a plain grey-brown cap (no red, no orange). Cap: grey-brown, tan,
+    or mushroom-brown. Requires VISIBLE dark scales on the stem — if
+    the stem is not clearly visible, do not call birch_bolete.
+- mokhovik: small-to-medium bolete, velvety olive / yellow-brown cap
+    (often cracked), bright yellow pores that bruise blue, slim stem.
+- chanterelle: ANY chanterelle / funnel mushroom — funnel / trumpet /
+    vase shape with ribbed (NOT gilled) underside and false gills
+    running down the stem. Variants: classic (bright golden-yellow),
+    trumpet (small grey-brown funnel, yellow inside, hollow stem),
+    horn of plenty (dark grey-black). One entry summing all.
+- saffron_milkcap: orange cap with concentric rings, orange milk
+- white_milkcap: white cap with wavy / fringed edges, white milk
+- woolly_milkcap: pink cap with concentric zones, hairy edge
+- spring_mushroom: ANY morel, verpa, or gyromitra. DIAGNOSTIC: the cap
+    is NOT a smooth disc — it is wrinkled, pitted, lobed, brain-like,
+    saddle-shaped, or honeycomb-textured.
+      · morel — honeycomb cap with deep pits, brown, hollow, fused to stem
+      · verpa — small brown wrinkled thimble cap hanging FREE from a tall
+        pale HOLLOW stem. Baskets look like pale stems topped with little
+        brown caps — do NOT call those brown caps porcini.
+      · gyromitra — brain-like or saddle lobes, dark reddish-brown,
+        no honeycomb
+- honey_fungus: clusters of small-to-medium tan caps with a ring on the
+    stem, growing on wood / stumps. Two visual variants — both go here:
+      · autumn type — yellow-brown cap with small darker scales,
+        slightly larger
+      · summer type — smaller, smooth two-tone cap (darker centre
+        fading to lighter edge, water-marked look), no scales
+- oyster: large shell / fan caps sideways on tree trunk, no central stem
+- russula: brittle flat cap (smooth disc), bright color (red / yellow /
+    green / violet), WHITE stem, NO ring, NO white spots on cap.
+    NOT russula: small bright-red CUP / bowl with no real stem sitting
+    on ground or wood (a spring cup-fungus) → use «other».
+- fly_agaric: BRIGHT RED cap with WHITE WART-LIKE SPOTS, white stem
+    with a ring and a bulbous base. The white spots distinguish it
+    from russula. If cap is red but spotless → russula, not fly_agaric.
+
+Berry keys (only if clearly visible as the main subject):
+- blueberry: small round dark blue / purple-black berries
+- cloudberry: orange / amber raspberry-shaped berries on low plants
+- cranberry: small round bright red berries on moss
+
+- other: any mushroom that's clearly visible but doesn't match any key
+
+count = TOTAL of that species across the WHOLE photo, summed across all
+baskets / piles. Full basket ≈ 30-50, half ≈ 15-25, handful ≈ 5-10.
+
+scene: basket (in container/stacked/cut) | kitchen (cooking/drying) |
+forest (growing/held outdoors) | other (close-up, neutral bg).
