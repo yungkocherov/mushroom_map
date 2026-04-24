@@ -1,30 +1,30 @@
-/**
- * Разделы которые ещё не наполнены контентом. Общий компонент вместо
- * копипасты.
- *
- * На Фазе 1 карта маршрутов зарезервирована; содержательное наполнение
- * (каталог видов из species_registry, гайды, методология) — в следующих
- * фазах, когда под них будет отдельная разметка.
- */
 import { Link } from "react-router-dom";
+import { Container } from "../components/layout/Container";
+import { Card } from "../components/ui/Card";
+import styles from "./Prose.module.css";
 
 interface Props {
   title: string;
   description: string;
 }
 
+/**
+ * Заглушка для разделов, которые ещё не наполнены. Один общий
+ * компонент вместо копипасты — наполняется по мере появления контента
+ * в Phase 1+.
+ */
 export function PlaceholderPage({ title, description }: Props) {
   return (
-    <article className="content content--narrow">
-      <h1>{title}</h1>
-      <p className="lead">{description}</p>
-      <div className="placeholder-box">
-        <p>
+    <Container as="article" size="narrow">
+      <h1 className={styles.h1}>{title}</h1>
+      <p className={styles.lead}>{description}</p>
+      <Card>
+        <p className={styles.p} style={{ margin: 0, color: "var(--ink-dim)" }}>
           Раздел в работе. Пока что — пользуйтесь{" "}
           <Link to="/map">картой</Link>, она уже содержит все лесные
           данные Ленобласти.
         </p>
-      </div>
-    </article>
+      </Card>
+    </Container>
   );
 }

@@ -1,16 +1,19 @@
+import { Container } from "../components/layout/Container";
+import styles from "./Prose.module.css";
+
 export function AboutPage() {
   return (
-    <article className="content content--narrow">
-      <h1>Об авторе</h1>
-      <p className="lead">
+    <Container as="article" size="narrow">
+      <h1 className={styles.h1}>О проекте</h1>
+      <p className={styles.lead}>
         Проект делает один человек, как хобби. Мотивация простая:
         хотелось объединить данные из разрозненных источников (Рослесхоз,
         OSM, ботанические справочники) в одно место, которым удобно
         пользоваться в лесу.
       </p>
 
-      <h2>Почему карта</h2>
-      <p>
+      <h2 className={styles.h2}>Почему карта</h2>
+      <p className={styles.p}>
         Большинство грибных ресурсов рунета — это либо форумы без
         структурированных данных, либо мобильные приложения с распознаванием
         по фото (которому не стоит доверять, когда речь о съедобности).
@@ -19,8 +22,8 @@ export function AboutPage() {
         — попытка закрыть этот пробел.
       </p>
 
-      <h2>Что дальше</h2>
-      <p>
+      <h2 className={styles.h2}>Что дальше</h2>
+      <p className={styles.p}>
         Список планов и идей — в{" "}
         <a
           href="https://github.com/yungkocherov/mushroom_map/blob/main/docs/roadmap_content_ideas.md"
@@ -41,12 +44,12 @@ export function AboutPage() {
         .
       </p>
 
-      <h2>Технологии</h2>
-      <p>
+      <h2 className={styles.h2}>Технологии</h2>
+      <p className={styles.p}>
         PostGIS, FastAPI, React + MapLibre GL, PMTiles. Весь код открытый,
         данные — public domain / OSM / ФГИС ЛК. Никакой телеметрии,
         никакой рекламы.
       </p>
-    </article>
+    </Container>
   );
 }

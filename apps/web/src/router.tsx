@@ -11,7 +11,7 @@
  */
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
-import { Root } from "./routes/Root";
+import { Layout } from "./components/layout/Layout";
 import { HomePage } from "./routes/HomePage";
 import { MapPage } from "./routes/MapPage";
 import { AboutPage } from "./routes/AboutPage";
@@ -20,7 +20,7 @@ import { PlaceholderPage } from "./routes/PlaceholderPage";
 export const router = createBrowserRouter([
   {
     path: "/",
-    element: <Root />,
+    element: <Layout />,
     children: [
       { index: true, element: <HomePage /> },
       { path: "map", element: <MapPage /> },

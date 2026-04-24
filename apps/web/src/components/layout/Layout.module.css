@@ -1,0 +1,61 @@
+.contentShell {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.contentMain {
+  flex: 1;
+  padding: var(--space-6) 0;
+}
+
+.mapShell {
+  height: 100vh;
+  overflow: hidden;
+  position: relative;
+}
+
+.mapMain {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.backLink {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  z-index: 15;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(252, 249, 240, 0.95);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  font-family: var(--font-body);
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s;
+}
+.backLink:hover {
+  background: var(--paper-rise);
+  color: var(--forest-deep);
+}
+.backLink:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+@media (max-width: 640px) {
+  .backLink span:not([aria-hidden]) {
+    display: none;
+  }
+  .backLink {
+    padding: var(--space-2);
+  }
+}
