@@ -1,0 +1,7 @@
+{
+  "name": "@mushroom-map/tokens",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Design tokens (CSS custom properties + TS constants) shared between the web app and the future mobile app",
+  "type": "module"
+}
