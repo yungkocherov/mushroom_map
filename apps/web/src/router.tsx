@@ -17,6 +17,8 @@ import { MapPage } from "./routes/MapPage";
 import { AboutPage } from "./routes/AboutPage";
 import { PlaceholderPage } from "./routes/PlaceholderPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
+import { MethodologyPage } from "./routes/MethodologyPage";
+import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
 
 export const router = createBrowserRouter([
   {
@@ -43,15 +45,8 @@ export const router = createBrowserRouter([
           />
         ),
       },
-      {
-        path: "methodology",
-        element: (
-          <PlaceholderPage
-            title="Методология"
-            description="Источники данных (Рослесхоз, OSM, Copernicus), способы обработки и известные ограничения."
-          />
-        ),
-      },
+      { path: "methodology",         element: <MethodologyPage /> },
+      { path: "methodology/:slug",    element: <MethodologyArticlePage /> },
       { path: "about", element: <AboutPage /> },
       { path: "*",     element: <NotFoundPage /> },
     ],

@@ -1,0 +1,124 @@
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  text-decoration: none;
+  margin-bottom: var(--space-5);
+  transition: color 0.15s;
+}
+.back:hover { color: var(--forest-deep); }
+
+.header {
+  margin-bottom: var(--space-5);
+}
+
+.meta {
+  display: flex;
+  gap: var(--space-4);
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+}
+
+.metaItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* ─── MDX body typography ─────────────────────────────────────── */
+
+.body {
+  color: var(--ink);
+  line-height: var(--lh-long);
+  font-size: var(--fs-body);
+}
+
+.body :global(h1) {
+  margin: 0 0 var(--space-5);
+  font-family: var(--font-display);
+  font-size: var(--fs-h1);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.015em;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.body :global(h2) {
+  margin: var(--space-7) 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  line-height: var(--lh-tight);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.body :global(h3) {
+  margin: var(--space-6) 0 var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.body :global(p) {
+  margin: 0 0 var(--space-4);
+}
+
+.body :global(a) {
+  color: var(--forest);
+  text-decoration: underline;
+  text-decoration-color: rgba(45, 90, 58, 0.3);
+  text-underline-offset: 2px;
+}
+.body :global(a:hover) {
+  color: var(--forest-deep);
+  text-decoration-color: var(--forest-deep);
+}
+
+.body :global(ul),
+.body :global(ol) {
+  margin: 0 0 var(--space-4);
+  padding-left: var(--space-5);
+}
+.body :global(ul li),
+.body :global(ol li) {
+  margin-bottom: var(--space-2);
+  line-height: var(--lh-long);
+}
+
+.body :global(code) {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--birch);
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+  color: var(--ink);
+}
+
+.body :global(pre) {
+  background: var(--paper-rise);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  overflow-x: auto;
+  margin: 0 0 var(--space-4);
+}
+
+.body :global(pre code) {
+  background: transparent;
+  padding: 0;
+  font-size: var(--fs-sm);
+}
+
+.body :global(strong) { font-weight: 600; }
+.body :global(em) { font-style: italic; }
+
+.body :global(blockquote) {
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-5);
+  border-left: 3px solid var(--forest);
+  background: var(--birch);
+  color: var(--ink-dim);
+}
