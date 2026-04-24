@@ -43,16 +43,15 @@ jobs:
         with:
           node-version: "20"
           cache: npm
-          cache-dependency-path: apps/web/package-lock.json
+          cache-dependency-path: package-lock.json
 
-      - name: Install dependencies
-        working-directory: apps/web
+      - name: Install workspace dependencies
         run: npm ci
 
-      - name: TypeScript typecheck
+      - name: TypeScript typecheck (web)
         working-directory: apps/web
         run: npx tsc --noEmit
 
-      - name: Vite build
+      - name: Vite build (web)
         working-directory: apps/web
         run: npx vite build
