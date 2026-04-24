@@ -9,13 +9,14 @@
  * /about        - Об авторе
  * *             - Любой несуществующий путь → редирект на /
  */
-import { createBrowserRouter, Navigate } from "react-router-dom";
+import { createBrowserRouter } from "react-router-dom";
 
 import { Layout } from "./components/layout/Layout";
 import { HomePage } from "./routes/HomePage";
 import { MapPage } from "./routes/MapPage";
 import { AboutPage } from "./routes/AboutPage";
 import { PlaceholderPage } from "./routes/PlaceholderPage";
+import { NotFoundPage } from "./routes/NotFoundPage";
 
 export const router = createBrowserRouter([
   {
@@ -52,7 +53,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: "about", element: <AboutPage /> },
-      { path: "*",     element: <Navigate to="/" replace /> },
+      { path: "*",     element: <NotFoundPage /> },
     ],
   },
 ]);
