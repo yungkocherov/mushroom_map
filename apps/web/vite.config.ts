@@ -1,5 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import mdx from "@mdx-js/rollup";
+import { VitePWA } from "vite-plugin-pwa";
+import remarkGfm from "remark-gfm";
+import rehypeSlug from "rehype-slug";
+import rehypeAutolinkHeadings from "rehype-autolink-headings";
 
 // В proxy target'е обязательно используем IPv4 loopback напрямую.
 // На Windows node 18+ резолвит "localhost" в ::1 (IPv6) первым, а docker-desktop
@@ -8,7 +13,68 @@ import react from "@vitejs/plugin-react";
 const API_TARGET = process.env.VITE_API_URL ?? "http://127.0.0.1:8000";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    // MDX-плагин обязан идти до @vitejs/plugin-react, чтобы .mdx сначала
+    // превратился в JSX, а потом был подхвачен React Fast Refresh'ем.
+    { enforce: "pre", ...mdx({
+      remarkPlugins: [remarkGfm],
+      rehypePlugins: [
+        rehypeSlug,
+        [rehypeAutolinkHeadings, { behavior: "wrap" }],
+      ],
+    }) },
+    react({ include: /\.(mdx|md|jsx|tsx|ts)$/ }),
+    VitePWA({
+      registerType: "autoUpdate",
+      includeAssets: ["icon.svg"],
+      manifest: {
+        name: "Грибная карта Ленинградской области",
+        short_name: "Грибная карта",
+        description: "Интерактивная карта и прогноз плодоношения грибов в Ленобласти",
+        lang: "ru",
+        theme_color: "#2d5a3a",
+        background_color: "#f5f1e6",
+        display: "standalone",
+        start_url: "/",
+        scope: "/",
+        categories: ["utilities", "education", "travel"],
+        icons: [
+          { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
+        ],
+      },
+      workbox: {
+        globPatterns: ["**/*.{js,css,html,svg,woff2}"],
+        navigateFallback: "/index.html",
+        // PMTiles кэшировать не стоит (сотни МБ), API GET'ы — network-first
+        // с коротким fallback'ом. Конкретные stale-while-revalidate политики
+        // настроим точнее когда появятся /api/species/:slug + /api/stats/*.
+        runtimeCaching: [
+          {
+            urlPattern: /\/api\//,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "mushroom-api",
+              networkTimeoutSeconds: 5,
+              expiration: { maxEntries: 100, maxAgeSeconds: 3600 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\//,
+            handler: "CacheFirst",
+            options: {
+              cacheName: "google-fonts",
+              expiration: { maxEntries: 30, maxAgeSeconds: 365 * 24 * 3600 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
+      devOptions: {
+        enabled: false,  // SW в dev обычно мешает — включим по необходимости
+      },
+    }),
+  ],
   server: {
     host: "0.0.0.0",
     port: 5173,
