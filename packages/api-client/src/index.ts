@@ -23,6 +23,8 @@ import type {
   TerrainAtResponse,
   SpeciesSearchResult,
   NominatimResult,
+  StatsOverview,
+  SpeciesNowResponse,
 } from "@mushroom-map/types";
 
 function resolveApiBase(): string {
@@ -68,6 +70,20 @@ export async function searchSpecies(q: string, limit = 10): Promise<SpeciesSearc
   const url = `${API_BASE}/api/species/search?q=${encodeURIComponent(q)}&limit=${limit}`;
   const res = await fetch(url);
   if (!res.ok) return [];
+  return res.json();
+}
+
+export async function fetchStatsOverview(): Promise<StatsOverview> {
+  const url = `${API_BASE}/api/stats/overview`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`stats/overview ${res.status}`);
+  return res.json();
+}
+
+export async function fetchSpeciesNow(window = "14d", limit = 5): Promise<SpeciesNowResponse> {
+  const url = `${API_BASE}/api/stats/vk/species-now?window=${window}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`stats/vk/species-now ${res.status}`);
   return res.json();
 }
 

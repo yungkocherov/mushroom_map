@@ -16,3 +16,4 @@ export * from "./soil";
 export * from "./water";
 export * from "./terrain";
 export * from "./places";
+export * from "./stats";

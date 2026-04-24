@@ -1,3 +1,5 @@
+/* ─── Hero ──────────────────────────────────────────────────────── */
+
 .hero {
   padding: var(--space-6) 0 var(--space-7);
   border-bottom: 1px solid var(--rule);
@@ -36,10 +38,116 @@
   align-items: center;
 }
 
+/* ─── "Что сейчас растёт" widget ──────────────────────────────── */
+
+.widget {
+  margin-bottom: var(--space-7);
+}
+
+.widgetHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.widgetTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h2);
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.015em;
+}
+
+.widgetHint {
+  margin: 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+}
+
+.widgetList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.widgetItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  background: var(--paper-rise);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+}
+
+.widgetSkeleton {
+  height: 76px;
+  background: var(--paper-rise);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  opacity: 0.6;
+}
+
+.widgetLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.widgetName {
+  font-family: var(--font-display);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.widgetMetric {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.widgetPct {
+  font-family: var(--font-mono);
+  font-size: var(--fs-h3);
+  font-weight: 600;
+  color: var(--forest);
+  font-variant-numeric: tabular-nums;
+}
+
+.widgetCount {
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+}
+
+.widgetEmpty {
+  margin: 0;
+  padding: var(--space-5);
+  background: var(--paper-rise);
+  border: 1px dashed var(--rule);
+  border-radius: var(--radius-md);
+  color: var(--ink-dim);
+  font-size: var(--fs-sm);
+}
+
+.trendUp   { color: var(--moss); }
+.trendDown { color: var(--danger); }
+.trendFlat { color: var(--ink-faint); }
+
+/* ─── Entry cards ─────────────────────────────────────────────── */
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: var(--space-4);
+  margin-bottom: var(--space-7);
 }
 
 .cardTitle {
@@ -58,6 +166,49 @@
   line-height: var(--lh-normal);
 }
 
+/* ─── Scale bar ──────────────────────────────────────────────── */
+
+.scale {
+  padding: var(--space-4) var(--space-5);
+  background: var(--birch);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scaleText {
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  text-align: center;
+  line-height: var(--lh-normal);
+}
+
+.scaleText strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.scaleLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: var(--space-3);
+  padding: 0;
+  color: var(--forest);
+  text-decoration: none;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.scaleLink:hover {
+  color: var(--forest-deep);
+  text-decoration: underline;
+}
+
 @media (max-width: 640px) {
   .title { font-size: var(--fs-h1); }
+  .widgetHeader { flex-direction: column; align-items: flex-start; }
+  .scaleLink { margin-left: 0; margin-top: var(--space-2); display: flex; }
 }
