@@ -3,7 +3,7 @@ import type {
   SoilAtResponse,
   WaterDistanceResponse,
   TerrainAtResponse,
-} from "../../../lib/api";
+} from "@mushroom-map/types";
 
 const FOREST_NAMES: Record<string, string> = {
   pine: "Сосновый лес",

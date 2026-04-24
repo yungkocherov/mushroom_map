@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { searchSpecies, searchPlaces, SpeciesSearchResult, NominatimResult } from "../lib/api";
+import { searchSpecies, searchPlaces } from "../lib/api";
+import type { SpeciesSearchResult, NominatimResult } from "@mushroom-map/types";
 import { useIsMobile } from "../lib/useIsMobile";
 
 interface Props {
