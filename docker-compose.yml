@@ -39,7 +39,7 @@ services:
 
   web:
     build:
-      context: ./services/web
+      context: ./apps/web
     container_name: mushroom_web
     restart: unless-stopped
     depends_on:
@@ -49,7 +49,7 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - ./services/web:/app
+      - ./apps/web:/app
       - /app/node_modules
     profiles: ["full"]
 

@@ -10,7 +10,7 @@ build_tiles: генерация PMTiles с лесным слоем из forest_u
        в PMTiles через `pmtiles.writer.Writer`.
     3. В property каждой фичи попадают `dominant_species`, `source`,
        `confidence`, `area_m2`, чтобы фронт смог раскрасить их через
-       MapLibre paint-expression (см. services/web/src/lib/forestStyle.ts).
+       MapLibre paint-expression (см. apps/web/src/lib/forestStyle.ts).
 
 Замечания:
     - Используется стандартный Google/XYZ web mercator, НЕ custom grid.

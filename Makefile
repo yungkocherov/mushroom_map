@@ -49,7 +49,7 @@ install-api:
 	pip install -e services/species_registry
 
 install-web:
-	cd services/web && npm install
+	cd apps/web && npm install
 
 # ─── DB ───────────────────────────────────────────────────
 db-migrate:
@@ -70,7 +70,7 @@ api-dev:
 	cd services/api && PYTHONPATH=src uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 
 web-dev:
-	cd services/web && npm run dev
+	cd apps/web && npm run dev
 
 # ─── Pipelines (phase 2) ──────────────────────────────────
 ingest-forest:

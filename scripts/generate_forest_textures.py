@@ -3,7 +3,7 @@
 
 На вход ничего не нужно, на выход — seamless 256×256 PNG для каждого
 slug'а из geodata.types.ForestTypeSlug. Текстуры кладутся в
-``services/web/public/textures/forest/``, откуда Vite отдаёт их как
+``apps/web/public/textures/forest/``, откуда Vite отдаёт их как
 ``/textures/forest/<slug>.png``.
 
 Принцип seamlessness:

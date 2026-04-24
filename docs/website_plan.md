@@ -285,7 +285,7 @@ species_found: [белый-гриб, лисичка-обыкновенная]
 - MapLibre изолируется в `app/map/page.tsx` с `'use client'`.
 
 Минусы:
-- Миграция — неделя работы (переписать `services/web` под Next-структуру).
+- Миграция — неделя работы (переписать `apps/web` под Next-структуру).
 - Bundle больше чем у Vite. Для контент-страниц — не критично.
 
 #### Вариант B: Astro + React islands
@@ -516,8 +516,8 @@ lazy-load'ом MapView в Фазе 2.
 - PMTiles + places.geojson → Cloudflare R2 (520 MB). `VITE_API_URL`
   указывает на Oracle VM, но `/tiles/*` — на R2 CDN.
 - `pg_dump` локальной БД → upload → `pg_restore` на Oracle.
-- Cloudflare Pages project: build `cd services/web && npm ci && npm run build`,
-  output `services/web/dist`, env `VITE_API_URL=https://api.<domain>`.
+- Cloudflare Pages project: build `cd apps/web && npm ci && npm run build`,
+  output `apps/web/dist`, env `VITE_API_URL=https://api.<domain>`.
 - CORS FastAPI: добавить `*.pages.dev` и будущий домен в `API_CORS_ORIGINS`.
 
 **Критерий успеха:** зайти с телефона через 4G на публичный URL, карта

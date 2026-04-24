@@ -109,7 +109,7 @@ PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -u pipelines/load_gazetteer.py -
 PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -u pipelines/extract_vk_districts.py --region lenoblast
 
 # Typecheck web
-cd services/web && export PATH="/c/Program Files/nodejs:$PATH" && npx tsc --noEmit
+cd apps/web && export PATH="/c/Program Files/nodejs:$PATH" && npx tsc --noEmit
 
 # API container logs (for 500 errors that manifest as CORS in the browser)
 docker compose logs --tail 50 api
@@ -229,7 +229,7 @@ docker compose logs --tail 50 api
    `services/geodata/src/geodata/db.py` COPY+DELETE pattern.
 4. **Tile build** `pipelines/build_<name>_tiles.py` — PostGIS → MVT →
    `data/tiles/<name>.pmtiles`. Use `build_water_tiles.py` as template.
-5. **Frontend** — add `services/web/src/components/mapView/layers/<name>.ts`
+5. **Frontend** — add `apps/web/src/components/mapView/layers/<name>.ts`
    exporting `add<Name>Layer` + `set<Name>Visibility` (use existing layers
    as template). Wire it in `MapView.tsx` via `toggleLayerWithCheck` with
    HEAD check on `/tiles/<name>.pmtiles` for graceful "tiles not built" UX.
