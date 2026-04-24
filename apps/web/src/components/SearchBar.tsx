@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { searchSpecies, searchPlaces } from "../lib/api";
+import { searchSpecies, searchPlaces } from "@mushroom-map/api-client";
 import type { SpeciesSearchResult, NominatimResult } from "@mushroom-map/types";
 import { useIsMobile } from "../lib/useIsMobile";
 

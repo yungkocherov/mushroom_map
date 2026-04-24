@@ -9,7 +9,7 @@ import {
   FOREST_LAYER_PAINT_AGE_GROUP,
   ForestColorMode,
 } from "../lib/forestStyle";
-import { fetchForestAt, fetchSoilAt, fetchWaterDistanceAt, fetchTerrainAt } from "../lib/api";
+import { fetchForestAt, fetchSoilAt, fetchWaterDistanceAt, fetchTerrainAt } from "@mushroom-map/api-client";
 import { useIsMobile } from "../lib/useIsMobile";
 import { MapControls, BaseMapMode } from "./MapControls";
 import { Legend } from "./Legend";

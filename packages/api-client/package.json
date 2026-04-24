@@ -2,6 +2,17 @@
   "name": "@mushroom-map/api-client",
   "version": "0.1.0",
   "private": true,
-  "description": "Typed fetch wrappers around the mushroom-map FastAPI — forest/at, species/search, soil/at, water/distance/at, terrain/at, etc. Shared by web and future mobile.",
-  "type": "module"
+  "description": "Typed fetch wrappers around the mushroom-map FastAPI — forest/at, species/search, soil/at, water/distance/at, terrain/at. Shared by apps/web and future apps/mobile.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src/"
+  ],
+  "dependencies": {
+    "@mushroom-map/types": "*"
+  }
 }
