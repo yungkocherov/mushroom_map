@@ -2,24 +2,10 @@
  * Глобальные стили. Минимальные — основная стилизация идёт inline
  * в компонентах карты. Здесь: сброс, layout, shell и контент-страницы.
  *
- * Дизайн-система (Fraunces/Inter, бумажный фон, полный токен-набор)
- * появится в Фазе 2. Сейчас — рабочий базовый вид, близкий к тому
- * что было до миграции, с адаптацией под маршруты.
+ * Design tokens (palette, typography, spacing, radius, shadow) живут
+ * в @mushroom-map/tokens (packages/tokens/src/tokens.css), импорт идёт
+ * из main.tsx до этого файла. Здесь только consumer-стили, без :root.
  */
-
-:root {
-  /* Холодная нейтральная палитра — переделаем в тёплую бумажную
-     в Фазе 2 вместе с typography. */
-  --paper:       #fafaf7;
-  --surface:     #ffffff;
-  --ink:         #1f2420;
-  --ink-dim:     #5a6159;
-  --ink-faint:   #9aa297;
-  --rule:        #e5e3dc;
-  --forest:      #2d5a3a;
-  --forest-deep: #1a3a24;
-  --accent:      #d88c1e;
-}
 
 * {
   box-sizing: border-box;
@@ -75,7 +61,7 @@ a:hover {
 /* ─── Site header ──────────────────────────────────────────────── */
 
 .site-header {
-  background: var(--surface);
+  background: var(--paper-rise);
   border-bottom: 1px solid var(--rule);
   position: sticky;
   top: 0;
@@ -250,7 +236,7 @@ a:hover {
 .home-grid__card {
   display: block;
   padding: 20px;
-  background: var(--surface);
+  background: var(--paper-rise);
   border: 1px solid var(--rule);
   border-radius: 10px;
   text-decoration: none;
@@ -280,7 +266,7 @@ a:hover {
 .placeholder-box {
   margin-top: 32px;
   padding: 24px;
-  background: var(--surface);
+  background: var(--paper-rise);
   border: 1px dashed var(--rule);
   border-radius: 10px;
   color: var(--ink-dim);

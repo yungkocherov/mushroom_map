@@ -1,0 +1,143 @@
+/*
+ * mushroom-map design tokens.
+ *
+ * Consumed by apps/web via `import "@mushroom-map/tokens/tokens.css"`.
+ * Future apps/mobile consumes the same values from index.ts.
+ *
+ * Positioning: field-guide / natural-history journal.
+ * References: iNaturalist, Merlin/eBird, plantsoftheworldonline.org.
+ *
+ * Light mode is the default. Dark mode activates via
+ * `[data-theme="dark"]` on <html>, set by a pre-hydrate script
+ * reading localStorage (see Phase 0 commit i).
+ */
+
+:root {
+  /* ─── Palette — surfaces & text ─────────────────────────────────── */
+  --paper:        #f5f1e6;  /* page background, warm ivory */
+  --paper-rise:   #fcf9f0;  /* cards, raised surfaces */
+  --ink:          #20241e;  /* body text, warm near-black */
+  --ink-dim:      #6b6a5e;  /* captions, secondary text */
+  --ink-faint:    #a5a295;  /* placeholders, tertiary */
+  --rule:         #d8d2c0;  /* hairlines, card borders */
+
+  /* ─── Palette — forest primary ──────────────────────────────────── */
+  --forest:       #2d5a3a;  /* primary accent, buttons, links */
+  --forest-deep:  #1a3a24;  /* hover state */
+  --moss:         #7a9b64;  /* edible badge, soft secondary */
+  --birch:        #e8e2d1;  /* hover bg for cards on paper */
+
+  /* ─── Palette — chanterelle CTA (use sparingly — ONE per viewport) ─ */
+  --chanterelle:  #d88c1e;
+  --amber-deep:   #a86b0f;
+
+  /* ─── Palette — status ──────────────────────────────────────────── */
+  --danger:       #8b2a2a;  /* toxic species, safety */
+  --caution:      #c07a2c;  /* conditional-edible warnings */
+
+  /* ─── A11y ──────────────────────────────────────────────────────── */
+  --focus-ring:   #d88c1e;
+
+  /* ─── Typography ────────────────────────────────────────────────── */
+  --font-display: "Fraunces Variable", "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body:    "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Scale — 1.25 ratio, root 16px */
+  --fs-display:   2.625rem;   /* 42px — hero */
+  --fs-h1:        2rem;        /* 32px */
+  --fs-h2:        1.5rem;      /* 24px */
+  --fs-h3:        1.25rem;     /* 20px */
+  --fs-lg:        1.125rem;    /* 18px — lead paragraph */
+  --fs-body:      1rem;        /* 16px */
+  --fs-sm:        0.875rem;    /* 14px — captions */
+  --fs-xs:        0.75rem;     /* 12px — micro */
+
+  --lh-tight:     1.15;
+  --lh-normal:    1.55;
+  --lh-long:      1.7;
+
+  /* ─── Spacing ───────────────────────────────────────────────────── */
+  --space-1:      0.25rem;   /* 4px */
+  --space-2:      0.5rem;    /* 8px */
+  --space-3:      0.75rem;   /* 12px */
+  --space-4:      1rem;      /* 16px */
+  --space-5:      1.5rem;    /* 24px */
+  --space-6:      2rem;      /* 32px */
+  --space-7:      3rem;      /* 48px */
+  --space-8:      4rem;      /* 64px */
+  --space-9:      6rem;      /* 96px */
+
+  /* ─── Radius ────────────────────────────────────────────────────── */
+  --radius-xs:    2px;
+  --radius-sm:    4px;
+  --radius-md:    8px;
+  --radius-lg:    12px;
+  --radius-pill:  9999px;
+
+  /* ─── Shadow ────────────────────────────────────────────────────── */
+  --shadow-1:     0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-2:     0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-3:     0 12px 32px rgba(0, 0, 0, 0.10);
+  --shadow-focus: 0 0 0 3px rgba(216, 140, 30, 0.35);
+}
+
+/* ─── Dark mode — bespoke palette, not an inverted light ──────────── */
+[data-theme="dark"] {
+  --paper:        #171913;
+  --paper-rise:   #1f221b;
+  --ink:          #e4dfd0;
+  --ink-dim:      #93907f;
+  --ink-faint:    #5f5d52;
+  --rule:         #2b2e23;
+
+  --forest:       #72b07e;  /* lightened for WCAG AA on dark */
+  --forest-deep:  #8fc395;
+  --moss:         #9bb785;
+  --birch:        #2b2e23;
+
+  --chanterelle:  #f3a435;  /* lightened */
+  --amber-deep:   #e8941f;
+
+  --danger:       #d05252;
+  --caution:      #dfa25c;
+
+  --focus-ring:   #f3a435;
+
+  --shadow-1:     0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-2:     0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-3:     0 12px 32px rgba(0, 0, 0, 0.55);
+  --shadow-focus: 0 0 0 3px rgba(243, 164, 53, 0.40);
+}
+
+/* Honour OS-level preference when the user has not explicitly chosen.
+   The pre-hydrate script (commit i) sets `data-theme` on <html> based on
+   localStorage; if absent, we fall through to `prefers-color-scheme`. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:        #171913;
+    --paper-rise:   #1f221b;
+    --ink:          #e4dfd0;
+    --ink-dim:      #93907f;
+    --ink-faint:    #5f5d52;
+    --rule:         #2b2e23;
+
+    --forest:       #72b07e;
+    --forest-deep:  #8fc395;
+    --moss:         #9bb785;
+    --birch:        #2b2e23;
+
+    --chanterelle:  #f3a435;
+    --amber-deep:   #e8941f;
+
+    --danger:       #d05252;
+    --caution:      #dfa25c;
+
+    --focus-ring:   #f3a435;
+
+    --shadow-1:     0 1px 2px rgba(0, 0, 0, 0.35);
+    --shadow-2:     0 4px 16px rgba(0, 0, 0, 0.45);
+    --shadow-3:     0 12px 32px rgba(0, 0, 0, 0.55);
+    --shadow-focus: 0 0 0 3px rgba(243, 164, 53, 0.40);
+  }
+}
