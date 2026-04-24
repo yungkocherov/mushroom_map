@@ -12,6 +12,20 @@
     <meta name="apple-mobile-web-app-title" content="Грибная карта" />
     <title>Грибная карта Ленобласти</title>
     <meta name="description" content="Интерактивная грибная карта Ленинградской области: тип леса, виды грибов, сезоны плодоношения, прогноз." />
+    <script>
+      // Pre-hydrate theme: before React mounts, read the user's choice
+      // from localStorage and set data-theme on <html>. Without this
+      // the page flashes the system-scheme colours for one frame
+      // before React re-applies the stored preference.
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t === "light" || t === "dark") {
+            document.documentElement.setAttribute("data-theme", t);
+          }
+        } catch (e) { /* private browsing / storage disabled */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

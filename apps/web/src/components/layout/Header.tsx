@@ -1,4 +1,5 @@
 import { NavLink, Link } from "react-router-dom";
+import { ThemeToggle } from "../ui/ThemeToggle";
 import styles from "./Header.module.css";
 
 const NAV_ITEMS = [
@@ -21,19 +22,22 @@ export function Header() {
             <span className={styles.brandSub}>Ленинградская область</span>
           </span>
         </Link>
-        <nav className={styles.nav} aria-label="Основная навигация">
-          {NAV_ITEMS.map(({ to, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                `${styles.link} ${isActive ? styles.linkActive : ""}`
-              }
-            >
-              {label}
-            </NavLink>
-          ))}
-        </nav>
+        <div className={styles.navWrap}>
+          <nav className={styles.nav} aria-label="Основная навигация">
+            {NAV_ITEMS.map(({ to, label }) => (
+              <NavLink
+                key={to}
+                to={to}
+                className={({ isActive }) =>
+                  `${styles.link} ${isActive ? styles.linkActive : ""}`
+                }
+              >
+                {label}
+              </NavLink>
+            ))}
+          </nav>
+          <ThemeToggle />
+        </div>
       </div>
     </header>
   );

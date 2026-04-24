@@ -54,6 +54,12 @@
   margin-top: 2px;
 }
 
+.navWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
 .nav {
   display: flex;
   align-items: center;
