@@ -24,6 +24,8 @@ import { AuthCompletePage } from "./routes/AuthCompletePage";
 import { AuthErrorPage } from "./routes/AuthErrorPage";
 import { CabinetPage } from "./routes/CabinetPage";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
+import { PrivacyPage } from "./routes/legal/PrivacyPage";
+import { TermsPage } from "./routes/legal/TermsPage";
 
 export const router = createBrowserRouter([
   {
@@ -68,6 +70,10 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+
+      // Legal drafts — на них линкуется footer, AuthPage и MDX-методология.
+      { path: "legal/privacy", element: <PrivacyPage /> },
+      { path: "legal/terms",   element: <TermsPage /> },
 
       { path: "*",     element: <NotFoundPage /> },
     ],
