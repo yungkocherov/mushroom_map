@@ -24,6 +24,7 @@ import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
 import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
 import { SpeciesListPage } from "./routes/SpeciesListPage";
+import { SpeciesDetailPage } from "./routes/SpeciesDetailPage";
 import { AuthPage } from "./routes/AuthPage";
 import { AuthCompletePage } from "./routes/AuthCompletePage";
 import { AuthErrorPage } from "./routes/AuthErrorPage";
@@ -73,7 +74,8 @@ export const router = createBrowserRouter([
           </Suspense>
         ),
       },
-      { path: "species", element: <SpeciesListPage /> },
+      { path: "species",        element: <SpeciesListPage /> },
+      { path: "species/:slug",  element: <SpeciesDetailPage /> },
       {
         path: "guide",
         element: (
