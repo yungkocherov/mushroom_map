@@ -19,6 +19,11 @@ import { PlaceholderPage } from "./routes/PlaceholderPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
 import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
+import { AuthPage } from "./routes/AuthPage";
+import { AuthCompletePage } from "./routes/AuthCompletePage";
+import { AuthErrorPage } from "./routes/AuthErrorPage";
+import { CabinetPage } from "./routes/CabinetPage";
+import { ProtectedRoute } from "./auth/ProtectedRoute";
 
 export const router = createBrowserRouter([
   {
@@ -48,6 +53,22 @@ export const router = createBrowserRouter([
       { path: "methodology",         element: <MethodologyPage /> },
       { path: "methodology/:slug",    element: <MethodologyArticlePage /> },
       { path: "about", element: <AboutPage /> },
+
+      // Auth flow: /auth (login) -> Yandex -> /api/auth/yandex/callback
+      // (backend, устанавливает cookie) -> /auth/complete (hydrate) ->
+      // /cabinet. Ошибки OAuth приземляются на /auth/error.
+      { path: "auth",           element: <AuthPage /> },
+      { path: "auth/complete",  element: <AuthCompletePage /> },
+      { path: "auth/error",     element: <AuthErrorPage /> },
+      {
+        path: "cabinet",
+        element: (
+          <ProtectedRoute>
+            <CabinetPage />
+          </ProtectedRoute>
+        ),
+      },
+
       { path: "*",     element: <NotFoundPage /> },
     ],
   },

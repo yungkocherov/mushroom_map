@@ -25,6 +25,8 @@ import type {
   NominatimResult,
   StatsOverview,
   SpeciesNowResponse,
+  AuthUser,
+  AuthRefreshResponse,
 } from "@mushroom-map/types";
 
 function resolveApiBase(): string {
@@ -84,6 +86,53 @@ export async function fetchSpeciesNow(window = "14d", limit = 5): Promise<Specie
   const url = `${API_BASE}/api/stats/vk/species-now?window=${window}&limit=${limit}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`stats/vk/species-now ${res.status}`);
+  return res.json();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────────────────────────────
+// Refresh и logout — cookie-based, обязательно credentials:"include",
+// иначе cross-origin fetch (dev proxy тоже относится к этому классу)
+// не отправляет HttpOnly cookie. fetchMe принимает access_token
+// аргументом, чтобы клиент не знал как его хранит потребитель.
+
+/** Абсолютный URL, на который надо редиректить браузер для OAuth login
+ *  через Yandex ID. Возвращается как URL, а не fetch, чтобы навигация
+ *  прошла в top-level window (нужно для 302 → oauth.yandex.ru). */
+export function authYandexLoginUrl(): string {
+  return `${API_BASE}/api/auth/yandex/login`;
+}
+
+export async function authRefresh(): Promise<AuthRefreshResponse | null> {
+  const res = await fetch(`${API_BASE}/api/auth/refresh`, {
+    method: "POST",
+    credentials: "include",
+  });
+  if (res.status === 401) return null;          // нет/истёкший cookie
+  if (!res.ok) throw new Error(`auth/refresh ${res.status}`);
+  return res.json();
+}
+
+export async function authLogout(): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/auth/logout`, {
+    method: "POST",
+    credentials: "include",
+  });
+  // 204 No Content — всё норм. Любой другой код игнорируем: logout
+  // должен быть мягким, чтобы разлогинить клиента даже если сервер лёг.
+  if (!res.ok && res.status !== 204) {
+    // не кидаем, но сигнализируем через console (фронт всё равно очистит state)
+    // eslint-disable-next-line no-console
+    console.warn(`auth/logout returned ${res.status}`);
+  }
+}
+
+export async function fetchMe(accessToken: string): Promise<AuthUser> {
+  const res = await fetch(`${API_BASE}/api/user/me`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`user/me ${res.status}`);
   return res.json();
 }
 

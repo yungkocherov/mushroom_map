@@ -54,23 +54,37 @@ fungi theoretical from species registry.
 - **Vite HMR on Docker + Windows needs polling**: `vite.config.ts` has
   `watch: { usePolling: true, interval: 300 }`. If file changes don't
   reload, verify that config is intact.
-- **Web npm packages must be installed inside the container.** The web
-  service uses an anonymous volume `/app/node_modules` (docker-compose.yml)
-  that shadows the host bind-mount. Host-side `npm install` updates
-  package.json but does not reach the running container. Use:
-  `docker compose exec web npm install <pkg>`. Rebuild (`docker compose
-  build web`) when you want a clean node_modules baked into the image.
+- **Web dev запускается на хосте, не в docker** (с Phase 1 D3). Docker
+  Desktop + WSL2 + virtiofs на Windows ловит esbuild `Cannot read
+  directory ".": cannot allocate memory` при bind-mount workspace-репо.
+  Поэтому service `web` теперь в профиле `full-web` и НЕ поднимается
+  через `docker compose --profile full up -d`. Dev-loop:
+  ```
+  export PATH="/c/Program Files/nodejs:$PATH"
+  npm run dev              # из репо-root: vite workspace @mushroom-map/web
+  ```
+  Контейнер `web` всё ещё билдится (`docker compose --profile full-web
+  build web`) для прод-проверки. Dockerfile обновлён под workspaces:
+  copy root + packages/* package.json, `npm ci --workspaces
+  --include-workspace-root`, WORKDIR /workspace/apps/web. Когда ставишь
+  host-side новый npm-пакет: `npm install --workspace=@mushroom-map/web
+  <pkg>` из репо-root.
 - **PMTiles Range requests** go direct to API (`http://${API_ORIGIN}/tiles/...`),
   not through Vite proxy. Vite proxy doesn't handle Range well.
 
 ## Common commands
 
 ```bash
-# Bring up the stack
+# Bring up backend stack (db + api). Web фронт запускается на хосте
+# отдельно через `npm run dev` (см. Environment quirks).
 docker compose --profile full up -d
 
-# DB only (for local API/web dev)
+# DB only (для API/web разработки без докеризированного API)
 docker compose up -d db
+
+# Фронт — hot-reload Vite на хосте
+export PATH="/c/Program Files/nodejs:$PATH"
+npm run dev                        # репо-root: workspace @mushroom-map/web
 
 # Migrations
 .venv/Scripts/python.exe db/migrate.py

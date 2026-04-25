@@ -38,8 +38,12 @@ services:
     profiles: ["full"]
 
   web:
+    # Build context = репо-root, потому что Dockerfile достаёт workspace
+    # package.json из packages/* (npm workspaces). До Phase 0 (b) контекст
+    # был ./apps/web, но после миграции на workspaces это поломалось.
     build:
-      context: ./apps/web
+      context: .
+      dockerfile: apps/web/Dockerfile
     container_name: mushroom_web
     restart: unless-stopped
     depends_on:
@@ -48,10 +52,13 @@ services:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
     ports:
       - "5173:5173"
-    volumes:
-      - ./apps/web:/app
-      - /app/node_modules
-    profiles: ["full"]
+    # Bind-mount'ы отключены: на Docker Desktop + Windows Vite dep-scanner
+    # ловит ENOMEM при обходе workspace-дерева (проблема WSL2 virtiofs,
+    # не нашего кода). Dev-loop сейчас запускается на хосте:
+    #   cd apps/web && npm run dev
+    # Контейнер поднимает готовый билд (прод-образ), для dev не нужен.
+    # profiles=["full-web"] — не включается в обычный `up -d`.
+    profiles: ["full-web"]
 
 volumes:
   pgdata:

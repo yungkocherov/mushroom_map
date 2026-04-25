@@ -1,5 +1,6 @@
 import { NavLink, Link } from "react-router-dom";
 import { ThemeToggle } from "../ui/ThemeToggle";
+import { HeaderAuth } from "./HeaderAuth";
 import styles from "./Header.module.css";
 
 const NAV_ITEMS = [
@@ -36,6 +37,7 @@ export function Header() {
               </NavLink>
             ))}
           </nav>
+          <HeaderAuth />
           <ThemeToggle />
         </div>
       </div>
