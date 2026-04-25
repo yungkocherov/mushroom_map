@@ -513,7 +513,7 @@ export function MapView() {
           fetchWaterDistanceAt(lat, lng).catch(() => null),
           fetchTerrainAt(lat, lng).catch(() => null),
         ]);
-        popup.setHTML(buildPopupHtml(forest, soil, water, terrain));
+        popup.setHTML(buildPopupHtml(forest, soil, water, terrain, lat, lng));
       } catch {
         popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
       }

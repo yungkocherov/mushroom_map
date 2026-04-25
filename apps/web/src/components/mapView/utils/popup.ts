@@ -118,15 +118,36 @@ function buildSoilHtml(soil: SoilAtResponse | null): string {
     </div>`;
 }
 
+/**
+ * «Сохранить это место» — кнопка в конце попапа, диспатчит CustomEvent
+ * `mm:save-spot` с {lat, lon}. Слушает MapPage и открывает модалку.
+ * Auth-проверку делает обработчик, не popup — здесь рисуем кнопку
+ * безусловно.
+ */
+function buildSaveSpotButton(lat: number, lon: number): string {
+  return `
+    <div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee;text-align:right">
+      <button type="button"
+        onclick="window.dispatchEvent(new CustomEvent('mm:save-spot',{detail:{lat:${lat},lon:${lon}}}))"
+        style="font-family:inherit;font-size:11px;cursor:pointer;background:transparent;border:1px solid #d8d2c0;border-radius:4px;padding:3px 8px;color:#2d5a3a">
+        Сохранить это место
+      </button>
+    </div>`;
+}
+
+
 export function buildPopupHtml(
   data: ForestAtResponse,
   soil?: SoilAtResponse | null,
   water?: WaterDistanceResponse | null,
   terrain?: TerrainAtResponse | null,
+  lat?: number,
+  lon?: number,
 ): string {
+  const saveBtn = (lat != null && lon != null) ? buildSaveSpotButton(lat, lon) : "";
   if (!data.forest) {
     return `<div style="font-family:sans-serif;padding:4px 2px;color:#555">
-      Вне лесных полигонов${buildTerrainHtml(terrain ?? null)}${buildWaterHtml(water ?? null)}${buildSoilHtml(soil ?? null)}
+      Вне лесных полигонов${buildTerrainHtml(terrain ?? null)}${buildWaterHtml(water ?? null)}${buildSoilHtml(soil ?? null)}${saveBtn}
     </div>`;
   }
 
@@ -208,5 +229,6 @@ export function buildPopupHtml(
     ${buildTerrainHtml(terrain ?? null)}
     ${buildWaterHtml(water ?? null)}
     ${buildSoilHtml(soil ?? null)}
+    ${saveBtn}
   </div>`;
 }

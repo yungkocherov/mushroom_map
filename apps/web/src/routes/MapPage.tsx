@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { fetchSpeciesDetail } from "@mushroom-map/api-client";
 import { MapView } from "../components/MapView";
+import { SaveSpotModal } from "../components/SaveSpotModal";
+import { useAuth } from "../auth/useAuth";
 
 
 export function MapPage() {
@@ -25,11 +27,42 @@ export function MapPage() {
     };
   }, [speciesSlug]);
 
+  // Save-spot flow: попап карты диспатчит mm:save-spot из inline-кнопки.
+  // Здесь ловим, проверяем auth, открываем модалку или редиректим на /auth.
+  const { status } = useAuth();
+  const navigate = useNavigate();
+  const [saveTarget, setSaveTarget] = useState<{ lat: number; lon: number } | null>(null);
+
+  useEffect(() => {
+    const onSaveSpot = (e: Event) => {
+      const ce = e as CustomEvent<{ lat: number; lon: number }>;
+      const detail = ce.detail;
+      if (!detail || typeof detail.lat !== "number" || typeof detail.lon !== "number") return;
+
+      if (status === "authenticated") {
+        setSaveTarget({ lat: detail.lat, lon: detail.lon });
+      } else if (status === "unauth") {
+        const next = encodeURIComponent("/map" + window.location.search);
+        navigate(`/auth?next=${next}`);
+      }
+      // status === "loading" — игнорируем; редко и без последствий.
+    };
+    window.addEventListener("mm:save-spot", onSaveSpot as EventListener);
+    return () => window.removeEventListener("mm:save-spot", onSaveSpot as EventListener);
+  }, [status, navigate]);
+
   return (
     <>
       <MapView />
       {speciesName && speciesSlug && (
         <SpeciesContextChip slug={speciesSlug} name={speciesName} />
+      )}
+      {saveTarget && (
+        <SaveSpotModal
+          lat={saveTarget.lat}
+          lon={saveTarget.lon}
+          onClose={() => setSaveTarget(null)}
+        />
       )}
     </>
   );

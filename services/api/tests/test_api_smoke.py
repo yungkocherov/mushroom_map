@@ -153,3 +153,91 @@ def test_forest_tiles_served_with_range() -> None:
     # Accept-Ranges должен быть bytes (для Range support)
     accept_ranges = r.headers.get("accept-ranges", "")
     assert accept_ranges == "bytes" or r.status_code == 206
+
+
+# ─── /api/cabinet/spots (auth gate regression guard) ────────────────────────
+# Полноценные CRUD-тесты потребовали бы создавать тестового юзера в БД и
+# выпускать access JWT — не лезет в смок-стиль («чёрный ящик, без
+# фикстур»). Поэтому здесь только проверяем что auth-гейт стоит и
+# реагирует на отсутствие/мусорный токен. Реальный CRUD проверен в
+# Phase 5 e2e-скрипте при коммите.
+
+
+def test_cabinet_spots_requires_auth() -> None:
+    r = CLIENT.get("/api/cabinet/spots")
+    assert r.status_code == 401
+    assert "bearer" in r.json().get("detail", "").lower()
+
+
+def test_cabinet_create_requires_auth() -> None:
+    r = CLIENT.post(
+        "/api/cabinet/spots",
+        json={"name": "x", "lat": 60.0, "lon": 30.0},
+    )
+    assert r.status_code == 401
+
+
+def test_cabinet_rejects_garbage_token() -> None:
+    r = CLIENT.get("/api/cabinet/spots", headers={"Authorization": "Bearer garbage"})
+    assert r.status_code == 401
+    assert "invalid" in r.json().get("detail", "").lower()
+
+
+def test_cabinet_rejects_wrong_scheme() -> None:
+    """Authorization: Basic … должно отклоняться так же, как отсутствие."""
+    r = CLIENT.get("/api/cabinet/spots", headers={"Authorization": "Basic abc"})
+    assert r.status_code == 401
+
+
+# ─── /api/auth/* (auth-gate regression) ────────────────────────────────────
+
+
+def test_auth_refresh_without_cookie_401() -> None:
+    r = CLIENT.post("/api/auth/refresh")
+    assert r.status_code == 401
+
+
+def test_auth_logout_without_cookie_204() -> None:
+    """logout идемпотентен — нет cookie, тоже OK."""
+    r = CLIENT.post("/api/auth/logout")
+    assert r.status_code == 204
+
+
+def test_user_me_requires_bearer() -> None:
+    r = CLIENT.get("/api/user/me")
+    assert r.status_code == 401
+
+
+# ─── /api/species/ (Phase 3 list endpoint) ─────────────────────────────────
+
+
+def test_species_list_returns_array() -> None:
+    """Список вида — массив с минимальным набором полей."""
+    r = CLIENT.get("/api/species/")
+    assert r.status_code == 200
+    items = r.json()
+    assert isinstance(items, list)
+    assert len(items) > 0
+    s0 = items[0]
+    for key in ("slug", "name_ru", "edibility", "season_months",
+                "photo_url", "red_book", "forest_types"):
+        assert key in s0, f"missing key: {key}"
+    assert s0["edibility"] in {
+        "edible", "conditionally_edible", "inedible", "toxic", "deadly"
+    }
+
+
+def test_species_detail_known_slug() -> None:
+    r = CLIENT.get("/api/species/boletus-edulis")
+    assert r.status_code == 200
+    d = r.json()
+    assert d["slug"] == "boletus-edulis"
+    assert d["edibility"] in {"edible", "conditionally_edible"}
+    # forests — массив (может быть пустым), similars — массив
+    assert isinstance(d["forests"], list)
+    assert isinstance(d["similars"], list)
+
+
+def test_species_detail_404_on_unknown_slug() -> None:
+    r = CLIENT.get("/api/species/this-mushroom-does-not-exist")
+    assert r.status_code == 404
