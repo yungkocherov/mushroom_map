@@ -55,3 +55,77 @@ jobs:
       - name: Vite build (web)
         working-directory: apps/web
         run: npx vite build
+
+  # API integration tests — поднимаем PostGIS sidecar'ом, применяем миграции,
+  # запускаем uvicorn в фоне на 127.0.0.1:8000, гоняем pytest. Покрытие:
+  # smoke (test_api_smoke.py) + auth-refresh + cabinet CRUD + oauth state.
+  # Без этого джоба интеграционные тесты авто-скипались (DB unreachable).
+  api-integration:
+    name: api integration tests
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER:     mushroom
+          POSTGRES_PASSWORD: mushroom_dev
+          POSTGRES_DB:       mushroom_map
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mushroom -d mushroom_map"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # CI host:port — не 5434, т.к. в GH Actions нет конфликта с
+      # native Postgres (это прод-локалью был).
+      DATABASE_URL: postgresql://mushroom:mushroom_dev@127.0.0.1:5432/mushroom_map
+      TEST_DB_DSN:  postgresql://mushroom:mushroom_dev@127.0.0.1:5432/mushroom_map
+      API_BASE:     http://127.0.0.1:8000
+      JWT_SECRET:   change-me-in-production-a-long-random-string
+      # Yandex creds оставляем пустыми — /yandex/login отдаст 503,
+      # это покрыто smoke-тестом (он не проверяет happy-path).
+      API_CORS_ORIGINS: http://localhost:5173
+      TILES_DIR:    /tmp/tiles
+      TERRAIN_DIR:  /tmp/terrain
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install api + test deps
+        working-directory: services/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+
+      - name: Apply DB migrations
+        run: |
+          mkdir -p /tmp/tiles /tmp/terrain
+          python db/migrate.py
+
+      - name: Start uvicorn in background
+        working-directory: services/api
+        run: |
+          # PYTHONPATH=src чтобы запустить без e -e установки повторно.
+          PYTHONPATH=src nohup uvicorn api.main:app --host 127.0.0.1 --port 8000 \
+              > /tmp/uvicorn.log 2>&1 &
+          # Ждём /health (uvicorn boot + DB pool init).
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health >/dev/null 2>&1; then
+              echo "API up after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/health
+
+      - name: Run pytest
+        working-directory: services/api
+        run: pytest -v tests/
+
+      - name: Show uvicorn log on failure
+        if: failure()
+        run: tail -200 /tmp/uvicorn.log
