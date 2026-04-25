@@ -32,6 +32,14 @@ from api.settings import settings
 router = APIRouter()
 
 
+# Cookie с PKCE-verifier'ом — живёт ровно на длительности OAuth-flow.
+# Никогда не попадает в URL/state — только сюда. Path сужен до callback'а
+# чтобы не светиться на других /api/auth/* эндпоинтах.
+PKCE_COOKIE_NAME = "mm_oauth_pkce"
+PKCE_COOKIE_PATH = "/api/auth/yandex/callback"
+PKCE_COOKIE_MAX_AGE = 600  # 10 мин — синхронно с OAUTH_STATE_TTL_SECONDS
+
+
 # ──────────────────────────────────────────────────────────────────────
 # helpers
 # ──────────────────────────────────────────────────────────────────────
@@ -57,6 +65,30 @@ def _clear_refresh_cookie(resp: Response) -> None:
     )
 
 
+def _set_pkce_cookie(resp: Response, verifier: str) -> None:
+    """PKCE verifier хранится тут на время OAuth round-trip. SameSite=Lax
+    обязателен — Yandex редиректит обратно top-level GET'ом, нужен
+    bypass для cross-site GET. Path сужен до callback пути."""
+    resp.set_cookie(
+        key=PKCE_COOKIE_NAME,
+        value=verifier,
+        max_age=PKCE_COOKIE_MAX_AGE,
+        httponly=True,
+        secure=settings.cookie_secure,
+        samesite="lax",
+        path=PKCE_COOKIE_PATH,
+        domain=settings.cookie_domain,
+    )
+
+
+def _clear_pkce_cookie(resp: Response) -> None:
+    resp.delete_cookie(
+        key=PKCE_COOKIE_NAME,
+        path=PKCE_COOKIE_PATH,
+        domain=settings.cookie_domain,
+    )
+
+
 def _client_meta(request: Request) -> tuple[Optional[str], Optional[str]]:
     ua = request.headers.get("user-agent")
     # Если API живёт за Cloudflare/Caddy, real IP будет в X-Forwarded-For.
@@ -74,10 +106,12 @@ def _client_meta(request: Request) -> tuple[Optional[str], Optional[str]]:
 def yandex_login() -> RedirectResponse:
     """Сгенерировать PKCE + state и редиректнуть на oauth.yandex.ru.
 
-    State с зашитым PKCE-verifier'ом мы передаём как query-параметр
-    `state` *самой Yandex'е* — она вернёт его обратно в callback. Так
-    мы избегаем cookie (меньше cookie-поверхности) и заодно получаем
-    проверку CSRF (state подписан нашим jwt_secret)."""
+    PKCE-verifier хранится в HttpOnly cookie на time-of-flow (10 мин).
+    State JWT несёт ТОЛЬКО nonce — он CSRF-binding'ит callback с этой
+    конкретной попыткой логина. Раньше verifier ходил внутри state и
+    светился в URL/Yandex-логах — это лишало PKCE смысла (RFC 7636 §1:
+    verifier не должен покидать клиент пока не дойдёт до /token).
+    """
     if not settings.yandex_client_id or not settings.yandex_client_secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -86,14 +120,13 @@ def yandex_login() -> RedirectResponse:
     verifier = yandex.generate_pkce_verifier()
     challenge = yandex.pkce_challenge(verifier)
 
-    # state включает nonce — чтобы один и тот же authorize-URL нельзя
-    # было переиспользовать и чтобы JWT не был детерминированным.
     state_jwt = jwt_tokens.encode_oauth_state({
         "nonce": secrets.token_urlsafe(16),
-        "pkce_verifier": verifier,
     })
     url = yandex.build_authorize_url(state=state_jwt, code_challenge=challenge)
-    return RedirectResponse(url=url, status_code=302)
+    resp = RedirectResponse(url=url, status_code=302)
+    _set_pkce_cookie(resp, verifier)
+    return resp
 
 
 @router.get("/yandex/callback")
@@ -121,13 +154,23 @@ def yandex_callback(request: Request) -> RedirectResponse:
         )
 
     try:
-        state_payload = jwt_tokens.decode_oauth_state(state)
-        verifier = state_payload.get("pkce_verifier")
-        if not verifier:
-            raise jwt_tokens.OAuthStateInvalid("no pkce_verifier in state")
+        # State JWT валидируется, но дальше нужен только сам факт что он
+        # наш и не просрочен (CSRF binding к /login сессии).
+        jwt_tokens.decode_oauth_state(state)
     except jwt_tokens.OAuthStateInvalid:
-        return RedirectResponse(
+        resp = RedirectResponse(
             url=f"{settings.frontend_auth_error_url}?reason=bad_state",
+            status_code=302,
+        )
+        _clear_pkce_cookie(resp)
+        return resp
+
+    verifier = request.cookies.get(PKCE_COOKIE_NAME)
+    if not verifier:
+        # Cookie не пришла — возможно, юзер пришёл из истории браузера
+        # без свежего /login, или прошёл TTL. Просим начать заново.
+        return RedirectResponse(
+            url=f"{settings.frontend_auth_error_url}?reason=missing_pkce",
             status_code=302,
         )
 
@@ -135,10 +178,12 @@ def yandex_callback(request: Request) -> RedirectResponse:
         token_resp = yandex.exchange_code(code, verifier)
         yuser = yandex.fetch_userinfo(token_resp.access_token)
     except yandex.YandexOAuthError:
-        return RedirectResponse(
+        resp = RedirectResponse(
             url=f"{settings.frontend_auth_error_url}?reason=provider_error",
             status_code=302,
         )
+        _clear_pkce_cookie(resp)
+        return resp
 
     ua, ip = _client_meta(request)
     with get_conn() as conn:
@@ -157,10 +202,11 @@ def yandex_callback(request: Request) -> RedirectResponse:
         )
         conn.commit()
 
-    # Редирект с выставленной HttpOnly cookie. RedirectResponse в Starlette
-    # поддерживает set_cookie через headers, но проще сконструировать вручную.
+    # Успех: выставляем refresh, чистим использованную PKCE cookie
+    # (одноразовая по контракту flow).
     redirect = RedirectResponse(url=settings.frontend_auth_complete_url, status_code=302)
     _set_refresh_cookie(redirect, new_rt.raw, settings.refresh_token_ttl_seconds)
+    _clear_pkce_cookie(redirect)
     return redirect
 
 

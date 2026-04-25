@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from api.db import close_pool, init_pool
 from api.settings import settings
 from api.routes import (
-    forest, species, regions, tiles, soil, water, terrain, districts, stats,
+    forest, species, regions, soil, water, terrain, districts, stats,
     auth, user, cabinet,
 )
 
@@ -48,11 +48,10 @@ app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
 app.include_router(auth.router,  prefix="/api/auth",  tags=["auth"])
 app.include_router(user.router,    prefix="/api/user",    tags=["user"])
 app.include_router(cabinet.router, prefix="/api/cabinet", tags=["cabinet"])
-app.include_router(tiles.router, prefix="/tiles", tags=["tiles"])
 
-# Статические PMTiles файлы (range-request support через StaticFiles).
-# Роутер выше перехватывает /tiles/forest/{z}/{x}/{y}.mvt;
-# всё остальное (в т.ч. /tiles/forest.pmtiles) отдаёт StaticFiles.
+# Статические PMTiles файлы — раздача с поддержкой Range-requests через
+# StaticFiles. Динамический /tiles/{z}/{x}/{y}.mvt был дроплен (мёртвый
+# код, фронт всегда читает PMTiles range'ами).
 _tiles_dir = Path(settings.tiles_dir)
 _tiles_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/tiles", StaticFiles(directory=str(_tiles_dir)), name="static-tiles")

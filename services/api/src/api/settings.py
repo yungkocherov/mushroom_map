@@ -1,6 +1,14 @@
 """Настройки API сервиса."""
 
+import os
+import sys
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+# Маркер default'а для JWT_SECRET. Любое prod-окружение должно
+# переопределить, иначе сессии форжатся public-known секретом.
+_JWT_SECRET_DEFAULT = "change-me-in-production-a-long-random-string"
 
 
 class Settings(BaseSettings):
@@ -15,7 +23,7 @@ class Settings(BaseSettings):
     # jwt_secret — HS256, используется и для access-JWT, и для подписи
     # короткоживущих OAuth-state/PKCE-cookies. В .env.example указан
     # placeholder; в dev'е достаточно любой случайной строки.
-    jwt_secret: str = "change-me-in-production-a-long-random-string"
+    jwt_secret: str = _JWT_SECRET_DEFAULT
     jwt_issuer: str = "mushroom-map"
     # Access-token живёт 15 минут — фронт хранит в памяти, передаёт как
     # Authorization: Bearer. Refresh (30 дней) — в HttpOnly cookie, в БД
@@ -51,3 +59,30 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+
+# Hard fail в проде если JWT_SECRET не переопределён. ENV=prod
+# (или COOKIE_SECURE=true) — индикатор. Для dev/test — warn-only.
+def _validate_secret() -> None:
+    is_default = settings.jwt_secret == _JWT_SECRET_DEFAULT
+    if not is_default:
+        return
+    looks_like_prod = (
+        settings.cookie_secure
+        or os.environ.get("ENV", "").lower() in {"prod", "production"}
+    )
+    if looks_like_prod:
+        sys.stderr.write(
+            "FATAL: JWT_SECRET is the default value but environment looks "
+            "like production (cookie_secure=True or ENV=prod). Forge any "
+            "session for any user. Set JWT_SECRET to a long random string "
+            "(see infra/.env.prod.example).\n"
+        )
+        raise SystemExit(2)
+    sys.stderr.write(
+        "WARNING: JWT_SECRET uses the public default. OK for dev; NEVER "
+        "ship to production.\n"
+    )
+
+
+_validate_secret()

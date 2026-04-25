@@ -19,17 +19,9 @@ import { Container } from "../components/layout/Container";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { useAuth } from "../auth/useAuth";
+import { SPOT_COLOR_OPTIONS } from "../lib/spotColors";
 import styles from "./CabinetSpotsPage.module.css";
 import prose from "./Prose.module.css";
-
-
-const COLOR_OPTIONS: { value: SpotColor; label: string; css: string }[] = [
-  { value: "forest",      label: "Лес",        css: "var(--forest)" },
-  { value: "chanterelle", label: "Лисичка",    css: "var(--chanterelle)" },
-  { value: "moss",        label: "Мох",        css: "var(--moss)" },
-  { value: "birch",       label: "Берёза",     css: "var(--birch)" },
-  { value: "danger",      label: "Опасность",  css: "var(--danger)" },
-];
 
 
 export function CabinetSpotsPage() {
@@ -193,7 +185,7 @@ export function CabinetSpotsPage() {
 
           <fieldset className={styles.colorRow}>
             <legend className={styles.colorLegend}>Маркер</legend>
-            {COLOR_OPTIONS.map((c) => (
+            {SPOT_COLOR_OPTIONS.map((c) => (
               <label key={c.value} className={styles.colorOpt}>
                 <input
                   type="radio"
@@ -202,7 +194,7 @@ export function CabinetSpotsPage() {
                   checked={color === c.value}
                   onChange={() => setColor(c.value)}
                 />
-                <span className={styles.colorDot} style={{ background: c.css }} />
+                <span className={styles.colorDot} style={{ background: c.cssVar }} />
                 <span>{c.label}</span>
               </label>
             ))}
@@ -231,7 +223,7 @@ export function CabinetSpotsPage() {
       {spots && spots.length > 0 && (
         <ul className={styles.list}>
           {spots.map((s) => {
-            const colorCss = COLOR_OPTIONS.find((c) => c.value === s.color)?.css ?? "var(--forest)";
+            const colorCss = SPOT_COLOR_OPTIONS.find((c) => c.value === s.color)?.cssVar ?? "var(--forest)";
             return (
               <li key={s.id} className={styles.row}>
                 <span className={styles.markerDot} style={{ background: colorCss }} aria-hidden="true" />

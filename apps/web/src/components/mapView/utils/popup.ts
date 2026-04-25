@@ -119,20 +119,62 @@ function buildSoilHtml(soil: SoilAtResponse | null): string {
 }
 
 /**
- * «Сохранить это место» — кнопка в конце попапа, диспатчит CustomEvent
- * `mm:save-spot` с {lat, lon}. Слушает MapPage и открывает модалку.
- * Auth-проверку делает обработчик, не popup — здесь рисуем кнопку
- * безусловно.
+ * «Сохранить это место» — кнопка в конце попапа. Раньше тут был
+ * inline `onclick="window.dispatchEvent(...)"` со склейкой lat/lon в
+ * JS-литерал — антипаттерн (XSS вектор для будущих полей + строгий
+ * CSP запретит inline-script). Теперь: безопасный data-* атрибут,
+ * MapView навешивает listener после `setHTML`. См. `attachPopupHandlers`.
  */
 function buildSaveSpotButton(lat: number, lon: number): string {
   return `
     <div style="margin-top:10px;padding-top:8px;border-top:1px solid #eee;text-align:right">
       <button type="button"
-        onclick="window.dispatchEvent(new CustomEvent('mm:save-spot',{detail:{lat:${lat},lon:${lon}}}))"
+        data-mm-save-spot
+        data-lat="${lat}"
+        data-lon="${lon}"
         style="font-family:inherit;font-size:11px;cursor:pointer;background:transparent;border:1px solid #d8d2c0;border-radius:4px;padding:3px 8px;color:#2d5a3a">
         Сохранить это место
       </button>
     </div>`;
+}
+
+
+/**
+ * Навесить обработчики на интерактивные элементы popup'а после того
+ * как HTML был установлен через `popup.setHTML(...)`. MapView вызывает
+ * это сразу после `setHTML`. Проектное правило: НЕ инлайнить
+ * `onclick=` / `onchange=` в строки — все интерактивные хендлеры
+ * крепятся здесь, на DOM, через addEventListener.
+ */
+export function attachPopupHandlers(root: HTMLElement): void {
+  const saveBtn = root.querySelector<HTMLButtonElement>("[data-mm-save-spot]");
+  if (saveBtn) {
+    saveBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      const lat = parseFloat(saveBtn.dataset.lat ?? "");
+      const lon = parseFloat(saveBtn.dataset.lon ?? "");
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+      window.dispatchEvent(
+        new CustomEvent("mm:save-spot", { detail: { lat, lon } }),
+      );
+    });
+  }
+
+  // Чекбоксы фильтра видов в forest-popup. data-sp-cb="all" / "season".
+  const allCb = root.querySelector<HTMLInputElement>('[data-sp-cb="all"]');
+  const seasonCb = root.querySelector<HTMLInputElement>('[data-sp-cb="season"]');
+  if (allCb && seasonCb) {
+    const apply = () => {
+      root.querySelectorAll<HTMLElement>(".sp-row").forEach((row) => {
+        const isPriority = row.dataset.p === "1";
+        const isSeason = row.dataset.s === "1";
+        const show = (allCb.checked || isPriority) && (!seasonCb.checked || isSeason);
+        row.style.display = show ? "table-row" : "none";
+      });
+    };
+    allCb.addEventListener("change", apply);
+    seasonCb.addEventListener("change", apply);
+  }
 }
 
 
@@ -205,13 +247,11 @@ export function buildPopupHtml(
         <span style="font-size:11px;color:#888">Виды грибов</span>
         <div style="display:flex;gap:8px;align-items:center">
           <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
-            <input type="checkbox" id="sp-all-cb" style="margin:0"
-              onchange="const ns=document.getElementById('sp-filter-cb').checked;document.querySelectorAll('.sp-row').forEach(r=>{r.style.display=(this.checked||r.dataset.p=='1')&&(!ns||r.dataset.s=='1')?'table-row':'none'})">
+            <input type="checkbox" data-sp-cb="all" style="margin:0">
             все виды
           </label>
           <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
-            <input type="checkbox" id="sp-filter-cb" style="margin:0"
-              onchange="const all=document.getElementById('sp-all-cb').checked;document.querySelectorAll('.sp-row').forEach(r=>{r.style.display=(all||r.dataset.p=='1')&&(!this.checked||r.dataset.s=='1')?'table-row':'none'})">
+            <input type="checkbox" data-sp-cb="season" style="margin:0">
             в сезоне
           </label>
         </div>

@@ -2,9 +2,14 @@
 Forest endpoints.
 
     GET /api/forest/at?lat=&lon=
-        Вернуть тип леса в точке + доминирующую породу + точную смесь
-        (если есть из Copernicus) + список видов грибов: теоретических и
-        эмпирических (агрегация по H3 ячейке или региону).
+        Тип леса в точке + доминирующая порода + species_composition
+        (если из Copernicus) + теоретические виды грибов из affinity.
+
+Раньше также возвращал `species_empirical` — агрегаты по mat-views
+`observation_h3_species_stats` и `observation_region_species_stats`.
+Эти view'хи мёртвые с тех пор как Stage-4 ингеста VK не дошёл до
+`observation`-таблицы (см. CLAUDE.md «Deprecated»). Удалено
+2026-04-25 — две лишние SQL-операции на каждый клик карты.
 """
 
 from fastapi import APIRouter, Query
@@ -45,12 +50,10 @@ def forest_at(
                 "lon": lon,
                 "forest": None,
                 "species_theoretical": [],
-                "species_empirical": [],
             }
 
         dominant_species: str = row[0]
 
-        # ── Теоретические виды (афинность к типу леса) ─────────────────────
         species_rows = conn.execute(
             """
             SELECT s.slug, s.name_ru, s.name_lat, s.edibility,
@@ -62,56 +65,6 @@ def forest_at(
             """,
             (dominant_species,),
         ).fetchall()
-
-        # ── Эмпирические виды из наблюдений ВК ─────────────────────────────
-        #
-        # Приоритет 1: H3-ячейка (если наблюдения были геопривязаны через NER/газеттир).
-        # Приоритет 2: региональная агрегация — данные всего региона.
-        #
-        # Сначала пробуем H3 (работает когда observation.h3_cell заполнен)
-        empirical_rows = conn.execute(
-            """
-            SELECT s.slug, s.name_ru, s.name_lat, s.edibility,
-                   s.season_months,
-                   SUM(st.n_observations)            AS n_obs,
-                   COUNT(DISTINCT st.observed_month) AS n_months,
-                   MAX(st.last_seen)                 AS last_seen
-            FROM observation_h3_species_stats st
-            JOIN species s ON s.id = st.species_id
-            JOIN region  r ON r.id = st.region_id
-            WHERE ST_Intersects(
-                r.geometry,
-                ST_SetSRID(ST_Point(%s, %s), 4326)
-            )
-            GROUP BY s.slug, s.name_ru, s.name_lat, s.edibility, s.season_months
-            ORDER BY n_obs DESC
-            LIMIT 15
-            """,
-            (lon, lat),
-        ).fetchall()
-
-        # Если H3 не дал результатов — берём региональные данные
-        if not empirical_rows:
-            empirical_rows = conn.execute(
-                """
-                SELECT s.slug, s.name_ru, s.name_lat, s.edibility,
-                       s.season_months,
-                       SUM(st.n_observations)            AS n_obs,
-                       COUNT(DISTINCT st.observed_month) AS n_months,
-                       MAX(st.last_seen)                 AS last_seen
-                FROM observation_region_species_stats st
-                JOIN species s ON s.id = st.species_id
-                JOIN region  r ON r.id = st.region_id
-                WHERE ST_Intersects(
-                    r.geometry,
-                    ST_SetSRID(ST_Point(%s, %s), 4326)
-                )
-                GROUP BY s.slug, s.name_ru, s.name_lat, s.edibility, s.season_months
-                ORDER BY n_obs DESC
-                LIMIT 15
-                """,
-                (lon, lat),
-            ).fetchall()
 
     return {
         "lat": lat,
@@ -136,17 +89,5 @@ def forest_at(
                 "affinity": float(s[5]),
             }
             for s in species_rows
-        ],
-        "species_empirical": [
-            {
-                "slug": e[0],
-                "name_ru": e[1],
-                "name_lat": e[2],
-                "edibility": e[3],
-                "season_months": e[4],
-                "n_observations": int(e[5]),
-                "last_seen": e[7].isoformat() if e[7] else None,
-            }
-            for e in empirical_rows
         ],
     }

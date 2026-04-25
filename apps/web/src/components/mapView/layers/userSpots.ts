@@ -10,20 +10,10 @@
  */
 
 import maplibregl, { type Map } from "maplibre-gl";
-import type { UserSpot, SpotColor } from "@mushroom-map/types";
+import type { UserSpot } from "@mushroom-map/types";
 import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
-
-
-// Цветовая палитра — должна совпадать с tokens.css ТЗ-цветами
-// и с COLOR_OPTIONS на /cabinet/spots. Если меняешь — синхронно
-// проверь оба фронта.
-const SPOT_COLOR_HEX: Record<SpotColor, string> = {
-  forest:      "#2d5a3a",
-  chanterelle: "#d88c1e",
-  birch:       "#e8e2d1",
-  moss:        "#7a9b64",
-  danger:      "#8b2a2a",
-};
+import { escapeHtml } from "../../../lib/escapeHtml";
+import { SPOT_COLOR_HEX } from "../../../lib/spotColors";
 
 
 function spotsToGeoJson(spots: UserSpot[]): GeoJSON.FeatureCollection {
@@ -125,21 +115,4 @@ export function updateUserSpots(m: Map, spots: UserSpot[]): void {
 export function removeUserSpotsLayer(m: Map): void {
   if (m.getLayer("user-spots")) m.removeLayer("user-spots");
   if (m.getSource("user-spots-src")) m.removeSource("user-spots-src");
-}
-
-
-export function setUserSpotsVisibility(m: Map, visible: boolean): void {
-  if (m.getLayer("user-spots"))
-    m.setLayoutProperty("user-spots", "visibility", visible ? "visible" : "none");
-}
-
-
-// Минимальный escape — никаких внешних либ ради двух полей строки.
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
 }

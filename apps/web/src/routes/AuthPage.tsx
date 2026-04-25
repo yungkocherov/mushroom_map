@@ -14,32 +14,15 @@ import { Container } from "../components/layout/Container";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { useAuth } from "../auth/useAuth";
+import { safeNext } from "../auth/safeNext";
 import styles from "./Prose.module.css";
-
-
-const NEXT_FALLBACK = "/";
-
-
-function safeNext(raw: string | null): string {
-  // Принимаем только относительные пути, иначе open-redirect. `new URL`
-  // с base="http://x" нормализует и отсекает схемы / внешние хосты.
-  if (!raw) return NEXT_FALLBACK;
-  try {
-    const u = new URL(raw, "http://x");
-    if (u.origin !== "http://x") return NEXT_FALLBACK;
-    const p = u.pathname + u.search;
-    return p.startsWith("/") ? p : NEXT_FALLBACK;
-  } catch {
-    return NEXT_FALLBACK;
-  }
-}
 
 
 export function AuthPage() {
   const { status, login } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const next = safeNext(searchParams.get("next"));
+  const next = safeNext(searchParams.get("next"), "/");
 
   useEffect(() => {
     if (status === "authenticated") {

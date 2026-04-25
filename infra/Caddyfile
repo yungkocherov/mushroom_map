@@ -24,6 +24,25 @@
 # api-домен — единственный, который Caddy слушает на этой VM.
 # Подставь свой через env CADDY_API_HOST=api.example.org.
 {$CADDY_API_HOST} {
+	# Security headers — уровня api.* эндпоинта (фронт на CF Pages
+	# обычно сам добавляет CSP/X-Frame-Options и т.п.). HSTS — главное:
+	# гарантирует браузеру что клиент-API контракт всегда HTTPS.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		X-Frame-Options           "DENY"
+		Referrer-Policy           "no-referrer"
+		# api отдаёт только JSON / pmtiles — никакого встраивания.
+		Permissions-Policy        "interest-cohort=()"
+		# Заголовок Server: Caddy раскрывает версию — убираем.
+		-Server
+	}
+
+	# Срезаем входящий X-Forwarded-For ДО reverse_proxy: иначе клиент
+	# может вписать любой IP в наши логи / `user_refresh_token.client_ip`.
+	# Caddy всё равно добавляет свой XFF при проксировании.
+	request_header -X-Forwarded-For
+
 	# Сжатие — text/json/yaml, не трогаем PMTiles (он уже бинарь, gzip
 	# съест CPU и сломает Range-семантику).
 	encode {

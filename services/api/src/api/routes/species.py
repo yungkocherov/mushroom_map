@@ -201,41 +201,5 @@ def species_detail(slug: str) -> dict:
     }
 
 
-# ──────────────────────────────────────────────────────────────────────
-# Legacy forests-only: GET /api/species/{slug}/forests
-# ──────────────────────────────────────────────────────────────────────
-
-@router.get("/{slug}/forests")
-def species_forests(slug: str) -> dict:
-    """Return forest types where the given species has affinity, ordered by affinity DESC.
-
-    Legacy — всё это + остальное доступно через /api/species/{slug}.
-    """
-    with get_conn() as conn:
-        species_row = conn.execute(
-            "SELECT id, name_ru FROM species WHERE slug = %s",
-            (slug,),
-        ).fetchone()
-
-        if species_row is None:
-            raise HTTPException(status_code=404, detail=f"Species '{slug}' not found")
-
-        species_id, name_ru = species_row
-
-        forest_rows = conn.execute(
-            """
-            SELECT forest_type, affinity
-            FROM species_forest_affinity
-            WHERE species_id = %s
-            ORDER BY affinity DESC
-            """,
-            (species_id,),
-        ).fetchall()
-
-    return {
-        "slug": slug,
-        "name_ru": name_ru,
-        "forest_types": [
-            {"forest_type": r[0], "affinity": float(r[1])} for r in forest_rows
-        ],
-    }
+# Бывший legacy `/api/species/{slug}/forests` удалён 2026-04-25 —
+# всё это покрывается /api/species/{slug} (поле `forests`).

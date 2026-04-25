@@ -12,27 +12,15 @@ import { useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Container } from "../components/layout/Container";
 import { useAuth } from "../auth/useAuth";
+import { safeNext } from "../auth/safeNext";
 import styles from "./Prose.module.css";
-
-
-function safeNext(raw: string | null): string {
-  if (!raw) return "/cabinet";
-  try {
-    const u = new URL(raw, "http://x");
-    if (u.origin !== "http://x") return "/cabinet";
-    const p = u.pathname + u.search;
-    return p.startsWith("/") ? p : "/cabinet";
-  } catch {
-    return "/cabinet";
-  }
-}
 
 
 export function AuthCompletePage() {
   const { status } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const next = safeNext(searchParams.get("next"));
+  const next = safeNext(searchParams.get("next"), "/cabinet");
 
   useEffect(() => {
     if (status === "authenticated") {

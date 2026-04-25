@@ -16,7 +16,7 @@ import { Legend } from "./Legend";
 import { SearchBar } from "./SearchBar";
 
 import { API_ORIGIN } from "./mapView/utils/api";
-import { buildPopupHtml } from "./mapView/utils/popup";
+import { buildPopupHtml, attachPopupHandlers } from "./mapView/utils/popup";
 import { INLINE_STYLE, SATELLITE_STYLE } from "./mapView/styles/inline";
 import { buildSchemeStyle, SCHEME_STYLE_FALLBACK } from "./mapView/styles/scheme";
 import { buildHybridStyle, HYBRID_STYLE_FALLBACK } from "./mapView/styles/hybrid";
@@ -542,6 +542,8 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
           fetchTerrainAt(lat, lng).catch(() => null),
         ]);
         popup.setHTML(buildPopupHtml(forest, soil, water, terrain, lat, lng));
+        const el = popup.getElement();
+        if (el) attachPopupHandlers(el);
       } catch {
         popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
       }

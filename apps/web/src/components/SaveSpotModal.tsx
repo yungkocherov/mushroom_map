@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 import { createSpot } from "@mushroom-map/api-client";
 import type { SpotColor } from "@mushroom-map/types";
 import { useAuth } from "../auth/useAuth";
+import { SPOT_COLOR_OPTIONS } from "../lib/spotColors";
 
 
 interface Props {
@@ -22,15 +23,6 @@ interface Props {
    *  spots-слой на карте. Опционально. */
   onSaved?: () => void;
 }
-
-
-const COLOR_OPTIONS: { value: SpotColor; label: string; css: string }[] = [
-  { value: "forest",      label: "Лес",       css: "var(--forest)" },
-  { value: "chanterelle", label: "Лисичка",   css: "var(--chanterelle)" },
-  { value: "moss",        label: "Мох",       css: "var(--moss)" },
-  { value: "birch",       label: "Берёза",    css: "var(--birch)" },
-  { value: "danger",      label: "Опасность", css: "var(--danger)" },
-];
 
 
 export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
@@ -181,7 +173,7 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
               <legend style={{ fontSize: "var(--fs-sm)", color: "var(--ink-dim)", marginBottom: "var(--space-1)" }}>
                 Маркер
               </legend>
-              {COLOR_OPTIONS.map((c) => (
+              {SPOT_COLOR_OPTIONS.map((c) => (
                 <label key={c.value} style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1)", fontSize: "var(--fs-sm)", cursor: "pointer" }}>
                   <input
                     type="radio"
@@ -190,7 +182,7 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
                     checked={color === c.value}
                     onChange={() => setColor(c.value)}
                   />
-                  <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: "50%", border: "1px solid var(--rule)", background: c.css }} />
+                  <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: "50%", border: "1px solid var(--rule)", background: c.cssVar }} />
                   <span>{c.label}</span>
                 </label>
               ))}

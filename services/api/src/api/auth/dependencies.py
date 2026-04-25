@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
+import psycopg
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
@@ -48,8 +49,18 @@ def get_current_user(
     except AccessTokenInvalid as exc:
         raise _credentials_error(f"invalid access token: {exc}") from exc
 
-    with get_conn() as conn:
-        user = get_user_by_id(conn, user_id)
+    # Если пул исчерпан / БД упала — это 503, а не 401. Иначе фронт
+    # увидит «invalid access token» / «missing bearer token» и
+    # AuthProvider молча разлогинит юзера (CLAUDE.md гача про
+    # «CORS-ошибка как 500»).
+    try:
+        with get_conn() as conn:
+            user = get_user_by_id(conn, user_id)
+    except psycopg.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="database temporarily unavailable",
+        ) from exc
 
     if user is None:
         raise _credentials_error("user no longer exists")

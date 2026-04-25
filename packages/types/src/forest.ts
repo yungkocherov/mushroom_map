@@ -23,6 +23,6 @@ export interface ForestAtResponse {
   lat: number;
   lon: number;
   forest: ForestInfo | null;
+  /** Виды грибов, теоретически ассоциированные с типом леса (affinity). */
   species_theoretical: SpeciesRef[];
-  species_empirical: SpeciesRef[];
 }
