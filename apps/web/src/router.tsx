@@ -23,6 +23,7 @@ import { PlaceholderPage } from "./routes/PlaceholderPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
 import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
+import { SpeciesListPage } from "./routes/SpeciesListPage";
 import { AuthPage } from "./routes/AuthPage";
 import { AuthCompletePage } from "./routes/AuthCompletePage";
 import { AuthErrorPage } from "./routes/AuthErrorPage";
@@ -72,15 +73,7 @@ export const router = createBrowserRouter([
           </Suspense>
         ),
       },
-      {
-        path: "species",
-        element: (
-          <PlaceholderPage
-            title="Справочник видов"
-            description="Подробные страницы по каждому грибу: съедобность, сезон, типы леса, двойники. Появится в следующей фазе."
-          />
-        ),
-      },
+      { path: "species", element: <SpeciesListPage /> },
       {
         path: "guide",
         element: (
