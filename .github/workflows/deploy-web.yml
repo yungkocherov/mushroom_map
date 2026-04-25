@@ -1,0 +1,58 @@
+# Production-деплой web на Cloudflare Pages.
+#
+# Тригер: push в main с изменениями в apps/web/** или packages/**.
+# Cloudflare Pages умеет подтягивать сборки из GitHub автоматически
+# (через подключение репозитория в их UI), но мы используем явный
+# wrangler-step — он быстрее, не зависит от auto-detection и
+# контролируется в этом репозитории.
+#
+# Требуемые secrets (Settings → Secrets → Actions):
+#   CF_API_TOKEN     — Cloudflare API token с Pages:Edit scope
+#                       (создать на dash.cloudflare.com → My Profile →
+#                       API Tokens → Pages: Edit template)
+#   CF_ACCOUNT_ID    — Cloudflare account ID (правый сайдбар на dash)
+#
+# Vars (Settings → Variables → Actions):
+#   CF_PAGES_PROJECT — имя проекта (создать в Pages → Create project)
+#   VITE_API_URL     — например, https://api.example.org
+#   PROD_DEPLOY_ENABLED — 'true' чтобы включить SSH-job в deploy-api.yml
+
+name: deploy-web
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/deploy-web.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    if: ${{ vars.CF_PAGES_PROJECT != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install workspace deps
+        run: npm ci
+
+      - name: Build web
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: npm -w @mushroom-map/web run build
+
+      - name: Publish to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken:  ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CF_ACCOUNT_ID }}
+          command: pages deploy apps/web/dist --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main

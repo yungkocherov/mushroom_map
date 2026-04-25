@@ -1,0 +1,99 @@
+# Production-деплой API. Тригерится:
+#   - push в main с изменениями в services/api/** или db/migrations/**
+#   - вручную через workflow_dispatch
+#
+# Что делает:
+#   1. Билдит образ из services/api/Dockerfile.prod
+#   2. Тегает sha-<short> + latest
+#   3. Пушит в ghcr.io/<owner>/mushroom-map-api
+#   4. По ssh заходит на VM, pull + restart api контейнера
+#
+# Требуемые secrets (Settings → Secrets → Actions):
+#   PROD_HOST           — IP или hostname VM
+#   PROD_SSH_USER       — обычно ubuntu
+#   PROD_SSH_KEY        — приватный ключ (содержимое id_ed25519)
+#
+# GHCR-доступ берётся из дефолтного GITHUB_TOKEN (нужен write:packages
+# в job permissions).
+
+name: deploy-api
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/api/**"
+      - "db/migrations/**"
+      - ".github/workflows/deploy-api.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    name: build & push image to GHCR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compute image tag
+        id: meta
+        run: |
+          SHA="${GITHUB_SHA::7}"
+          IMG="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/mushroom-map-api"
+          echo "image=$IMG" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMG:sha-$SHA" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push
+        uses: docker/build-push-action@v6
+        with:
+          # Context = repo root: Dockerfile.prod копирует и services/api/src,
+          # и db/ для миграций. См. сам Dockerfile.prod, заголовок.
+          context: .
+          file: services/api/Dockerfile.prod
+          push: true
+          # Multi-arch — на Oracle Free Tier ARM64; локальная отладка x86.
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ steps.meta.outputs.image_tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: ssh deploy to VM
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    # Включится только если PROD_HOST задан (skip — если ещё не подключали).
+    if: ${{ vars.PROD_DEPLOY_ENABLED == 'true' }}
+    steps:
+      - name: SSH and pull/restart
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_SSH_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          script: |
+            set -e
+            cd /srv/mushroom-map
+            git pull --ff-only origin main
+            docker compose -f docker-compose.prod.yml --env-file .env.prod pull api
+            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api
+            # Применяем миграции (db/migrate.py живёт внутри prod-образа,
+            # см. services/api/Dockerfile.prod). Идемпотентно — отметка о
+            # применённых миграциях в schema_migrations.
+            docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T api \
+                python /app/db/migrate.py
+            docker image prune -f --filter "until=24h"

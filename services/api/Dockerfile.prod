@@ -1,0 +1,82 @@
+# Production image для FastAPI.
+#
+# ВАЖНО: build-context = РЕПО-ROOT (не services/api). Так в образ можно
+# взять и app-код (services/api/src), и миграции (db/), и при этом
+# Docker layer-cache работает корректно. См. .github/workflows/deploy-api.yml
+# и docker-compose.prod.yml — там `context: .` + `dockerfile:
+# services/api/Dockerfile.prod`.
+#
+# Отличия от dev-Dockerfile (services/api/Dockerfile):
+#   - multi-stage: компилируем зависимости в builder-стадии, в финал
+#     остаётся только slim runtime
+#   - НЕ-root user (uvicorn:uvicorn) — security best practice
+#   - без --reload, uvicorn workers (env UVICORN_WORKERS, default 2)
+#   - HEALTHCHECK для compose `condition: service_healthy`
+#   - миграции (db/migrate.py + db/migrations/*.sql) идут внутрь
+#     образа, чтобы можно было одной командой применять:
+#         docker compose exec api python /app/db/migrate.py
+#
+# Сборка вручную:
+#   docker build -f services/api/Dockerfile.prod -t mushroom-api:prod .
+
+# ─── stage 1: builder ──────────────────────────────────────────────────
+FROM python:3.11-slim AS builder
+
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /build
+
+# pyproject.toml + src копируются из services/api (полный относительный
+# путь, потому что context=root).
+COPY services/api/pyproject.toml ./
+COPY services/api/src ./src
+
+RUN pip install --prefix=/install --no-deps . \
+ && pip install --prefix=/install \
+       "fastapi>=0.110" "uvicorn[standard]>=0.29" \
+       "psycopg[binary]>=3.2" "psycopg-pool>=3.2" \
+       "pydantic>=2.6" "pydantic-settings>=2.2" "python-dotenv>=1.0" \
+       "rasterio>=1.3" "pyproj>=3.6" \
+       "pyjwt>=2.8" "httpx>=0.27"
+
+
+# ─── stage 2: runtime ──────────────────────────────────────────────────
+FROM python:3.11-slim AS runtime
+
+# rasterio bundles its own libgdal in the wheel — нам нужны только
+# libpq5 (для psycopg) + libexpat1 + curl для healthcheck.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpq5 libexpat1 \
+        curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r uvicorn && useradd -r -g uvicorn uvicorn
+
+COPY --from=builder /install /usr/local
+
+WORKDIR /app
+COPY --from=builder /build/src /app/src
+COPY db /app/db
+
+# /tiles и /terrain создаём заранее с правами uvicorn — чтобы main.py
+# (settings.tiles_dir.mkdir(exist_ok=True)) не падал, когда volume
+# не примонтирован, и чтобы при примонтировании прав хватало.
+RUN mkdir -p /tiles /terrain && chown -R uvicorn:uvicorn /tiles /terrain /app
+
+ENV PYTHONPATH=/app/src \
+    PYTHONUNBUFFERED=1 \
+    UVICORN_WORKERS=2
+
+USER uvicorn
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:8000/health || exit 1
+
+# uvicorn workers — 2 на 4-core ARM Oracle Free Tier хватает.
+CMD ["sh", "-c", "uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers ${UVICORN_WORKERS:-2}"]

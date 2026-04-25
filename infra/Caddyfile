@@ -1,0 +1,74 @@
+# Caddy reverse-proxy для прод-VM.
+#
+# Архитектура:
+#   Cloudflare Pages    → mushroom-map.pages.dev (статический фронт)
+#   Caddy на VM         → api.<домен>            (этот файл)
+#   - /api/*            → api:8000
+#   - /tiles/*          → api:8000 (PMTiles range-requests)
+#   - /health           → api:8000
+#   - всё остальное     → 404 (на api-домене веб-фронту делать нечего)
+#
+# Caddy сам управляет TLS через ACME — нужно только корректное A-запись
+# api.<домен> → IP VM до старта контейнера.
+#
+# Email для ACME: подставится из CADDY_ACME_EMAIL env-переменной (см.
+# /etc/default/caddy на VM или env_file в compose).
+
+{
+	# Глобальные опции — email Let's Encrypt'а ставится через CLI flag
+	# или env. Не хардкодим тут чтобы не конфликтовало с локальным
+	# тестом без TLS.
+	email {$CADDY_ACME_EMAIL}
+}
+
+# api-домен — единственный, который Caddy слушает на этой VM.
+# Подставь свой через env CADDY_API_HOST=api.example.org.
+{$CADDY_API_HOST} {
+	# Сжатие — text/json/yaml, не трогаем PMTiles (он уже бинарь, gzip
+	# съест CPU и сломает Range-семантику).
+	encode {
+		gzip
+		match {
+			header Content-Type application/json*
+			header Content-Type text/*
+		}
+	}
+
+	# Здоровье — отдаём прямо без проксирования, это полезно для
+	# uptime-мониторинга и для Cloudflare healthcheck'ов.
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	# PMTiles — Range-requests обязательны. Caddy проксирует Range:
+	# заголовок прозрачно, но мы отключаем буферизацию явно.
+	handle /tiles/* {
+		reverse_proxy api:8000 {
+			flush_interval -1
+			# Включаем accept-ranges:bytes, если апстрим забыл.
+			header_down Accept-Ranges bytes
+		}
+		# Cache-friendly: tile-файлы immutable по name+hash.
+		header Cache-Control "public, max-age=86400, immutable"
+	}
+
+	# Все API-вызовы.
+	handle /api/* {
+		reverse_proxy api:8000 {
+			flush_interval -1
+		}
+		# CORS preflight отвечает сам FastAPI (CORSMiddleware), Caddy не
+		# переопределяет.
+	}
+
+	# Всё остальное — 404, чтобы не отдавать пустой Caddy-баннер.
+	handle {
+		respond "Not Found" 404
+	}
+
+	# Логи в JSON, удобно для journalctl/loki.
+	log {
+		output stdout
+		format json
+	}
+}

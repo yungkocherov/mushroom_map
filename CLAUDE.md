@@ -130,6 +130,26 @@ docker compose logs --tail 50 api
 
 # Run all tests (smoke API + unit). Smoke skipped if docker not up.
 .venv/Scripts/python.exe -m pytest -q
+
+# ─── Production деплой ──────────────────────────────────────────────
+# Полный runbook — docs/deployment.md. Краткая шпаргалка:
+#
+# Локальный prod-build образа API (валидация перед push в GHCR):
+docker build -f services/api/Dockerfile.prod -t mushroom-api:prod .
+#
+# На VM (Oracle Free Tier ARM, Ubuntu 22.04):
+#   bash scripts/deploy/bootstrap_oracle.sh   (один раз, через ssh)
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# DB-миграции в проде (изнутри контейнера):
+#   docker compose -f docker-compose.prod.yml exec -T api \
+#       python /app/db/migrate.py
+#
+# pg_dump из локали в прод:
+#   REMOTE=ubuntu@<vm-ip> bash scripts/deploy/sync_db_to_remote.sh
+#
+# PMTiles -> Cloudflare R2:
+#   bash scripts/deploy/sync_tiles_to_r2.sh
 ```
 
 ## Deprecated (don't extend, don't rely on)

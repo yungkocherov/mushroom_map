@@ -1,0 +1,94 @@
+# Production compose — для Oracle Cloud Free Tier ARM Ampere VM (или
+# любого другого хоста с docker engine).
+#
+# Архитектурный контракт:
+#   - db   — PostGIS, named volume, без bind-mount'ов
+#   - api  — image из ghcr.io (или локальный prod-build), env через .env
+#   - caddy — reverse-proxy, auto Let's Encrypt; читает Caddyfile
+#
+# Web-фронт сюда не входит: статика собирается на Cloudflare Pages
+# (см. .github/workflows/deploy-web.yml). Caddy проксирует только
+# /api/* и /tiles/*, остальное хостится на Cloudflare.
+#
+# Запуск:
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# Обновление api после нового образа:
+#   docker compose -f docker-compose.prod.yml pull api && \
+#   docker compose -f docker-compose.prod.yml up -d api
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: mushroom_db_prod
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB:       ${POSTGRES_DB}
+    # ВАЖНО: порт НЕ публикуется наружу — db доступна только внутри
+    # compose-сети. Это убирает целый класс «забыл pg_hba.conf и оставил
+    # 5432/tcp открытым в интернет».
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+      - ./db/migrations:/migrations:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # На Oracle ARM 24 GB RAM это разумные лимиты. Поднимаем при росте.
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+
+  api:
+    image: ${API_IMAGE:-ghcr.io/yungkocherov/mushroom-map-api:latest}
+    container_name: mushroom_api_prod
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL:                  postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      API_CORS_ORIGINS:              ${API_CORS_ORIGINS}
+      JWT_SECRET:                    ${JWT_SECRET}
+      COOKIE_SECURE:                 ${COOKIE_SECURE:-true}
+      YANDEX_CLIENT_ID:              ${YANDEX_CLIENT_ID}
+      YANDEX_CLIENT_SECRET:          ${YANDEX_CLIENT_SECRET}
+      YANDEX_REDIRECT_URI:           ${YANDEX_REDIRECT_URI}
+      FRONTEND_AUTH_COMPLETE_URL:    ${FRONTEND_AUTH_COMPLETE_URL}
+      FRONTEND_AUTH_ERROR_URL:       ${FRONTEND_AUTH_ERROR_URL}
+      UVICORN_WORKERS:               ${UVICORN_WORKERS:-2}
+      TILES_DIR:                     /tiles
+      TERRAIN_DIR:                   /terrain
+    volumes:
+      # PMTiles локально на VM как read-only mount. На Cloudflare R2
+      # переносится отдельно (через Caddy или CDN-rewrite); пока проще
+      # отдавать с самой VM.
+      - ${TILES_HOST_PATH:-./data/tiles}:/tiles:ro
+      - ${TERRAIN_HOST_PATH:-./data/copernicus/terrain}:/terrain:ro
+    deploy:
+      resources:
+        limits:
+          memory: 2g
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: mushroom_caddy_prod
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata_prod:
+  caddy_data:
+  caddy_config:
