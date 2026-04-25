@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { fetchSpeciesDetail } from "@mushroom-map/api-client";
+import { fetchSpeciesDetail, listSpots } from "@mushroom-map/api-client";
+import type { UserSpot } from "@mushroom-map/types";
 import { MapView } from "../components/MapView";
 import { SaveSpotModal } from "../components/SaveSpotModal";
 import { useAuth } from "../auth/useAuth";
@@ -27,9 +28,35 @@ export function MapPage() {
     };
   }, [speciesSlug]);
 
-  // Save-spot flow: попап карты диспатчит mm:save-spot из inline-кнопки.
-  // Здесь ловим, проверяем auth, открываем модалку или редиректим на /auth.
-  const { status } = useAuth();
+  // ── Auth + spots layer ──────────────────────────────────────────────
+  const { status, getAccessToken } = useAuth();
+  const [spots, setSpots] = useState<UserSpot[] | null>(null);
+
+  const refreshSpots = useCallback(async () => {
+    const tok = getAccessToken();
+    if (!tok) {
+      setSpots(null);
+      return;
+    }
+    try {
+      const data = await listSpots(tok);
+      setSpots(data);
+    } catch {
+      // Не падаем визуально — без spots слоя карта всё равно работает.
+      setSpots([]);
+    }
+  }, [getAccessToken]);
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      void refreshSpots();
+    } else if (status === "unauth") {
+      setSpots(null);
+    }
+    // status === "loading" — ждём, ничего не делаем
+  }, [status, refreshSpots]);
+
+  // ── Save-spot flow ──────────────────────────────────────────────────
   const navigate = useNavigate();
   const [saveTarget, setSaveTarget] = useState<{ lat: number; lon: number } | null>(null);
 
@@ -53,7 +80,7 @@ export function MapPage() {
 
   return (
     <>
-      <MapView />
+      <MapView userSpots={spots} />
       {speciesName && speciesSlug && (
         <SpeciesContextChip slug={speciesSlug} name={speciesName} />
       )}
@@ -62,6 +89,7 @@ export function MapPage() {
           lat={saveTarget.lat}
           lon={saveTarget.lon}
           onClose={() => setSaveTarget(null)}
+          onSaved={() => void refreshSpots()}
         />
       )}
     </>

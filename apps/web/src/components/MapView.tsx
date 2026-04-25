@@ -32,11 +32,24 @@ import { addWaterwayLayer, setWaterwayVisibility } from "./mapView/layers/waterw
 import { addHillshadeLayer, setHillshadeVisibility } from "./mapView/layers/hillshade";
 import { addDistrictsLayer, setDistrictsVisibility } from "./mapView/layers/districts";
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
+import {
+  addUserSpotsLayer,
+  removeUserSpotsLayer,
+  updateUserSpots,
+} from "./mapView/layers/userSpots";
+import type { UserSpot } from "@mushroom-map/types";
 
 const _protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", _protocol.tile.bind(_protocol));
 
-export function MapView() {
+interface MapViewProps {
+  /** Список сохранённых юзером spot'ов; null = не залогинен / ещё не
+   *  загружено. При смене массива — слой обновляется in-place
+   *  (без recreate'а). */
+  userSpots?: UserSpot[] | null;
+}
+
+export function MapView({ userSpots = null }: MapViewProps = {}) {
   const mobile = useIsMobile();
   const mapRef = useRef<HTMLDivElement>(null);
   const map = useRef<Map | null>(null);
@@ -106,6 +119,12 @@ export function MapView() {
   const districtsVisibleRef = useRef(districtsVisible);
   districtsVisibleRef.current = districtsVisible;
   const districtsLoadedRef = useRef(false);
+  // userSpots — единственный «динамический» слой: данные приходят из props
+  // и могут поменяться в любой момент (создал/удалил spot). Ref нужен,
+  // чтобы setupForestAndInteractions (после basemap-switch'а) знал
+  // актуальный список без зависимости в callback'е.
+  const userSpotsRef = useRef<UserSpot[] | null>(userSpots);
+  userSpotsRef.current = userSpots;
   // Изначально INLINE_STYLE (osm), useState инициализирован "scheme" → первый
   // useEffect переключит с osm на scheme.
   const appliedBaseMap = useRef<BaseMapMode>("osm");
@@ -186,6 +205,15 @@ export function MapView() {
       if (m.getSource("districts")) m.removeSource("districts");
       addDistrictsLayer(m);
       setDistrictsVisibility(m, districtsVisibleRef.current);
+    }
+    // User spots — приватный слой, появляется только когда юзер залогинен
+    // и есть хоть одно место. После basemap switch'а нужно re-add'нуть
+    // как остальные слои.
+    const spots = userSpotsRef.current;
+    if (m.getLayer("user-spots")) m.removeLayer("user-spots");
+    if (m.getSource("user-spots-src")) m.removeSource("user-spots-src");
+    if (spots && spots.length > 0) {
+      addUserSpotsLayer(m, spots);
     }
   }, []);
 
@@ -571,6 +599,29 @@ export function MapView() {
 
     return () => { cancelled = true; };
   }, [baseMap, setupForestAndInteractions]);
+
+  // Реагируем на смену userSpots prop — добавляем / обновляем / убираем
+  // приватный слой. Карта может ещё не быть готова (style loading),
+  // тогда откладываем до idle. Удаление при null или пустом массиве:
+  // мы не показываем «один сиротливый» слой когда юзер вышел из аккаунта.
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const apply = () => {
+      const spots = userSpots;
+      if (!spots || spots.length === 0) {
+        removeUserSpotsLayer(m);
+        return;
+      }
+      if (m.getLayer("user-spots")) {
+        updateUserSpots(m, spots);
+      } else {
+        addUserSpotsLayer(m, spots);
+      }
+    };
+    if (m.isStyleLoaded()) apply();
+    else m.once("idle", apply);
+  }, [userSpots]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

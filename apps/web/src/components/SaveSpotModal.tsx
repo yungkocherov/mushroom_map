@@ -18,6 +18,9 @@ interface Props {
   lat: number;
   lon: number;
   onClose: () => void;
+  /** Вызывается после успешного create — даёт MapPage шанс рефрешнуть
+   *  spots-слой на карте. Опционально. */
+  onSaved?: () => void;
 }
 
 
@@ -30,7 +33,7 @@ const COLOR_OPTIONS: { value: SpotColor; label: string; css: string }[] = [
 ];
 
 
-export function SaveSpotModal({ lat, lon, onClose }: Props) {
+export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
   const { getAccessToken } = useAuth();
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
@@ -61,6 +64,7 @@ export function SaveSpotModal({ lat, lon, onClose }: Props) {
       });
       setDone(true);
       setError(null);
+      onSaved?.();
     } catch (err) {
       setError((err as Error).message);
     } finally {
