@@ -18,3 +18,4 @@ export * from "./terrain";
 export * from "./places";
 export * from "./stats";
 export * from "./auth";
+export * from "./cabinet";

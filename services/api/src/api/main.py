@@ -11,7 +11,7 @@ from api.db import close_pool, init_pool
 from api.settings import settings
 from api.routes import (
     forest, species, regions, tiles, soil, water, terrain, districts, stats,
-    auth, user,
+    auth, user, cabinet,
 )
 
 
@@ -46,7 +46,8 @@ app.include_router(regions.router, prefix="/api/regions", tags=["regions"])
 app.include_router(districts.router, prefix="/api/districts", tags=["districts"])
 app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
 app.include_router(auth.router,  prefix="/api/auth",  tags=["auth"])
-app.include_router(user.router,  prefix="/api/user",  tags=["user"])
+app.include_router(user.router,    prefix="/api/user",    tags=["user"])
+app.include_router(cabinet.router, prefix="/api/cabinet", tags=["cabinet"])
 app.include_router(tiles.router, prefix="/tiles", tags=["tiles"])
 
 # Статические PMTiles файлы (range-request support через StaticFiles).

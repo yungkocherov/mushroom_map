@@ -29,6 +29,9 @@ import type {
   SpeciesNowResponse,
   AuthUser,
   AuthRefreshResponse,
+  UserSpot,
+  SpotCreatePayload,
+  SpotPatchPayload,
 } from "@mushroom-map/types";
 
 function resolveApiBase(): string {
@@ -149,6 +152,66 @@ export async function fetchMe(accessToken: string): Promise<AuthUser> {
   });
   if (!res.ok) throw new Error(`user/me ${res.status}`);
   return res.json();
+}
+
+
+// ─────────────────────────────────────────────────────────────────────
+// Cabinet (protected — все вызовы требуют Bearer access token)
+// ─────────────────────────────────────────────────────────────────────
+
+function authHeaders(accessToken: string): HeadersInit {
+  return {
+    "Authorization": `Bearer ${accessToken}`,
+    "Content-Type":  "application/json",
+  };
+}
+
+export async function listSpots(accessToken: string): Promise<UserSpot[]> {
+  const res = await fetch(`${API_BASE}/api/cabinet/spots`, {
+    headers: authHeaders(accessToken),
+  });
+  if (!res.ok) throw new Error(`cabinet/spots ${res.status}`);
+  return res.json();
+}
+
+export async function createSpot(accessToken: string, payload: SpotCreatePayload): Promise<UserSpot> {
+  const res = await fetch(`${API_BASE}/api/cabinet/spots`, {
+    method: "POST",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`createSpot ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+export async function patchSpot(
+  accessToken: string,
+  id: string,
+  payload: SpotPatchPayload,
+): Promise<UserSpot> {
+  const res = await fetch(`${API_BASE}/api/cabinet/spots/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: authHeaders(accessToken),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`patchSpot ${res.status}: ${detail.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+export async function deleteSpot(accessToken: string, id: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/cabinet/spots/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { "Authorization": `Bearer ${accessToken}` },
+  });
+  if (!res.ok && res.status !== 204) {
+    throw new Error(`deleteSpot ${res.status}`);
+  }
 }
 
 export async function searchPlaces(q: string): Promise<NominatimResult[]> {

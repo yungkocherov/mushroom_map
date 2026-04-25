@@ -4,6 +4,7 @@
  * Реальное наполнение (spots / trips / settings) — следующие фазы.
  */
 
+import { Link } from "react-router-dom";
 import { Container } from "../components/layout/Container";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -55,8 +56,20 @@ export function CabinetPage() {
         </div>
       </Card>
 
-      <p className={styles.p} style={{ color: "var(--ink-dim)" }}>
-        Сохранённые места, журнал поездок и настройки появятся в следующей фазе.
+      <h2 className={styles.h2}>Разделы</h2>
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "var(--space-3)" }}>
+        <li>
+          <Link to="/cabinet/spots" style={{ color: "var(--forest)", textDecoration: "none" }}>
+            Сохранённые места
+          </Link>
+          <span style={{ color: "var(--ink-dim)", marginLeft: "var(--space-2)" }}>
+            — приватные точки на карте с заметками
+          </span>
+        </li>
+      </ul>
+
+      <p className={styles.p} style={{ color: "var(--ink-dim)", marginTop: "var(--space-5)" }}>
+        Журнал поездок и настройки появятся в следующих фазах.
       </p>
     </Container>
   );

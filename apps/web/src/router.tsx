@@ -29,6 +29,7 @@ import { AuthPage } from "./routes/AuthPage";
 import { AuthCompletePage } from "./routes/AuthCompletePage";
 import { AuthErrorPage } from "./routes/AuthErrorPage";
 import { CabinetPage } from "./routes/CabinetPage";
+import { CabinetSpotsPage } from "./routes/CabinetSpotsPage";
 import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { PrivacyPage } from "./routes/legal/PrivacyPage";
 import { TermsPage } from "./routes/legal/TermsPage";
@@ -100,6 +101,14 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute>
             <CabinetPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: "cabinet/spots",
+        element: (
+          <ProtectedRoute>
+            <CabinetSpotsPage />
           </ProtectedRoute>
         ),
       },

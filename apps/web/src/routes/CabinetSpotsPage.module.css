@@ -1,0 +1,170 @@
+.breadcrumbs {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  margin-bottom: var(--space-4);
+}
+.breadcrumbs a {
+  color: var(--ink-dim);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--ink-faint);
+}
+.breadcrumbs a:hover { color: var(--forest); border-bottom-color: var(--forest); }
+
+.form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--fs-sm);
+}
+.field span {
+  color: var(--ink-dim);
+}
+.field input,
+.field textarea {
+  font: inherit;
+  font-family: var(--font-body);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink);
+  resize: vertical;
+}
+.field input:focus,
+.field textarea:focus {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 30%, transparent);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: var(--space-3);
+  align-items: end;
+}
+@media (max-width: 540px) {
+  .row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .geoBtn { grid-column: span 2; }
+}
+
+.geoBtn {
+  font-size: var(--fs-sm);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--paper-rise);
+  cursor: pointer;
+  color: var(--ink-dim);
+}
+.geoBtn:hover { color: var(--ink); border-color: var(--forest); }
+
+.colorRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+.colorLegend {
+  display: block;
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  margin-bottom: var(--space-2);
+  width: 100%;
+}
+.colorOpt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--fs-sm);
+  cursor: pointer;
+}
+.colorDot {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--rule);
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-5) 0 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.list > li {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3);
+  background: var(--paper-rise);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+}
+
+.markerDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin-top: 4px;
+}
+
+.rowBody {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.rowTitle {
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.rowNote {
+  color: var(--ink-dim);
+  font-size: var(--fs-sm);
+  white-space: pre-wrap;
+}
+
+.rowMeta {
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  font-family: var(--font-mono);
+}
+.rowMeta a {
+  color: var(--ink-dim);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--ink-faint);
+}
+.rowMeta a:hover { color: var(--forest); border-bottom-color: var(--forest); }
+
+.deleteBtn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ink-faint);
+  font-size: 1.2rem;
+  line-height: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.deleteBtn:hover {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 25%, transparent);
+}
