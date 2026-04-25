@@ -12,11 +12,6 @@ Species endpoints.
         Детали одного вида — полный набор полей + affinity по лесам +
         similars/cooking из meta JSONB. 404 если slug не найден.
 
-    GET /api/species/{slug}/forests
-        Legacy: только forest_types, без остального. Оставлен пока есть
-        потребители в текущем коде; в дальнейшем поглотится детальным
-        endpoint'ом.
-
 Порядок путей в FastAPI важен: `/search` и `/` должны идти до
 `/{slug}`, иначе slug'ом будет трактоваться даже "search".
 """
