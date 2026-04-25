@@ -22,6 +22,8 @@ import type {
   WaterDistanceResponse,
   TerrainAtResponse,
   SpeciesSearchResult,
+  SpeciesListItem,
+  SpeciesDetail,
   NominatimResult,
   StatsOverview,
   SpeciesNowResponse,
@@ -72,6 +74,19 @@ export async function searchSpecies(q: string, limit = 10): Promise<SpeciesSearc
   const url = `${API_BASE}/api/species/search?q=${encodeURIComponent(q)}&limit=${limit}`;
   const res = await fetch(url);
   if (!res.ok) return [];
+  return res.json();
+}
+
+export async function listSpecies(): Promise<SpeciesListItem[]> {
+  const res = await fetch(`${API_BASE}/api/species/`);
+  if (!res.ok) throw new Error(`species list ${res.status}`);
+  return res.json();
+}
+
+export async function fetchSpeciesDetail(slug: string): Promise<SpeciesDetail | null> {
+  const res = await fetch(`${API_BASE}/api/species/${encodeURIComponent(slug)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`species/${slug} ${res.status}`);
   return res.json();
 }
 
