@@ -2,18 +2,22 @@
  * Карта маршрутов сайта. Один источник правды.
  *
  * /             - Главная с hero и входом в карту
- * /map          - Полноэкранная карта (текущее приложение)
+ * /map          - Полноэкранная карта (lazy — MapLibre тяжёлый, не
+ *                 грузим на других страницах; см. MapPage.tsx)
  * /species      - Каталог видов (placeholder на Фазе 1)
  * /guide        - Полевые гайды (placeholder)
- * /methodology  - Методология данных (placeholder)
+ * /methodology  - Методология данных
  * /about        - Об авторе
- * *             - Любой несуществующий путь → редирект на /
+ * /auth/*       - OAuth-flow (Yandex ID)
+ * /cabinet      - Личный кабинет (за ProtectedRoute)
+ * /legal/*      - Privacy / Terms (drafts)
+ * *             - 404
  */
+import { lazy, Suspense } from "react";
 import { createBrowserRouter } from "react-router-dom";
 
 import { Layout } from "./components/layout/Layout";
 import { HomePage } from "./routes/HomePage";
-import { MapPage } from "./routes/MapPage";
 import { AboutPage } from "./routes/AboutPage";
 import { PlaceholderPage } from "./routes/PlaceholderPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
@@ -27,13 +31,47 @@ import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { PrivacyPage } from "./routes/legal/PrivacyPage";
 import { TermsPage } from "./routes/legal/TermsPage";
 
+// MapPage тянет за собой MapLibre GL + PMTiles (~600–700 КБ минифицированных
+// JS). Lazy-load срезает main-bundle на все не-карта страницы: /, /species,
+// /about и т. д. загружаются без MapLibre.
+const MapPage = lazy(() =>
+  import("./routes/MapPage").then((m) => ({ default: m.MapPage })),
+);
+
+function MapPageLoader() {
+  return (
+    <div
+      role="status"
+      aria-label="Загружаем карту"
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "grid",
+        placeItems: "center",
+        background: "var(--paper)",
+        color: "var(--ink-dim)",
+        fontSize: "var(--fs-sm)",
+      }}
+    >
+      Загружаем карту…
+    </div>
+  );
+}
+
 export const router = createBrowserRouter([
   {
     path: "/",
     element: <Layout />,
     children: [
       { index: true, element: <HomePage /> },
-      { path: "map", element: <MapPage /> },
+      {
+        path: "map",
+        element: (
+          <Suspense fallback={<MapPageLoader />}>
+            <MapPage />
+          </Suspense>
+        ),
+      },
       {
         path: "species",
         element: (
