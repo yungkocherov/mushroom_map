@@ -139,6 +139,11 @@ def rotate_refresh_token(
 
     # Reuse detection: любой попадающий сюда revoked токен — сигнал кражи.
     # Отзываем всю family целиком; злоумышленник и жертва оба теряют сессию.
+    #
+    # ВАЖНО: коммитим прямо здесь. Если поднять исключение до commit'а,
+    # вызывающий контекст-менеджер `with get_conn() as conn:` в psycopg-pool
+    # сделает rollback и family останется живой. Этот путь — security-
+    # критичный, скрытая «семантически реализованная отмена» неприемлема.
     if revoked_at is not None:
         conn.execute(
             """
@@ -150,6 +155,7 @@ def rotate_refresh_token(
             """,
             (family_id,),
         )
+        conn.commit()
         raise RefreshReuseDetected()
 
     if expires_at <= _now_utc():
