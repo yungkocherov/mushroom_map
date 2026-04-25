@@ -158,9 +158,14 @@ export function buildPopupHtml(
         )
         .join("&thinsp;");
       const aff = s.affinity ? Math.round(s.affinity * 100) : 0;
+      // Имя — ссылка на детальную страницу /species/:slug. Полный
+      // переход (full nav) приемлем — это уход с карты на контент.
+      const nameCell = s.slug
+        ? `<a href="/species/${encodeURIComponent(s.slug)}" style="${style};text-decoration:none;border-bottom:1px dotted currentColor">${s.name_ru}</a>`
+        : s.name_ru;
       return `<tr class="sp-row" data-p="${isPriority ? 1 : 0}" data-s="${inSeason ? 1 : 0}"
           style="display:${isPriority ? "table-row" : "none"}">
-        <td style="${style};padding:2px 6px 2px 0">${s.name_ru}</td>
+        <td style="${style};padding:2px 6px 2px 0">${nameCell}</td>
         <td style="color:#aaa;font-size:10px;padding:2px 6px 2px 0;font-style:italic">${s.name_lat ?? ""}</td>
         <td style="font-size:10px;color:#555;padding:2px 6px 2px 0;white-space:nowrap">${months}</td>
         <td style="font-size:10px;color:#888;padding:2px 0">${aff}%</td>
