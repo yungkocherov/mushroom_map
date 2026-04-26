@@ -42,6 +42,7 @@ export function HomePage() {
         </p>
         <div className={styles.cta}>
           <Button as="link" to="/map" variant="primary">Открыть карту</Button>
+          <Button as="link" to="/forecast" variant="ghost">Прогноз на неделю</Button>
         </div>
       </section>
 
@@ -52,6 +53,20 @@ export function HomePage() {
           <h3 className={styles.cardTitle}>Справочник видов</h3>
           <p className={styles.cardText}>
             Съедобность, сезон, в каких лесах водится, с чем можно спутать.
+          </p>
+        </Card>
+        <Card to="/forecast">
+          <h3 className={styles.cardTitle}>Прогноз плодоношения</h3>
+          <p className={styles.cardText}>
+            Ранжирование районов по предсказанной активности на ближайшую
+            неделю.
+          </p>
+        </Card>
+        <Card to="/guide">
+          <h3 className={styles.cardTitle}>Полевые гайды</h3>
+          <p className={styles.cardText}>
+            Что брать с собой, когда ехать, где нельзя собирать,
+            двойники ядовитых видов.
           </p>
         </Card>
         <Card to="/methodology">
