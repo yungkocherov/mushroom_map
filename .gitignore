@@ -52,3 +52,4 @@ vk_photos_report*.html
 .idea/
 .DS_Store
 Thumbs.db
+*.env.prod

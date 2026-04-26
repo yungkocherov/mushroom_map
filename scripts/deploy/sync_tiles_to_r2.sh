@@ -22,7 +22,7 @@
 
 set -euo pipefail
 
-BUCKET="${BUCKET:-mushroom-map-tiles}"
+BUCKET="${BUCKET:-geobiom-tiles}"
 TILES_DIR="${TILES_DIR:-data/tiles}"
 
 if ! command -v rclone >/dev/null 2>&1; then
