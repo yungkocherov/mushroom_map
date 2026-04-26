@@ -69,15 +69,6 @@ export function AboutPage() {
         </ul>
       </Card>
 
-      <h2 className={styles.h2}>Чего здесь не будет</h2>
-      <p className={styles.p}>
-        Соцсети грибников. Идентификации по фото. Рекламы. Трекеров.
-        Paywall'ов. Платного «премиум»-режима. Всё это — осознанные
-        не-цели, не «когда-нибудь потом». Сайт либо работает таким, либо
-        закрывается; промежуточный монетизированный формат не
-        рассматривается.
-      </p>
-
       <h2 className={styles.h2}>Что дальше</h2>
       <p className={styles.p}>
         Полный список планов и идей — в{" "}
@@ -109,7 +100,7 @@ export function AboutPage() {
           issues на GitHub
         </a>{" "}
         или почтой{" "}
-        <a href="mailto:ineedletter@gmail.com">ineedletter@gmail.com</a>.
+        <a href="mailto:ikocherov@mail.ru">ikocherov@mail.ru</a>.
         Отвечаю не всегда быстро, но читаю всё.
       </p>
     </Container>

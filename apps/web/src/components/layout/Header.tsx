@@ -5,10 +5,8 @@ import styles from "./Header.module.css";
 
 const NAV_ITEMS = [
   { to: "/map",         label: "Карта" },
-  { to: "/forecast",    label: "Прогноз" },
   { to: "/species",     label: "Виды" },
   { to: "/methodology", label: "Методология" },
-  { to: "/guide",       label: "Гайды" },
   { to: "/about",       label: "О проекте" },
 ];
 

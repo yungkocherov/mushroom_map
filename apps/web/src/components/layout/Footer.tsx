@@ -30,7 +30,7 @@ export function Footer() {
             <Code size={20} />
           </a>
           <a
-            href="mailto:ineedletter@gmail.com"
+            href="mailto:ikocherov@mail.ru"
             className={styles.iconLink}
             aria-label="Написать автору"
           >

@@ -4,8 +4,7 @@
  * /             - Главная с hero и входом в карту
  * /map          - Полноэкранная карта (lazy — MapLibre тяжёлый, не
  *                 грузим на других страницах; см. MapPage.tsx)
- * /species      - Каталог видов (placeholder на Фазе 1)
- * /guide        - Полевые гайды (placeholder)
+ * /species      - Каталог видов
  * /methodology  - Методология данных
  * /about        - Об авторе
  * /auth/*       - OAuth-flow (Yandex ID)
@@ -19,7 +18,6 @@ import { createBrowserRouter } from "react-router-dom";
 import { Layout } from "./components/layout/Layout";
 import { HomePage } from "./routes/HomePage";
 import { AboutPage } from "./routes/AboutPage";
-import { PlaceholderPage } from "./routes/PlaceholderPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
 import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
@@ -77,15 +75,6 @@ export const router = createBrowserRouter([
       },
       { path: "species",        element: <SpeciesListPage /> },
       { path: "species/:slug",  element: <SpeciesDetailPage /> },
-      {
-        path: "guide",
-        element: (
-          <PlaceholderPage
-            title="Полевые гайды"
-            description="Сезоны, безопасность, правовые вопросы сбора, снаряжение. Раздел готовится."
-          />
-        ),
-      },
       { path: "methodology",         element: <MethodologyPage /> },
       { path: "methodology/:slug",    element: <MethodologyArticlePage /> },
       { path: "about", element: <AboutPage /> },

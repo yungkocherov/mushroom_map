@@ -25,7 +25,7 @@ export function PrivacyPage() {
         Проект Грибная карта делает физическое лицо — Иван Кочеров,
         как личный некоммерческий проект. Контакт для любых вопросов о
         данных:{" "}
-        <a href="mailto:ineedletter@gmail.com">ineedletter@gmail.com</a>.
+        <a href="mailto:ikocherov@mail.ru">ikocherov@mail.ru</a>.
       </p>
 
       <h2 className={styles.h2}>2. Что мы собираем</h2>
@@ -113,7 +113,7 @@ export function PrivacyPage() {
       <p className={styles.p}>
         <strong>Как удалить аккаунт прямо сейчас:</strong> кнопки в
         интерфейсе пока нет. Напишите на{" "}
-        <a href="mailto:ineedletter@gmail.com">ineedletter@gmail.com</a>{" "}
+        <a href="mailto:ikocherov@mail.ru">ikocherov@mail.ru</a>{" "}
         с указанием email вашего Яндекс-аккаунта — удаление ручное,
         в течение 7 дней. Подтверждение придёт письмом. Кнопка в
         кабинете появится в одной из ближайших фаз.
@@ -124,7 +124,7 @@ export function PrivacyPage() {
         Вы вправе запросить копию данных, которые мы о вас храним,
         исправление неточностей или удаление. Все запросы — на тот же
         адрес{" "}
-        <a href="mailto:ineedletter@gmail.com">ineedletter@gmail.com</a>.
+        <a href="mailto:ikocherov@mail.ru">ikocherov@mail.ru</a>.
         Отвечаем в течение 30 дней.
       </p>
 

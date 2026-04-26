@@ -83,7 +83,7 @@ export function TermsPage() {
         предупреждения в случае явных нарушений (флуд, спам,
         автоматизированные атаки, попытки эксплуатации API). Удаление
         аккаунта по собственному желанию — через{" "}
-        <a href="mailto:ineedletter@gmail.com">ineedletter@gmail.com</a>{" "}
+        <a href="mailto:ikocherov@mail.ru">ikocherov@mail.ru</a>{" "}
         (см. политику конфиденциальности, раздел 5).
       </p>
 
