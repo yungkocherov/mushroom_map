@@ -1,10 +1,10 @@
 import type maplibregl from "maplibre-gl";
 import type { Map } from "maplibre-gl";
-import { API_ORIGIN } from "../utils/api";
+import { TILES_BASE } from "../utils/api";
 import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
 import { buildSoilFillColorExpression } from "../../../lib/soilStyle";
 
-export const SOIL_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/soil.pmtiles`;
+export const SOIL_PMTILES_URL = `pmtiles://${TILES_BASE}/soil.pmtiles`;
 
 // Раскраска по soil0_id, сгруппированному в 8 грибно-значимых кластеров
 // (см. lib/soilStyle.ts). Раньше окрашивали по `zone` (всего 4 категории)

@@ -2,10 +2,10 @@ import maplibregl, { type Map } from "maplibre-gl";
 import {
   FOREST_LAYER_PAINT_COLOR,
 } from "../../../lib/forestStyle";
-import { API_ORIGIN } from "../utils/api";
+import { TILES_BASE } from "../utils/api";
 import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
 
-export const FOREST_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/forest.pmtiles`;
+export const FOREST_PMTILES_URL = `pmtiles://${TILES_BASE}/forest.pmtiles`;
 
 export function addForestLayer(m: Map): void {
   if (m.getLayer("forest-fill")) return;

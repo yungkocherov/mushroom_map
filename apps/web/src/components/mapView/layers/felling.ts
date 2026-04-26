@@ -1,9 +1,9 @@
 import type maplibregl from "maplibre-gl";
 import type { Map } from "maplibre-gl";
-import { API_ORIGIN } from "../utils/api";
+import { TILES_BASE } from "../utils/api";
 import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
 
-export const FELLING_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/felling.pmtiles`;
+export const FELLING_PMTILES_URL = `pmtiles://${TILES_BASE}/felling.pmtiles`;
 
 export function addFellingLayer(m: Map): void {
   if (m.getLayer("felling-fill")) return;

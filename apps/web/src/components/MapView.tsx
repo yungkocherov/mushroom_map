@@ -15,7 +15,7 @@ import { MapControls, BaseMapMode } from "./MapControls";
 import { Legend } from "./Legend";
 import { SearchBar } from "./SearchBar";
 
-import { API_ORIGIN } from "./mapView/utils/api";
+import { TILES_BASE } from "./mapView/utils/api";
 import { buildPopupHtml, attachPopupHandlers } from "./mapView/utils/popup";
 import { INLINE_STYLE, SATELLITE_STYLE } from "./mapView/styles/inline";
 import { buildSchemeStyle, SCHEME_STYLE_FALLBACK } from "./mapView/styles/scheme";
@@ -276,7 +276,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
       if (!m) return;
       if (!loadedRef.current) {
         try {
-          const resp = await fetch(`${API_ORIGIN}/tiles/${pmtilesName}`, { method: "HEAD" });
+          const resp = await fetch(`${TILES_BASE}/${pmtilesName}`, { method: "HEAD" });
           if (!resp.ok) {
             setErrorMsg(notFoundMsg);
             setTimeout(() => setErrorMsg(null), 5000);

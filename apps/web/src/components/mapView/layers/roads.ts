@@ -1,8 +1,8 @@
 import type maplibregl from "maplibre-gl";
 import type { Map } from "maplibre-gl";
-import { API_ORIGIN } from "../utils/api";
+import { TILES_BASE } from "../utils/api";
 
-export const ROADS_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/roads.pmtiles`;
+export const ROADS_PMTILES_URL = `pmtiles://${TILES_BASE}/roads.pmtiles`;
 
 // Сase + main-line: светлый halo снаружи делает коричневую линию видимой
 // на зелёном лесе и серой подложке (иначе сливается).

@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from api.db import close_pool, init_pool
+from api.db import close_pool, get_conn, init_pool
 from api.settings import settings
 from api.routes import (
     forest, species, regions, soil, water, terrain, districts, stats,
@@ -60,3 +60,19 @@ app.mount("/tiles", StaticFiles(directory=str(_tiles_dir)), name="static-tiles")
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/healthz")
+def healthz() -> dict[str, str]:
+    # Liveness + readiness в одном эндпоинте: пингуем pool. Если БД мертва,
+    # возвращаем 503 — внешний мониторинг (uptimerobot/healthchecks.io)
+    # триггерит alert.
+    try:
+        with get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+    except Exception as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=503, detail=f"db unreachable: {exc}")
+    return {"status": "ok", "db": "ok"}

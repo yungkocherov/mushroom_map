@@ -1,8 +1,8 @@
 import type maplibregl from "maplibre-gl";
 import type { Map } from "maplibre-gl";
-import { API_ORIGIN } from "../utils/api";
+import { TILES_BASE } from "../utils/api";
 
-export const WATERWAY_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/waterway.pmtiles`;
+export const WATERWAY_PMTILES_URL = `pmtiles://${TILES_BASE}/waterway.pmtiles`;
 
 // Линейные водотоки из OSM. Реки и каналы шире, ручьи/канавы тоньше.
 // Цвет — вода стандартный, но bluer чем water-fill (полигональные озёра),

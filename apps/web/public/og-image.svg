@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="Грибная карта Ленинградской области — geobiom.ru">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f5f1e6"/>
+      <stop offset="1" stop-color="#e8e2cf"/>
+    </linearGradient>
+    <linearGradient id="cap" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a7050"/>
+      <stop offset="1" stop-color="#2d5a3a"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <g transform="translate(112 165)">
+    <path d="M150 0 C70 0, 10 60, 10 110 L290 110 C290 60, 230 0, 150 0 Z" fill="url(#cap)"/>
+    <rect x="105" y="110" width="90" height="115" rx="22" fill="#fcf9f0" stroke="#d8d2c0" stroke-width="2"/>
+  </g>
+  <g font-family="-apple-system, 'Segoe UI', system-ui, Arial, sans-serif" fill="#1f2622">
+    <text x="500" y="240" font-size="78" font-weight="700">Грибная карта</text>
+    <text x="500" y="320" font-size="42" font-weight="400" fill="#4a5a50">Ленинградская область</text>
+    <text x="500" y="430" font-size="28" font-weight="400" fill="#5a655d">Лесные данные, виды грибов,</text>
+    <text x="500" y="468" font-size="28" font-weight="400" fill="#5a655d">сезоны плодоношения, прогноз</text>
+  </g>
+  <text x="1140" y="585" font-family="-apple-system, 'Segoe UI', system-ui, Arial, sans-serif" font-size="28" font-weight="600" fill="#2d5a3a" text-anchor="end">geobiom.ru</text>
+</svg>

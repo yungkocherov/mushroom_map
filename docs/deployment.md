@@ -55,7 +55,11 @@
    - Build command: `npm ci && npm -w @mushroom-map/web run build`
    - Build output directory: `apps/web/dist`
    - Root directory: пусто
-   - Env vars: `VITE_API_URL=https://api.<твой-домен>`
+   - Env vars:
+     - `VITE_API_URL=https://api.<твой-домен>`
+     - `VITE_TILES_URL=https://tiles.<твой-домен>` (если PMTiles раздаются
+       через Cloudflare R2 — без неё фронт читает тайлы из API). См.
+       `scripts/deploy/sync_tiles_to_r2.sh` про заливку в bucket.
 
 После создания проекта подсмотреть Account ID (правая колонка дашборда,
 8-символьное hex). Это `CF_ACCOUNT_ID` для GitHub Actions.

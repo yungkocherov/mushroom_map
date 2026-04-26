@@ -13,8 +13,10 @@
 #   CF_ACCOUNT_ID    — Cloudflare account ID (правый сайдбар на dash)
 #
 # Vars (Settings → Variables → Actions):
-#   CF_PAGES_PROJECT — имя проекта (создать в Pages → Create project)
-#   VITE_API_URL     — например, https://api.example.org
+#   CF_PAGES_PROJECT    — имя проекта (создать в Pages → Create project)
+#   VITE_API_URL        — например, https://api.geobiom.ru
+#   VITE_TILES_URL      — например, https://tiles.geobiom.ru (R2 CDN);
+#                         если не задана, фронт читает PMTiles из API
 #   PROD_DEPLOY_ENABLED — 'true' чтобы включить SSH-job в deploy-api.yml
 
 name: deploy-web
@@ -48,6 +50,7 @@ jobs:
       - name: Build web
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_TILES_URL: ${{ vars.VITE_TILES_URL }}
         run: npm -w @mushroom-map/web run build
 
       - name: Publish to Cloudflare Pages

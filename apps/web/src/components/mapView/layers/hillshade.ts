@@ -1,8 +1,8 @@
 import type { Map } from "maplibre-gl";
-import { API_ORIGIN } from "../utils/api";
+import { TILES_BASE } from "../utils/api";
 import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
 
-export const HILLSHADE_PMTILES_URL = `pmtiles://${API_ORIGIN}/tiles/hillshade.pmtiles`;
+export const HILLSHADE_PMTILES_URL = `pmtiles://${TILES_BASE}/hillshade.pmtiles`;
 
 // Hillshade из Copernicus GLO-30 DEM, UTM 36N -> Web Mercator, PNG тайлы.
 // Слой наложен как raster с multiply-blending, чтобы рельеф проступал
