@@ -10,16 +10,13 @@
  * (тот сам делает свой fetch для feature-state). Кешировать через
  * shared хук — Phase 2.5 при wiring'е MapView.
  */
-import { useEffect, useState } from "react";
-
 import {
   DISTRICT_ACCENTS,
   DEFAULT_ACCENT,
 } from "@mushroom-map/tokens/district-accents";
 
-import { API_ORIGIN } from "../mapView/utils/api";
-import type { ForecastDistrictRow } from "../mapView/layers/forecastChoropleth";
 import { useForecastDate } from "../../store/useForecastDate";
+import { useForecastDistricts } from "../../store/useForecastDistricts";
 
 import { DateScrubber } from "./DateScrubber";
 import styles from "./SidebarOverview.module.css";
@@ -32,33 +29,7 @@ const TOP_N = 5;
 
 export function SidebarOverview({ className }: SidebarOverviewProps) {
   const date = useForecastDate((s) => s.selected);
-  const [rows, setRows] = useState<ForecastDistrictRow[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    setError(null);
-    fetch(
-      `${API_ORIGIN}/api/forecast/districts?date=${encodeURIComponent(date)}&region=lenoblast`,
-      { credentials: "omit" },
-    )
-      .then((r) => {
-        if (!r.ok) throw new Error(`forecast/districts: ${r.status}`);
-        return r.json() as Promise<ForecastDistrictRow[]>;
-      })
-      .then((data) => {
-        if (cancelled) return;
-        setRows(data);
-      })
-      .catch((e) => {
-        if (cancelled) return;
-        setError(String(e?.message ?? e));
-        setRows([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [date]);
+  const { rows, error } = useForecastDistricts(date);
 
   const top = (rows ?? [])
     .slice()
