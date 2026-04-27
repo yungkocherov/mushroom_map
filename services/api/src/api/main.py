@@ -11,7 +11,7 @@ from api.db import close_pool, get_conn, init_pool
 from api.settings import settings
 from api.routes import (
     forest, species, regions, soil, water, terrain, districts, stats,
-    auth, user, cabinet,
+    auth, user, cabinet, forecast,
 )
 
 
@@ -44,6 +44,7 @@ app.include_router(terrain.router, prefix="/api/terrain", tags=["terrain"])
 app.include_router(species.router, prefix="/api/species", tags=["species"])
 app.include_router(regions.router, prefix="/api/regions", tags=["regions"])
 app.include_router(districts.router, prefix="/api/districts", tags=["districts"])
+app.include_router(forecast.router, prefix="/api/forecast", tags=["forecast"])
 app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
 app.include_router(auth.router,  prefix="/api/auth",  tags=["auth"])
 app.include_router(user.router,    prefix="/api/user",    tags=["user"])
