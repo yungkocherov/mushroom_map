@@ -297,11 +297,31 @@ Viewport baseline: 390px (iPhone 13/14/15).
 
 ```
 GET /api/forecast/at?lat=&lon=&date=
-  → { index: 4.2, top_species: ["boletus-edulis", ...], confidence: "preview"|"model" }
+  → {
+      index: 4.2,                           # 0–5, может быть float
+      top_species: [
+        { slug: "boletus-edulis", score: 0.42 },
+        { slug: "leccinum-aurantiacum", score: 0.31 },
+        ...
+      ],
+      confidence: "preview" | "model",
+      generated_at: "2026-05-02T08:00:00Z"
+    }
 
 GET /api/forecast/districts?date=
-  → [{ admin_area_id, district_name, index: 4.2, top_species: [...] }]
+  → [
+      {
+        admin_area_id: 12345,
+        district_name: "Лужский",
+        district_slug: "luzhsky",
+        index: 4.2,
+        top_species: [{ slug, score }, ...]
+      },
+      ...
+    ]
 ```
+
+**Контракт-дисциплина:** `top_species` всегда `[{slug, score}]` — не голый массив строк. Это compat-первый дизайн: ML-модель будет возвращать вероятности, и frontend сразу научится их рендерить (например, для прозрачности бара). Все `lat/lon/date/q/limit` валидируются через Pydantic-модели на input.
 
 **Реализация v1 (seeded fixture):**
 - Детерминированно из `hash(district_id, date)` → 0–5
@@ -370,7 +390,7 @@ GET /api/places/search?q=&limit=10
 - Старая HomePage и связанные компоненты (стили, виджеты-секции)
 - `apps/web/src/routes/AboutPage.tsx` (108 строк) → контент переезжает в `apps/web/src/content/methodology/about.mdx`, `/about` → 301
 - CSS-модули, не привязанные к переехавшим компонентам (после миграции — пройтись `tsc --noEmit` + ручной orphan-чек)
-- Старый `mm:save-spot` custom event → заменён прямым вызовом `useSpots().add()` через store
+- ~~Старый `mm:save-spot` custom event → заменён прямым вызовом `useSpots().add()` через store~~ — **отменено по результатам adversarial-review:** popup MapLibre рендерится вне React-tree, хуки оттуда не работают. Оставляем event-bus pattern как есть, при необходимости даём popup-у callback-ref для imperative API.
 
 ### Что НЕ трогаем
 
