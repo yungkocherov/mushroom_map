@@ -31,7 +31,15 @@ import { addSoilLayer, setSoilVisibility } from "./mapView/layers/soil";
 import { addWaterwayLayer, setWaterwayVisibility } from "./mapView/layers/waterway";
 import { addHillshadeLayer, setHillshadeVisibility } from "./mapView/layers/hillshade";
 import { addDistrictsLayer, setDistrictsVisibility } from "./mapView/layers/districts";
+import {
+  addForecastChoroplethLayer,
+  applyForecastIndices,
+  setForecastChoroplethVisibility,
+} from "./mapView/layers/forecastChoropleth";
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
+import { useLayerVisibility } from "../store/useLayerVisibility";
+import { useForecastDate } from "../store/useForecastDate";
+import { useForecastDistricts } from "../store/useForecastDistricts";
 import {
   addUserSpotsLayer,
   removeUserSpotsLayer,
@@ -202,9 +210,14 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     }
     if (districtsLoadedRef.current) {
       if (m.getLayer("districts-line")) m.removeLayer("districts-line");
+      if (m.getLayer("forecast-choropleth-fill")) m.removeLayer("forecast-choropleth-fill");
       if (m.getSource("districts")) m.removeSource("districts");
       addDistrictsLayer(m);
       setDistrictsVisibility(m, districtsVisibleRef.current);
+      // Forecast choropleth — фон-fill под линиями районов. Гэйтится
+      // через useLayerVisibility, по умолчанию скрыт. Эффект ниже
+      // следит за зустанд-стором и flip'ит visibility + feature-state.
+      addForecastChoroplethLayer(m);
     }
     // User spots — приватный слой, появляется только когда юзер залогинен
     // и есть хоть одно место. После basemap switch'а нужно re-add'нуть
@@ -624,6 +637,33 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     if (m.isStyleLoaded()) apply();
     else m.once("idle", apply);
   }, [userSpots]);
+
+  // ─── Forecast choropleth controller ───────────────────────────────
+  // Subscribes to the new zustand stores (Phase 2 path) without
+  // disturbing the existing useState-driven layer wiring. Когда юзер
+  // включает forecast в обзор-сайдбаре или попадает на overview-mode
+  // главной — layer становится виден; на смене даты — feature-state
+  // переписывается без re-fetch'а тайлов.
+  const forecastChoroplethVisible = useLayerVisibility(
+    (s) => s.visible.forecastChoropleth,
+  );
+  const forecastDate = useForecastDate((s) => s.selected);
+  const { rows: forecastRows } = useForecastDistricts(forecastDate);
+  useEffect(() => {
+    const m = map.current;
+    if (!m) return;
+    const apply = () => {
+      // Если districts ещё не «загружены» (пользователь не дёргал
+      // их toggle) — слой не существует, выходим тихо.
+      if (!m.getLayer("forecast-choropleth-fill")) return;
+      setForecastChoroplethVisibility(m, forecastChoroplethVisible);
+      if (forecastChoroplethVisible && forecastRows) {
+        applyForecastIndices(m, forecastRows);
+      }
+    };
+    if (m.isStyleLoaded()) apply();
+    else m.once("idle", apply);
+  }, [forecastChoroplethVisible, forecastRows]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
