@@ -1,0 +1,80 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.pill {
+  appearance: none;
+  border: 1px solid var(--rule);
+  background: var(--paper-rise);
+  color: var(--ink);
+  padding: var(--space-2) var(--space-3);
+  font: inherit;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  line-height: 1;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.pill:hover {
+  background: var(--birch);
+  border-color: var(--moss);
+}
+
+.pill:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.pillActive {
+  background: var(--forest);
+  border-color: var(--forest);
+  color: var(--paper);
+}
+
+.pillActive:hover {
+  background: var(--forest-deep);
+  border-color: var(--forest-deep);
+}
+
+.dayLabel {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin-bottom: 2px;
+}
+
+.pillActive .dayLabel {
+  color: rgba(245, 241, 230, 0.7);
+}
+
+.expandToggle {
+  align-self: flex-start;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--ink-dim);
+  font: inherit;
+  font-size: var(--fs-xs);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.expandToggle:hover {
+  color: var(--forest);
+}
