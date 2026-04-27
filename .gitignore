@@ -42,6 +42,7 @@ vk_photos_report*.html
 
 # Claude Code session data
 .claude/
+.superpowers/
 
 # Env / secrets
 .env
