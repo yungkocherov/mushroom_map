@@ -32,6 +32,13 @@ export const palette = {
     caution: "#c07a2c",
 
     focusRing: "#d88c1e",
+
+    // Forecast index 0–5 scale
+    idx0: "#4a6b40",
+    idx1: "#5e8050",
+    idx2: "#9bb47a",
+    idx3: "#bcc890",
+    idx4: "#d88c1e",
   },
   dark: {
     paper: "#171913",
@@ -53,6 +60,13 @@ export const palette = {
     caution: "#dfa25c",
 
     focusRing: "#f3a435",
+
+    // Forecast index 0–5 scale (dark mode)
+    idx0: "#6b8a5e",
+    idx1: "#7da068",
+    idx2: "#a9c290",
+    idx3: "#cdd8a3",
+    idx4: "#f3a435",
   },
 } as const;
 

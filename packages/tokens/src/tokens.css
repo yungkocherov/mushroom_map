@@ -35,6 +35,16 @@
   --danger:       #8b2a2a;  /* toxic species, safety */
   --caution:      #c07a2c;  /* conditional-edible warnings */
 
+  /* ─── Forecast index scale (0–5, 5 buckets) ─────────────────────── */
+  /* Semantic, not viridis. Cool dark green = forest is here, mushrooms
+     aren't. Warm chanterelle = "go!". Bucket boundaries: idx-0 covers
+     [0,1), idx-1 [1,2), idx-2 [2,3), idx-3 [3,4), idx-4 [4,5]. */
+  --idx-0:        #4a6b40;  /* холодно · мимо */
+  --idx-1:        #5e8050;  /* мимо */
+  --idx-2:        #9bb47a;  /* слабо */
+  --idx-3:        #bcc890;  /* можно ехать */
+  --idx-4:        #d88c1e;  /* хороший день — same hue as chanterelle */
+
   /* ─── A11y ──────────────────────────────────────────────────────── */
   --focus-ring:   #d88c1e;
 
@@ -102,6 +112,14 @@
   --danger:       #d05252;
   --caution:      #dfa25c;
 
+  /* Forecast index — lightened greens for dark surfaces, chanterelle
+     for "good day" matches the dark `--chanterelle`. */
+  --idx-0:        #6b8a5e;
+  --idx-1:        #7da068;
+  --idx-2:        #a9c290;
+  --idx-3:        #cdd8a3;
+  --idx-4:        #f3a435;
+
   --focus-ring:   #f3a435;
 
   --shadow-1:     0 1px 2px rgba(0, 0, 0, 0.35);
@@ -132,6 +150,12 @@
 
     --danger:       #d05252;
     --caution:      #dfa25c;
+
+    --idx-0:        #6b8a5e;
+    --idx-1:        #7da068;
+    --idx-2:        #a9c290;
+    --idx-3:        #cdd8a3;
+    --idx-4:        #f3a435;
 
     --focus-ring:   #f3a435;
 
