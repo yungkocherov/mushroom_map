@@ -1,0 +1,16 @@
+[
+  {
+    "slug": "boletus-edulis",
+    "src": "/photos/boletus-edulis.jpg",
+    "author": "TODO(phase-3)",
+    "license": "CC-BY-SA-4.0",
+    "alt_ru": "Белый гриб (Boletus edulis) на фоне соснового подлеска"
+  },
+  {
+    "slug": "cantharellus-cibarius",
+    "src": "/photos/cantharellus-cibarius.jpg",
+    "author": "TODO(phase-3)",
+    "license": "CC-BY-SA-4.0",
+    "alt_ru": "Лисичка обыкновенная (Cantharellus cibarius) среди мха"
+  }
+]
