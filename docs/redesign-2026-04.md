@@ -463,6 +463,7 @@ GET /api/places/search?q=&limit=10
 - `npx tsc --noEmit` без ошибок
 - Существующий тестовый набор (pytest API smoke + unit) — без регрессий
 - **Установить Playwright как зависимость v1.49+** (`npm install -D --workspace=@mushroom-map/web @playwright/test`) и `npx playwright install chromium`. Если уже установлен — пропустить. Создать `apps/web/playwright.config.ts` (baseURL → dev-server, headless по умолчанию) и пустую папку `apps/web/tests/`. Это инфраструктура для phase-2/3 spec-файлов.
+  - TODO(phase-2): `npx playwright install chromium` failed in sandbox (offline browser download blocked). Run on dev machine before first spec is added. Config + `tests/` дир уже коммитнуты — устанавливать только бинарь.
 - Ручной QA: открыть текущий сайт на staging — ничего визуально не изменилось
 
 **Откат:** revert PR-1, ничего у пользователя не сломается (фаза была невидимой).
