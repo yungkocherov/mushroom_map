@@ -617,6 +617,25 @@ PMTiles на R2 — не трогаем (один и тот же URL обслу�
 - TODO(phase-2): real district-slug column on `admin_area` (transliteration), replace `code[len("osm_rel_"):]` shortcut in `forecast.py:_district_slug_from_code`.
 - TODO(phase-3): real photos for `content/photos.json`, fill author/license.
 
+## Phase 2 partial (autonomous run continued, 2026-04-27)
+
+- [x] 2.a — `forecastChoroplethLayer.ts`: source reuses `districts`, `step` paint expression on feature-state index, fetchAndApplyForecast convenience (commit `4d2e0b9`)
+- [x] 2.b — `DateScrubber` substantive: 7/14-day pills, mono pills, today eyebrow, focus ring (commit `8885941`)
+- [x] 2.c — `SidebarOverview` substantive: eyebrow + Fraunces H1 + lead + preview badge + DateScrubber + top-5 with district accent dots + sources (commit `7f1e751`)
+- [x] 2.d — `useForecastDistricts` hook with in-memory cache; SidebarOverview migrated to it (commit `3a2afec`)
+- [x] 2.e — MapView additive wiring: forecast layer registered alongside districts, controller effect subscribes to `useLayerVisibility` + `useForecastDate` (commit `66d1ea8`)
+
+**Phase 2 Outstanding (not done in this autonomous run):**
+- MapView 778-line decomposition (extract layer modules into a single dispatcher, replace 11 useState pairs with `useLayerVisibility` reads). High-risk in unattended mode.
+- Popup redesign per spec (Fraunces title, JetBrains Mono fields, no vydel/запас/уклон, top species section, CTA).
+- SidebarDistrict substantive impl + LayerGrid impl + accent application.
+- Router redirects: `/map` `/forecast` `/about` `/guide` → 301; `/` swap to MapPage.
+- BottomSheet impl (deps `@use-gesture/react` + `@react-spring/web` not yet installed).
+- HomePage.tsx + AboutPage.tsx deletion (after `/` swap to MapPage).
+- OG/SEO meta on the new home.
+
+State: site visually unchanged; new layer hidden by default; SidebarOverview not mounted in any route yet (Phase 2.f, deferred). `npx tsc --noEmit` clean across all touched files; `pytest -q` 29 passed / 3 smoke skipped (no live API in sandbox).
+
 ---
 
 ## Ссылки на ресурсы brainstorm-сессии
