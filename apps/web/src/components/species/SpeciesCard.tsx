@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import type { SpeciesListItem } from "@mushroom-map/types";
 import { EdibilityChip } from "./EdibilityChip";
 import { SeasonBar } from "./SeasonBar";
-import { FOREST_LABEL } from "./labels";
+import { FOREST_LABEL, EDIBILITY_TONE } from "./labels";
 import styles from "./SpeciesCard.module.css";
 
 
@@ -12,8 +12,18 @@ interface Props {
 
 
 export function SpeciesCard({ item }: Props) {
+  // Edge-цвет карточки по edibility (по spec'у redesign-2026-04, /species).
+  // Левый бордер = тон edibility — зелёный для съедобных, жёлтый для условно,
+  // красный для ядовитых; нейтральный rule — для несъедобных.
+  const edge = EDIBILITY_TONE[item.edibility]?.bg ?? "var(--rule)";
+  const isWarning = item.edibility === "toxic" || item.edibility === "deadly";
+
   return (
-    <Link to={`/species/${item.slug}`} className={styles.card}>
+    <Link
+      to={`/species/${item.slug}`}
+      className={styles.card}
+      style={{ borderLeftColor: edge, borderLeftWidth: "3px" }}
+    >
       <div className={styles.photoWrap}>
         {item.photo_url ? (
           <img
@@ -28,6 +38,15 @@ export function SpeciesCard({ item }: Props) {
         {item.red_book && (
           <span className={styles.redBookBadge} title="Включён в Красную книгу">
             КК
+          </span>
+        )}
+        {isWarning && (
+          <span
+            className={styles.warningBadge}
+            title={item.edibility === "deadly" ? "Смертельно ядовитый" : "Ядовитый"}
+            aria-label="Опасный вид"
+          >
+            !
           </span>
         )}
       </div>

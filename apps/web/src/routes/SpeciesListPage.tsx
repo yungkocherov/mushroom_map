@@ -19,6 +19,14 @@ import prose from "./Prose.module.css";
 
 type FilterValue = "all" | Edibility;
 
+function pluralize(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
 const FILTER_ORDER: FilterValue[] = [
   "all",
   "edible",
@@ -60,7 +68,23 @@ export function SpeciesListPage() {
   return (
     <Container as="section" size="wide">
       <header className={styles.header}>
-        <h1 className={prose.h1}>Справочник видов</h1>
+        <p
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--fs-xs)",
+            letterSpacing: "0.16em",
+            textTransform: "uppercase",
+            color: "var(--moss)",
+            margin: "0 0 var(--space-2)",
+          }}
+        >
+          Виды грибов и ягод
+        </p>
+        <h1 className={prose.h1}>
+          {items
+            ? `${items.length} ${pluralize(items.length, "вид", "вида", "видов")} из реестра проекта`
+            : "Справочник видов"}
+        </h1>
         <p className={prose.lead}>
           Грибы, которые встречаются в Ленинградской области. Данные
           справочные; распознавание собранных грибов и проверка
