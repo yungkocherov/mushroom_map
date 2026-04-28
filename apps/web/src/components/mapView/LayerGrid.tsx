@@ -70,7 +70,7 @@ export function LayerGrid({ className, layout = "grid" }: LayerGridProps) {
     authStatus === "authenticated"
       ? {
           key: "userSpots",
-          label: "Места",
+          label: "Сохранённые",
           active: visible.userSpots,
           onClick: () => setVisible("userSpots", !visible.userSpots),
         }
@@ -83,7 +83,7 @@ export function LayerGrid({ className, layout = "grid" }: LayerGridProps) {
               ? window.location.pathname + window.location.search
               : "/",
           )}`,
-          hint: "Места",
+          hint: "Сохранённые",
           disabled: authStatus === "loading",
         };
 

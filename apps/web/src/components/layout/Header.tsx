@@ -8,7 +8,7 @@ import styles from "./Header.module.css";
 const NAV_ITEMS = [
   { to: "/",            label: "Карта", end: true },
   { to: "/species",     label: "Виды" },
-  { to: "/spots",       label: "Места" },
+  { to: "/spots",       label: "Сохранённые места" },
   { to: "/methodology", label: "Методология" },
 ];
 
@@ -23,21 +23,22 @@ export function Header() {
             <span className={styles.brandSub}>лес ленобласти</span>
           </span>
         </Link>
-        <div className={styles.navWrap}>
-          <nav className={styles.nav} aria-label="Основная навигация">
-            {NAV_ITEMS.map(({ to, label, end }) => (
-              <NavLink
-                key={to}
-                to={to}
-                end={end}
-                className={({ isActive }) =>
-                  `${styles.link} ${isActive ? styles.linkActive : ""}`
-                }
-              >
-                {label}
-              </NavLink>
-            ))}
-          </nav>
+        <nav className={styles.nav} aria-label="Основная навигация">
+          {NAV_ITEMS.map(({ to, label, end }) => (
+            <NavLink
+              key={to}
+              to={to}
+              end={end}
+              className={({ isActive }) =>
+                `${styles.link} ${isActive ? styles.linkActive : ""}`
+              }
+            >
+              {label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className={styles.spacer} />
+        <div className={styles.right}>
           <ThemeToggle />
           <HeaderAuth />
         </div>

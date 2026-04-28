@@ -12,9 +12,15 @@
   padding: var(--space-3) var(--space-5);
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-5);
   flex-wrap: wrap;
+}
+
+.spacer { flex: 1; }
+.right {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
 }
 
 .brand {
@@ -52,12 +58,6 @@
   font-size: var(--fs-xs);
   color: var(--ink-dim);
   margin-top: 2px;
-}
-
-.navWrap {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
 }
 
 .nav {

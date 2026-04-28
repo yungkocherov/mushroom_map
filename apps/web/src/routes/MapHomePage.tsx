@@ -118,6 +118,18 @@ export function MapHomePage() {
       return next;
     });
   }, []);
+  // MapLibre canvas рендерит в фиксированный pixel-buffer по последнему
+  // размеру контейнера. При свёртывании sidebar grid-template-columns
+  // меняется → div ширже, но canvas прежнего размера → пустые полосы /
+  // «карта сломана». Стрельнуть window resize заставит MapLibre сделать
+  // resize() сам (он подписан на это событие). Дёргаем 2 раза: сразу и
+  // после анимации (если будет) — на случай transition'а.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.dispatchEvent(new Event("resize"));
+    const t = setTimeout(() => window.dispatchEvent(new Event("resize")), 320);
+    return () => clearTimeout(t);
+  }, [sidebarCollapsed]);
 
   return (
     <div

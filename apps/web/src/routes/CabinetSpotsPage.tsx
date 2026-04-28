@@ -152,7 +152,7 @@ export function CabinetSpotsPage() {
       <nav className={styles.breadcrumbs} aria-label="Хлебные крошки">
         <Link to="/cabinet">Кабинет</Link>
         <span aria-hidden="true">/</span>
-        <span>Места</span>
+        <span>Сохранённые места</span>
       </nav>
 
       <p
@@ -165,7 +165,7 @@ export function CabinetSpotsPage() {
           margin: "0 0 var(--space-2)",
         }}
       >
-        Мои места
+        Мои сохранённые места
       </p>
       <h1 className={prose.h1}>
         {spots && spots.length > 0
