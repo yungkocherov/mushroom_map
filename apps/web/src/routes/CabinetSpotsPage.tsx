@@ -251,11 +251,15 @@ export function CabinetSpotsPage() {
               <li key={s.id} className={styles.row}>
                 <span className={styles.markerDot} style={{ background: colorCss }} aria-hidden="true" />
                 <div className={styles.rowBody}>
-                  <div className={styles.rowTitle}>{s.name}</div>
+                  <div className={styles.rowTitle}>
+                    <Link to={`/spots/${s.id}`} className={styles.rowTitleLink}>
+                      {s.name}
+                    </Link>
+                  </div>
                   {s.note && <div className={styles.rowNote}>{s.note}</div>}
                   <div className={styles.rowMeta}>
                     <Link
-                      to={`/map?lat=${s.lat}&lon=${s.lon}&z=14`}
+                      to={`/?lat=${s.lat}&lon=${s.lon}&z=14`}
                       title="Открыть на карте"
                     >
                       {s.lat.toFixed(5)}, {s.lon.toFixed(5)}

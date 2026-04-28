@@ -12,6 +12,10 @@ build/
 node_modules/
 .vite/
 
+# Playwright
+apps/web/test-results/
+apps/web/playwright-report/
+
 # Data (large binary — regenerate with pipelines)
 data/tiles/
 data/raw/
