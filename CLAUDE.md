@@ -215,6 +215,38 @@ docker build -f services/api/Dockerfile.prod -t mushroom-api:prod .
 #   bash scripts/deploy/sync_tiles_to_r2.sh
 ```
 
+## Pre-prod-deploy checklist
+
+Шаги, которые **обязательно** сделать до первого публичного запуска
+`geobiom.ru`. На локальном dev'е не нужны, на стейджинге — желательно.
+
+1. **Yandex OAuth callback URL.** На [https://oauth.yandex.ru](https://oauth.yandex.ru/)
+   → проектное приложение → Redirect URI добавить
+   `https://geobiom.ru/api/auth/yandex/callback` (и `https://staging.geobiom.ru/...`
+   если будет staging). Старый localhost-callback можно оставить
+   параллельно для dev-loop'а. Без этого вход через Яндекс на проде
+   откажет с `redirect_uri_mismatch`.
+2. **`.env.prod` секреты:**
+   - `JWT_SECRET` — 32+ байт, `openssl rand -hex 32`
+   - `OAUTH_STATE_SECRET` — отдельный 32+ байт (НЕ переиспользовать JWT)
+   - `YANDEX_CLIENT_ID` / `YANDEX_CLIENT_SECRET` — из oauth.yandex.ru
+   - `DATABASE_URL` — внутренний адрес pg в compose-сети (`db:5432`)
+3. **DB:** на VM либо тащим `pg_dump` локального через
+   `scripts/deploy/sync_db_to_remote.sh`, либо стартуем с пустой и
+   гоняем `db/migrate.py` + ingest pipeline'ы. Решить заранее, во
+   избежание простоя в момент DNS-cutover.
+4. **PMTiles → Cloudflare R2.** `bash scripts/deploy/sync_tiles_to_r2.sh`,
+   фронт читает с `r2.geobiom.ru` (или прямой R2 endpoint). Снимает
+   нагрузку с VM, иначе forest.pmtiles 322 МБ + hillshade 453 МБ
+   уйдут в трафик через uvicorn — медленно и дорого.
+5. **DNS A-запись `geobiom.ru` → IP VM** в Cloudflare. Делать
+   ПОСЛЕ того, как VM ответит 200 на `https://<vm-ip>/health` через
+   nginx с самоподписанным сертификатом — иначе CF Universal SSL не
+   выдаст cert.
+
+VM-статус и hosting-fallback живут в memory-файле
+`project_website_migration.md`.
+
 ## Deprecated (don't extend, don't rely on)
 
 - **`observation` table + `vk_post.observation_written` column.** Старый
