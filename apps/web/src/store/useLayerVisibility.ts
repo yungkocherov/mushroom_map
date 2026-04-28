@@ -39,6 +39,16 @@ export interface LayerVisibilityState {
   visible: Record<LayerKey, boolean>;
   loaded: Record<LayerKey, boolean>;
   forestColorMode: ForestColorMode;
+  /** Текст ошибки, отображаемый красным toast'ом ~5 сек. null = тоста нет. */
+  errorMsg: string | null;
+  /** Тост «спутник может не загружаться при VPN». 'visible' → 'fading' (800ms) → 'hidden'. */
+  vpnToast: "hidden" | "visible" | "fading";
+  /** Тост-подсказка после первого включения forest. Тот же lifecycle. */
+  forestHint: "hidden" | "visible" | "fading";
+  /** Тост «ссылка скопирована». Boolean — короткий 2-сек pulse. */
+  shareToast: boolean;
+  /** Бейдж активного species-фильтра. null = бейджа нет. */
+  speciesFilterLabel: string | null;
 
   setVisible: (key: LayerKey, value: boolean) => void;
   toggleVisible: (key: LayerKey) => void;
@@ -46,6 +56,11 @@ export interface LayerVisibilityState {
   setForestColorMode: (mode: ForestColorMode) => void;
   /** Включить forest и переключить mode одним действием — для LayerGrid. */
   selectForestMode: (mode: ForestColorMode) => void;
+  setErrorMsg: (msg: string | null) => void;
+  setVpnToast: (state: "hidden" | "visible" | "fading") => void;
+  setForestHint: (state: "hidden" | "visible" | "fading") => void;
+  setShareToast: (value: boolean) => void;
+  setSpeciesFilterLabel: (label: string | null) => void;
 }
 
 const DEFAULT_VISIBLE: Record<LayerKey, boolean> = {
@@ -72,6 +87,11 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
   visible: DEFAULT_VISIBLE,
   loaded: DEFAULT_LOADED,
   forestColorMode: "species",
+  errorMsg: null,
+  vpnToast: "hidden",
+  forestHint: "hidden",
+  shareToast: false,
+  speciesFilterLabel: null,
 
   setVisible: (key, value) =>
     set((s) => ({ visible: { ...s.visible, [key]: value } })),
@@ -85,4 +105,9 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
       visible: { ...s.visible, forest: true },
       forestColorMode: mode,
     })),
+  setErrorMsg: (msg) => set({ errorMsg: msg }),
+  setVpnToast: (state) => set({ vpnToast: state }),
+  setForestHint: (state) => set({ forestHint: state }),
+  setShareToast: (value) => set({ shareToast: value }),
+  setSpeciesFilterLabel: (label) => set({ speciesFilterLabel: label }),
 }));
