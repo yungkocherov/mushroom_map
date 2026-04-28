@@ -6,7 +6,6 @@ import { MapControls } from "./MapControls";
 import { Legend } from "./Legend";
 import { SearchBar } from "./SearchBar";
 
-import { buildPopupHtml, attachPopupHandlers } from "./mapView/utils/popup";
 import { INLINE_STYLE, SATELLITE_STYLE } from "./mapView/styles/inline";
 import { buildSchemeStyle, SCHEME_STYLE_FALLBACK } from "./mapView/styles/scheme";
 import { buildHybridStyle, HYBRID_STYLE_FALLBACK } from "./mapView/styles/hybrid";
@@ -18,13 +17,8 @@ import {
 } from "./mapView/layers/userSpots";
 import { useMapLayers } from "./mapView/hooks/useMapLayers";
 import { useMapInstance, parseInitialView } from "./mapView/hooks/useMapInstance";
+import { useMapPopup } from "./mapView/hooks/useMapPopup";
 
-import {
-  fetchForestAt,
-  fetchSoilAt,
-  fetchWaterDistanceAt,
-  fetchTerrainAt,
-} from "@mushroom-map/api-client";
 import {
   useLayerVisibility,
   type BaseMapMode,
@@ -76,8 +70,9 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   });
 
   const { reapplyAll } = useMapLayers(map);
+  useMapPopup(map);
 
-  // ─── Map handlers (mousemove cursor, moveend URL sync, click popup) ──
+  // ─── Map handlers (mousemove cursor, moveend URL sync) ───────────────
   useEffect(() => {
     const m = map.current;
     if (!m) return;
@@ -97,35 +92,9 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     };
     m.on("moveend", syncUrl);
 
-    const clickHandler = async (e: maplibregl.MapMouseEvent) => {
-      if (!e.lngLat) return;
-      if ((e.originalEvent.target as HTMLElement | null)?.closest(".maplibregl-popup")) return;
-      const { lng, lat } = e.lngLat;
-      const popupMaxWidth = window.innerWidth < 600 ? `${window.innerWidth - 32}px` : "380px";
-      const popup = new maplibregl.Popup({ maxWidth: popupMaxWidth })
-        .setLngLat([lng, lat])
-        .setHTML(`<div style="font-family:sans-serif;color:#555;padding:4px">Загружаю…</div>`)
-        .addTo(m);
-      try {
-        const [forest, soil, water, terrain] = await Promise.all([
-          fetchForestAt(lat, lng),
-          fetchSoilAt(lat, lng).catch(() => null),
-          fetchWaterDistanceAt(lat, lng).catch(() => null),
-          fetchTerrainAt(lat, lng).catch(() => null),
-        ]);
-        popup.setHTML(buildPopupHtml(forest, soil, water, terrain, lat, lng));
-        const el = popup.getElement();
-        if (el) attachPopupHandlers(el);
-      } catch {
-        popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
-      }
-    };
-    m.on("click", clickHandler);
-
     return () => {
       m.off("mousemove", onMouseMove);
       m.off("moveend", syncUrl);
-      m.off("click", clickHandler);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
