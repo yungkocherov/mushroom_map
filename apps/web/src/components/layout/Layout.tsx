@@ -13,6 +13,20 @@ import styles from "./Layout.module.css";
 export function Layout() {
   const { pathname } = useLocation();
   const isMap = pathname === "/map" || pathname.startsWith("/map/");
+  // Главная теперь сама — карта (variant C редизайна). Без back-link
+  // overlay (некуда «возвращаться»), без хедера/футера (карта владеет
+  // экраном); вся навигация внутри SidebarOverview.
+  const isHome = pathname === "/";
+
+  if (isHome) {
+    return (
+      <div className={styles.mapShell}>
+        <main className={styles.mapMain}>
+          <Outlet />
+        </main>
+      </div>
+    );
+  }
 
   if (isMap) {
     return (

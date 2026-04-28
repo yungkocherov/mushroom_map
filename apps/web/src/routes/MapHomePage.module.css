@@ -1,0 +1,76 @@
+/*
+ * Map-as-home layout: sidebar слева, карта на оставшееся.
+ * На широких экранах sidebar 380px фиксирован; ниже 768px sidebar
+ * сворачивается в верхнюю секцию (мобильный stack), карта тянется на
+ * всю оставшуюся высоту.
+ */
+
+.shell {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  width: 100%;
+  height: 100%;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.sidebar {
+  /* SidebarOverview сам управляет своим padding'ом и скроллом —
+     мы только даём ему фиксированную область grid-cell. */
+  height: 100%;
+  overflow-y: auto;
+  border-right: 1px solid var(--rule);
+}
+
+.mapPane {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+}
+
+.contextChip {
+  position: absolute;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 12px;
+  background: var(--paper-rise);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-2);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  color: var(--ink);
+}
+
+.contextChipLabel {
+  color: var(--ink-dim);
+}
+
+.contextChipName {
+  color: var(--forest);
+  font-weight: 500;
+}
+
+/* Mobile: sidebar collapses above the map. */
+@media (max-width: 768px) {
+  .shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .sidebar {
+    height: auto;
+    max-height: 50vh;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .mapPane {
+    min-height: 50vh;
+  }
+}

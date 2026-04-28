@@ -18,6 +18,7 @@ import { createBrowserRouter } from "react-router-dom";
 
 import { Layout } from "./components/layout/Layout";
 import { HomePage } from "./routes/HomePage";
+import { MapHomePage } from "./routes/MapHomePage";
 import { AboutPage } from "./routes/AboutPage";
 import { PlaceholderPage } from "./routes/PlaceholderPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
@@ -34,9 +35,10 @@ import { ProtectedRoute } from "./auth/ProtectedRoute";
 import { PrivacyPage } from "./routes/legal/PrivacyPage";
 import { TermsPage } from "./routes/legal/TermsPage";
 
-// MapPage тянет за собой MapLibre GL + PMTiles (~600–700 КБ минифицированных
-// JS). Lazy-load срезает main-bundle на все не-карта страницы: /, /species,
-// /about и т. д. загружаются без MapLibre.
+// MapPage и MapHomePage тянут MapLibre GL + PMTiles (~600–700 КБ
+// минифицированных JS). Lazy-load срезает main-bundle на все не-карта
+// страницы: /species, /about и т. д. — а главная неизбежно несёт этот
+// груз, потому что карта = главная (variant C редизайна).
 const MapPage = lazy(() =>
   import("./routes/MapPage").then((m) => ({ default: m.MapPage })),
 );
@@ -66,7 +68,11 @@ export const router = createBrowserRouter([
     path: "/",
     element: <Layout />,
     children: [
-      { index: true, element: <HomePage /> },
+      // Главная — теперь карта-обзор с sidebar'ом (variant C редизайна).
+      // Старая `HomePage` (hero + виджеты) больше не на `/`; компонент
+      // оставлен в коде для возможного восстановления и будет удалён в
+      // фазе 2.5 cleanup. См. docs/redesign-2026-04.md.
+      { index: true, element: <MapHomePage /> },
       {
         path: "map",
         element: (
@@ -75,6 +81,9 @@ export const router = createBrowserRouter([
           </Suspense>
         ),
       },
+      // /home — временный путь к старому HomePage, на случай если нужно
+      // быстро откатиться визуально без revert-коммита (фаза 2 страховка).
+      { path: "home-legacy", element: <HomePage /> },
       { path: "species",        element: <SpeciesListPage /> },
       { path: "species/:slug",  element: <SpeciesDetailPage /> },
       {
