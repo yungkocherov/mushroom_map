@@ -74,6 +74,12 @@ export function addForecastChoroplethLayer(m: Map): void {
   const colors = resolveIndexColors();
   const beforeId = findFirstSymbolLayerId(m);
 
+  // Continuous interpolate, не step. Step делал «два цвета на 18
+  // районов», когда индексы в узком диапазоне (например, ранняя весна:
+  // все индексы 0.5–1.9 → только бакеты 0 и 1). Interpolate даёт каждой
+  // дробной точке свой оттенок, и районы становятся визуально различимы
+  // даже на одинаково-плохом дне. Опорные точки совпадают с idx-токенами
+  // (semantic-scale), но плавное смешение между ними.
   m.addLayer(
     {
       id: FORECAST_FILL_LAYER_ID,
@@ -83,22 +89,24 @@ export function addForecastChoroplethLayer(m: Map): void {
         "fill-color": [
           "case",
           ["==", ["feature-state", "index"], null],
-          "#cccccc", // no data — neutral grey, opacity drops it out
+          "#cccccc",
           [
-            "step",
-            ["feature-state", "index"],
-            colors[0],
-            1, colors[1],
-            2, colors[2],
-            3, colors[3],
-            4, colors[4],
+            "interpolate", ["linear"], ["feature-state", "index"],
+            0,   colors[0],
+            1.5, colors[1],
+            2.5, colors[2],
+            3.5, colors[3],
+            4.5, colors[4],
           ],
         ],
+        // Opacity 0.7 (было 0.45). По спеке choropleth — главная
+        // визуальная информация на overview; basemap под ним играет
+        // вторую роль. 0.7 даёт чёткий цвет, не убивая labels.
         "fill-opacity": [
           "case",
           ["==", ["feature-state", "index"], null],
           0.0,
-          0.45,
+          0.7,
         ],
       } as unknown as maplibregl.FillLayerSpecification["paint"],
       layout: { visibility: "none" },

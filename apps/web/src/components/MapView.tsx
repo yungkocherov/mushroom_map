@@ -769,7 +769,6 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   // питает choropleth и district lines). 1.2s easing — комфортная
   // длительность по spec'у.
   const selectedDistrictId = useMapMode((s) => s.districtId);
-  const mapMode = useMapMode((s) => s.mode);
   useEffect(() => {
     const m = map.current;
     if (!m || selectedDistrictId == null) return;
@@ -822,15 +821,6 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} className="map-root" />
 
-      {/*
-        MapControls — legacy floating-overlay (basemap + 13 layer-чипов).
-        В обзор-режиме главной (`/`) спека требует чистую карту: единственный
-        источник правды по слоям — sidebar. На /map/:district (district mode)
-        пока временно используем те же controls, пока phase 2.5 не вынесет
-        LayerGrid из SidebarDistrict в стандалон. Не рендерим на overview
-        чтобы не дублировать sidebar и не загромождать карту.
-      */}
-      {mapMode !== "overview" && (
       <MapControls
         baseMap={baseMap}
         onBaseMapChange={setBaseMap}
@@ -871,15 +861,8 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
         onDistrictsToggle={handleDistrictsToggle}
         onShare={handleShare}
       />
-      )}
 
-      {/* SearchBar — legacy (top-right поиск). На overview его роль играет
-          Spotlight ⌘K (см. components/Spotlight.tsx, mounted в Layout).
-          Прячем на `/`, оставляем на /map/:district чтобы пользователь
-          мог искать места внутри района без открытия global Spotlight'а. */}
-      {mapMode !== "overview" && (
-        <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={handleSpeciesFilter} />
-      )}
+      <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={handleSpeciesFilter} />
 
       {(forestLoaded || (soilLoaded && soilVisible)) && (
         <Legend

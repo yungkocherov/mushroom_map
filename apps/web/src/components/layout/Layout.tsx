@@ -1,42 +1,25 @@
-import { Link, Outlet, useLocation } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { Outlet, useLocation } from "react-router-dom";
 import { Header } from "./Header";
 import { Footer } from "./Footer";
 import { Spotlight } from "../Spotlight";
 import styles from "./Layout.module.css";
 
 /**
- * Корневой layout. Шапка и подвал спрятаны на /map (карта владеет
- * всем viewport'ом), вместо них — компактная overlay-ссылка обратно
- * на главную в левом верхнем углу. Иначе пользователь оказывается
- * заперт на карте без обратного пути.
+ * Корневой layout. На / и /map/:district карта тянется на полный
+ * вьюпорт, но Header остаётся сверху (по brainstorm-мокапу
+ * hero-c-fullsize.html). Footer прячем на map-shell страницах —
+ * карта-главная не должна скроллиться, footer мешал бы.
  */
 export function Layout() {
   const { pathname } = useLocation();
   const isMap = pathname === "/map" || pathname.startsWith("/map/");
-  // Главная теперь сама — карта (variant C редизайна). Без back-link
-  // overlay (некуда «возвращаться»), без хедера/футера (карта владеет
-  // экраном); вся навигация внутри SidebarOverview.
   const isHome = pathname === "/";
+  const isMapShell = isHome || isMap;
 
-  if (isHome) {
+  if (isMapShell) {
     return (
       <div className={styles.mapShell}>
-        <main className={styles.mapMain}>
-          <Outlet />
-        </main>
-        <Spotlight />
-      </div>
-    );
-  }
-
-  if (isMap) {
-    return (
-      <div className={styles.mapShell}>
-        <Link to="/" className={styles.backLink} title="На главную">
-          <ArrowLeft size={14} aria-hidden />
-          <span>На главную</span>
-        </Link>
+        <Header />
         <main className={styles.mapMain}>
           <Outlet />
         </main>
