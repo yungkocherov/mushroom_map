@@ -35,11 +35,13 @@ import {
   addForecastChoroplethLayer,
   applyForecastIndices,
   setForecastChoroplethVisibility,
+  FORECAST_FILL_LAYER_ID,
 } from "./mapView/layers/forecastChoropleth";
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
 import { useLayerVisibility } from "../store/useLayerVisibility";
 import { useForecastDate } from "../store/useForecastDate";
 import { useForecastDistricts } from "../store/useForecastDistricts";
+import { useMapMode } from "../store/useMapMode";
 import {
   addUserSpotsLayer,
   removeUserSpotsLayer,
@@ -218,6 +220,28 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
       // через useLayerVisibility, по умолчанию скрыт. Эффект ниже
       // следит за зустанд-стором и flip'ит visibility + feature-state.
       addForecastChoroplethLayer(m);
+
+      // Click-into-district: тап по выкрашенному району переводит
+      // useMapMode в режим 'district', что переключает Sidebar на
+      // SidebarDistrict + (в будущем) поднимет flyTo. Используем
+      // `useMapMode.getState()` потому что MapLibre-обработчики живут
+      // вне React-tree (как и popup, см. fix C2 в спеке).
+      m.on("click", FORECAST_FILL_LAYER_ID, (e) => {
+        const feat = e.features?.[0];
+        if (!feat || feat.id == null) return;
+        const id = typeof feat.id === "number" ? feat.id : Number(feat.id);
+        if (!Number.isFinite(id)) return;
+        const props = (feat.properties ?? {}) as Record<string, unknown>;
+        const osmRelId = props.osm_rel_id;
+        const slug = osmRelId != null ? String(osmRelId) : String(id);
+        useMapMode.getState().setDistrict(id, slug);
+      });
+      m.on("mouseenter", FORECAST_FILL_LAYER_ID, () => {
+        m.getCanvas().style.cursor = "pointer";
+      });
+      m.on("mouseleave", FORECAST_FILL_LAYER_ID, () => {
+        m.getCanvas().style.cursor = "";
+      });
     }
     // User spots — приватный слой, появляется только когда юзер залогинен
     // и есть хоть одно место. После basemap switch'а нужно re-add'нуть

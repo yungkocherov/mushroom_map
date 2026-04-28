@@ -10,7 +10,9 @@ export interface SidebarProps {
   className?: string;
 }
 
-export function Sidebar(_props: SidebarProps) {
+export function Sidebar({ className }: SidebarProps) {
   const mode = useMapMode((s) => s.mode);
-  return mode === "overview" ? <SidebarOverview /> : <SidebarDistrict />;
+  return mode === "overview"
+    ? <SidebarOverview className={className} />
+    : <SidebarDistrict className={className} />;
 }

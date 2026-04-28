@@ -24,7 +24,7 @@ import type { UserSpot } from "@mushroom-map/types";
 
 import { MapView } from "../components/MapView";
 import { SaveSpotModal } from "../components/SaveSpotModal";
-import { SidebarOverview } from "../components/sidebar/SidebarOverview";
+import { Sidebar } from "../components/sidebar/Sidebar";
 import { useAuth } from "../auth/useAuth";
 import { useLayerVisibility } from "../store/useLayerVisibility";
 import styles from "./MapHomePage.module.css";
@@ -118,7 +118,7 @@ export function MapHomePage() {
 
   return (
     <div className={styles.shell}>
-      <SidebarOverview className={styles.sidebar} />
+      <Sidebar className={styles.sidebar} />
 
       <div className={styles.mapPane}>
         <MapView userSpots={spots} />
