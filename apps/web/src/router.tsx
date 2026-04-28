@@ -17,9 +17,7 @@ import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { Layout } from "./components/layout/Layout";
-import { HomePage } from "./routes/HomePage";
 import { MapHomePage } from "./routes/MapHomePage";
-import { AboutPage } from "./routes/AboutPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
 import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
@@ -89,18 +87,17 @@ export const router = createBrowserRouter([
       { path: "forecast", element: <Navigate to="/" replace /> },
       // /guide — старый плейсхолдер для гайдов; контент уехал в /methodology.
       { path: "guide", element: <Navigate to="/methodology" replace /> },
-      // /home — временный путь к старому HomePage, на случай если нужно
-      // быстро откатиться визуально без revert-коммита (фаза 2 страховка).
-      { path: "home-legacy", element: <HomePage /> },
+      // /home-legacy и /about-legacy удалены: главная неделю катается на
+      // MapHomePage без откатов, контент About переехал в MDX. Если когда-то
+      // понадобится откат — `git revert` PR'а phase 2.f.
+      { path: "home-legacy", element: <Navigate to="/" replace /> },
       { path: "species",        element: <SpeciesListPage /> },
       { path: "species/:slug",  element: <SpeciesDetailPage /> },
       { path: "methodology",         element: <MethodologyPage /> },
       { path: "methodology/:slug",    element: <MethodologyArticlePage /> },
-      // /about → /methodology/about (контент в content/methodology/about.mdx
-      // с фазы 1 routine commit). Старый AboutPage остаётся для phase-2.5
-      // удаления.
+      // /about и /about-legacy → /methodology/about (контент в MDX).
       { path: "about",         element: <Navigate to="/methodology/about" replace /> },
-      { path: "about-legacy",  element: <AboutPage /> },
+      { path: "about-legacy",  element: <Navigate to="/methodology/about" replace /> },
 
       // Auth flow: /auth (login) -> Yandex -> /api/auth/yandex/callback
       // (backend, устанавливает cookie) -> /auth/complete (hydrate) ->

@@ -1,15 +1,18 @@
 /**
- * /species/:slug — детальная страница вида.
+ * /species/:slug — детальная карточка вида.
  *
- * Layout: две колонки на десктопе (>= 960 px) — слева sticky
- * «паспорт» (фото + быстрые факты), справа текст (описание, леса,
- * двойники, кулинария). На мобильном — одна колонка, паспорт
- * сверху.
+ * Layout (по spec'у redesign-2026-04, секция «/species/:slug карточка»):
+ *  - Hero ~220px: photo background + gradient veil; eyebrow «Гриб ·
+ *    съедобный» + Title (Fraunces) + латинское (Inter italic) +
+ *    breadcrumb «← все виды» поверх.
+ *  - Двухколоночное тело:
+ *      Слева: «Где растёт» (intro + сезон 12-month bar)
+ *      Справа: «Похожие виды» (с предупреждением для двойников),
+ *              «Сродство к лесу» (mono-bar чарт), CTA «Открыть на карте»
  *
- * Секции пропускаются gracefully: поля description / similars /
- * cooking пока пустые для всех видов (контент-проход будет позже),
- * но endpoint отдаёт их структурированно — добавление ничего
- * здесь не сломает.
+ * Phase 3: реальные фотографии в hero подгружаются через `data.photo_url`
+ * (когда содержимое наполнят). Сейчас 99% видов идут с placeholder'ом —
+ * рисуем диагональный паттерн в тон `birch`.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -17,19 +20,21 @@ import { Link, useParams } from "react-router-dom";
 import { fetchSpeciesDetail } from "@mushroom-map/api-client";
 import type { SpeciesDetail } from "@mushroom-map/types";
 import { Container } from "../components/layout/Container";
-import { Card } from "../components/ui/Card";
-import { Button } from "../components/ui/Button";
-import { EdibilityChip } from "../components/species/EdibilityChip";
 import { SeasonBar } from "../components/species/SeasonBar";
-import { FOREST_LABEL, EDIBILITY_LABEL } from "../components/species/labels";
+import {
+  EDIBILITY_LABEL,
+  EDIBILITY_TONE,
+  FOREST_LABEL,
+} from "../components/species/labels";
 import styles from "./SpeciesDetailPage.module.css";
 import prose from "./Prose.module.css";
-
 
 export function SpeciesDetailPage() {
   const { slug = "" } = useParams<{ slug: string }>();
   const [data, setData] = useState<SpeciesDetail | null>(null);
-  const [state, setState] = useState<"loading" | "ready" | "not_found" | "error">("loading");
+  const [state, setState] = useState<"loading" | "ready" | "not_found" | "error">(
+    "loading",
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -84,78 +89,114 @@ export function SpeciesDetailPage() {
     );
   }
 
-  return <SpeciesDetail data={data} />;
+  return <SpeciesDetailView data={data} />;
 }
 
+const KIND_LABEL = "Гриб";
 
-function SpeciesDetail({ data }: { data: SpeciesDetail }) {
+function SpeciesDetailView({ data }: { data: SpeciesDetail }) {
   const forestsSorted = useMemo(
     () => [...data.forests].sort((a, b) => b.affinity - a.affinity),
     [data.forests],
   );
 
+  const tone = EDIBILITY_TONE[data.edibility];
+  const eyebrowLabel = EDIBILITY_LABEL[data.edibility].toLowerCase();
+
   return (
-    <Container as="article" size="wide">
-      <nav className={styles.breadcrumbs} aria-label="Хлебные крошки">
-        <Link to="/species">Справочник видов</Link>
-        <span className={styles.breadcrumbSep} aria-hidden="true">/</span>
-        <span>{data.name_ru}</span>
-      </nav>
-
-      <div className={styles.layout}>
-        <aside className={styles.side}>
-          <div className={styles.photoWrap}>
-            {data.photo_url ? (
-              <img src={data.photo_url} alt="" className={styles.photo} />
-            ) : (
-              <div className={styles.photoPlaceholder} aria-hidden="true">
-                <svg viewBox="0 0 64 64" width={72} height={72} fill="var(--ink-faint)">
-                  <path d="M32 8 C18 8, 8 20, 8 30 L56 30 C56 20, 46 8, 32 8 Z" />
-                  <rect x="24" y="30" width="16" height="22" rx="4" fill="var(--ink-faint)" />
-                </svg>
-              </div>
-            )}
-            {data.red_book && (
-              <span className={styles.redBookBadge} title="Включён в Красную книгу">
-                Красная книга
-              </span>
-            )}
+    <Container as="article" size="default">
+      <header className={styles.hero}>
+        {data.photo_url ? (
+          <div
+            className={styles.heroBg}
+            style={{ backgroundImage: `url(${data.photo_url})` }}
+            aria-hidden="true"
+          />
+        ) : (
+          <div className={styles.heroBgPlaceholder} aria-hidden="true" />
+        )}
+        <div className={styles.heroVeil} aria-hidden="true" />
+        {data.red_book && (
+          <span
+            className={styles.redBookBadge}
+            title="Включён в Красную книгу"
+          >
+            Красная книга
+          </span>
+        )}
+        <div className={styles.heroContent}>
+          <nav className={styles.breadcrumbs} aria-label="Хлебные крошки">
+            <Link to="/species">← все виды</Link>
+          </nav>
+          <div className={styles.heroTitleRow}>
+            <p className={styles.eyebrow}>
+              {KIND_LABEL}
+              <span
+                className={styles.eyebrowDot}
+                style={{ background: tone?.bg ?? "var(--moss)" }}
+                aria-hidden="true"
+              />
+              {eyebrowLabel}
+            </p>
+            <h1 className={styles.title}>{data.name_ru}</h1>
+            {data.name_lat ? (
+              <p className={styles.latin}>{data.name_lat}</p>
+            ) : null}
           </div>
+        </div>
+      </header>
 
-          <Card>
+      <div className={styles.body}>
+        <div className={styles.col}>
+          <section className={styles.section} aria-labelledby="sec-where">
+            <p className={styles.sectionLabel}>Где растёт</p>
+            <h2 className={styles.sectionTitle} id="sec-where">
+              Лес и сезон
+            </h2>
+            {data.description ? (
+              <p className={styles.intro}>{data.description}</p>
+            ) : (
+              <p className={styles.descriptionDim}>
+                Подробное описание появится в следующей фазе наполнения
+                справочника. Пока доступны только структурные данные.
+              </p>
+            )}
+            <SeasonBar months={data.season_months} />
+          </section>
+
+          <section className={styles.section} aria-labelledby="sec-facts">
+            <p className={styles.sectionLabel}>Карточка</p>
+            <h2 className={styles.sectionTitle} id="sec-facts">
+              Быстрые факты
+            </h2>
             <dl className={styles.facts}>
               <dt>Съедобность</dt>
-              <dd><EdibilityChip edibility={data.edibility} /></dd>
+              <dd>{EDIBILITY_LABEL[data.edibility]}</dd>
 
-              {data.name_lat && (
+              {data.name_lat ? (
                 <>
                   <dt>Латинское</dt>
-                  <dd className={styles.latin}>{data.name_lat}</dd>
+                  <dd className={styles.factsLatin}>{data.name_lat}</dd>
                 </>
-              )}
+              ) : null}
 
-              {(data.genus || data.family) && (
+              {data.genus || data.family ? (
                 <>
                   <dt>Таксономия</dt>
                   <dd>
                     {[data.genus, data.family].filter(Boolean).join(" / ")}
                   </dd>
                 </>
-              )}
+              ) : null}
 
-              {data.synonyms.length > 0 && (
+              {data.synonyms.length > 0 ? (
                 <>
                   <dt>Синонимы</dt>
                   <dd>{data.synonyms.join(", ")}</dd>
                 </>
-              )}
+              ) : null}
 
-              <dt>Сезон</dt>
-              <dd>
-                <SeasonBar months={data.season_months} />
-              </dd>
-
-              {data.wiki_url && (
+              {data.wiki_url ? (
                 <>
                   <dt>Подробнее</dt>
                   <dd>
@@ -164,31 +205,21 @@ function SpeciesDetail({ data }: { data: SpeciesDetail }) {
                     </a>
                   </dd>
                 </>
-              )}
+              ) : null}
             </dl>
+          </section>
+        </div>
 
-            {/* Кнопка «Показать на карте» — связка с Phase 3 D. */}
-            <div className={styles.mapBtnWrap}>
-              <Button as="link" to={`/map?species=${encodeURIComponent(data.slug)}`} variant="primary">
-                Показать на карте
-              </Button>
-            </div>
-          </Card>
-        </aside>
-
-        <div className={styles.main}>
-          <h1 className={prose.h1}>{data.name_ru}</h1>
-
-          {data.description && (
-            <p className={prose.lead}>{data.description}</p>
-          )}
-
+        <div className={styles.col}>
           {forestsSorted.length > 0 && (
-            <section>
-              <h2 className={prose.h2}>Где растёт</h2>
-              <p className={prose.p} style={{ color: "var(--ink-dim)", fontSize: "var(--fs-sm)" }}>
-                Теоретическая ассоциация с типом леса. Значение affinity —
-                экспертная оценка, не статистика находок.
+            <section className={styles.section} aria-labelledby="sec-affinity">
+              <p className={styles.sectionLabel}>Сродство к лесу</p>
+              <h2 className={styles.sectionTitle} id="sec-affinity">
+                Где встречается чаще всего
+              </h2>
+              <p className={styles.descriptionDim}>
+                Экспертная оценка ассоциации с типом леса (0–1), не статистика
+                находок.
               </p>
               <ul className={styles.forestList}>
                 {forestsSorted.map((f) => (
@@ -215,45 +246,51 @@ function SpeciesDetail({ data }: { data: SpeciesDetail }) {
           )}
 
           {data.similars.length > 0 && (
-            <section>
-              <h2 className={prose.h2}>Сходные виды</h2>
-              <Card>
-                <p className={prose.p} style={{ margin: 0 }}>
-                  <strong>Безопасность прежде всего:</strong> если не
-                  уверены в определении — не собирайте. Многие из
-                  двойников ниже опасны, а некоторые смертельно ядовиты.
+            <section className={styles.section} aria-labelledby="sec-similars">
+              <p className={styles.sectionLabel}>Похожие виды</p>
+              <h2 className={styles.sectionTitle} id="sec-similars">
+                Двойники и соседи
+              </h2>
+              <div className={styles.warningCard}>
+                <p>
+                  <strong>Безопасность прежде всего:</strong> если не уверены
+                  в определении — не собирайте. Многие двойники опасны, а
+                  некоторые смертельно ядовиты.
                 </p>
-              </Card>
+              </div>
               <ul className={styles.similarsList}>
                 {data.similars.map((s) => (
                   <li key={s.slug}>
                     <Link to={`/species/${s.slug}`} className={styles.similarLink}>
                       {s.slug}
                     </Link>
-                    {s.note && <span className={styles.similarNote}>— {s.note}</span>}
+                    {s.note ? (
+                      <span className={styles.similarNote}>— {s.note}</span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
             </section>
           )}
 
-          {data.cooking && (
-            <section>
-              <h2 className={prose.h2}>Кулинария</h2>
-              <p className={prose.p}>{data.cooking}</p>
+          {data.cooking ? (
+            <section className={styles.section} aria-labelledby="sec-cooking">
+              <p className={styles.sectionLabel}>Кулинария</p>
+              <h2 className={styles.sectionTitle} id="sec-cooking">
+                Как готовят
+              </h2>
+              <p className={styles.intro}>{data.cooking}</p>
             </section>
-          )}
+          ) : null}
 
-          {!data.description && !data.cooking && data.similars.length === 0 && (
-            <Card>
-              <p className={prose.p} style={{ margin: 0, color: "var(--ink-dim)" }}>
-                Подробное описание ({EDIBILITY_LABEL[data.edibility].toLowerCase()},
-                {" "}сезон {data.season_months.length > 0 ? data.season_months.join(", ") : "—"})
-                {" "}будет добавлено в следующей фазе наполнения справочника.
-                Пока доступны только структурные данные — где растёт и в каком сезоне.
-              </p>
-            </Card>
-          )}
+          <div className={styles.ctaWrap}>
+            <Link
+              to={`/?species=${encodeURIComponent(data.slug)}`}
+              className={styles.cta}
+            >
+              Открыть на карте →
+            </Link>
+          </div>
         </div>
       </div>
     </Container>
