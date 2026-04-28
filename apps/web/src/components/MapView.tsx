@@ -54,7 +54,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   const speciesFilterLabel = useLayerVisibility((s) => s.speciesFilterLabel);
 
   const initialView = useMemo(() => parseInitialView(), []);
-  const map = useMapInstance(mapRef, initialView, (m) => {
+  const { map, ready: mapReady } = useMapInstance(mapRef, initialView, (m) => {
     if (m.getLayer("places-text")) m.removeLayer("places-text");
     if (m.getSource("places")) m.removeSource("places");
     addPlaceLabelsLayer(m);
@@ -62,7 +62,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     if (spots && spots.length > 0) addUserSpotsLayer(m, spots);
   });
 
-  const { reapplyAll } = useMapLayers(map);
+  const { reapplyAll } = useMapLayers(map, mapReady);
   useMapPopup(map);
   useMapUrl(map);
 

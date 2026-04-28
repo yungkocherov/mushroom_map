@@ -4,7 +4,7 @@
  *
  * URL `?lat=&lon=&z=` парсятся при инициализации. На unmount — `m.remove()`.
  */
-import { useEffect, useRef, type MutableRefObject } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import maplibregl, { Map } from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -39,8 +39,9 @@ export function useMapInstance(
   containerRef: MutableRefObject<HTMLDivElement | null>,
   initialView: InitialView,
   onReady: (map: Map) => void,
-): MutableRefObject<Map | null> {
+): { map: MutableRefObject<Map | null>; ready: boolean } {
   const mapRef = useRef<Map | null>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -63,6 +64,7 @@ export function useMapInstance(
       if (m.isStyleLoaded()) {
         m.off("styledata", onStyleReady);
         onReady(m);
+        setReady(true);
       }
     };
     m.on("styledata", onStyleReady);
@@ -70,9 +72,10 @@ export function useMapInstance(
     return () => {
       m.remove();
       mapRef.current = null;
+      setReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return mapRef;
+  return { map: mapRef, ready };
 }

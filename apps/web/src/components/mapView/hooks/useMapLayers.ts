@@ -31,7 +31,10 @@ function paintForMode(mode: ForestColorMode) {
     : FOREST_LAYER_PAINT_COLOR["fill-color"];
 }
 
-export function useMapLayers(mapRef: React.MutableRefObject<Map | null>) {
+export function useMapLayers(
+  mapRef: React.MutableRefObject<Map | null>,
+  ready: boolean,
+) {
   const visible = useLayerVisibility((s) => s.visible);
   const loaded = useLayerVisibility((s) => s.loaded);
   const forestColorMode = useLayerVisibility((s) => s.forestColorMode);
@@ -109,13 +112,13 @@ export function useMapLayers(mapRef: React.MutableRefObject<Map | null>) {
         });
       }
     }
-  }, [visible, loaded, mapRef, setLoaded, setVisible, setErrorMsg]);
+  }, [visible, loaded, mapRef, ready, setLoaded, setVisible, setErrorMsg]);
 
   useEffect(() => {
     const m = mapRef.current;
     if (!m || !m.getLayer("forest-fill")) return;
     m.setPaintProperty("forest-fill", "fill-color", paintForMode(forestColorMode));
-  }, [forestColorMode, mapRef]);
+  }, [forestColorMode, mapRef, ready]);
 
   useEffect(() => {
     const m = mapRef.current;
@@ -129,7 +132,7 @@ export function useMapLayers(mapRef: React.MutableRefObject<Map | null>) {
         ["literal", speciesFilter],
       ]);
     }
-  }, [speciesFilter, mapRef]);
+  }, [speciesFilter, mapRef, ready]);
 
   const reapplyAll = useCallback(() => {
     const m = mapRef.current;
