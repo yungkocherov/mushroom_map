@@ -1,0 +1,61 @@
+.toast {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  z-index: 30;
+  font-family: system-ui, sans-serif;
+  color: white;
+}
+
+.toastShare { background: #323232; }
+.toastError { background: #c62828; max-width: 380px; text-align: center; font-size: 12px; }
+
+.vpnToast {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: white;
+  color: #333;
+  border-radius: 8px;
+  padding: 14px 22px;
+  font-size: 18px;
+  z-index: 30;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  font-family: system-ui, sans-serif;
+}
+
+.forestHint {
+  position: absolute;
+  bottom: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2e7d32;
+  color: white;
+  border-radius: 8px;
+  padding: 14px 22px;
+  font-size: 17px;
+  font-family: system-ui, sans-serif;
+  z-index: 30;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.fading {
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+@media (max-width: 768px) {
+  .vpnToast { top: 90px; font-size: 16px; }
+  .forestHint { bottom: 60px; font-size: 15px; }
+}

@@ -13,9 +13,11 @@ import { useMapPopup } from "./mapView/hooks/useMapPopup";
 import { useMapUrl } from "./mapView/hooks/useMapUrl";
 import { useUserSpotsSync } from "./mapView/hooks/useUserSpotsSync";
 import { useBaseMap } from "./mapView/hooks/useBaseMap";
+import { useToastLifecycles } from "./mapView/hooks/useToastLifecycles";
 import { BaseMapPicker } from "./mapView/BaseMapPicker";
 import { LayerGrid } from "./mapView/LayerGrid";
 import { ShareButton } from "./mapView/ShareButton";
+import { MapOverlays } from "./mapView/MapOverlays";
 
 import {
   useLayerVisibility,
@@ -38,17 +40,10 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   userSpotsRef.current = userSpots;
 
   // ─── Store subscriptions ──────────────────────────────────────────
-  const baseMap = useLayerVisibility((s) => s.baseMap);
   const visible = useLayerVisibility((s) => s.visible);
   const loaded = useLayerVisibility((s) => s.loaded);
   const forestColorMode = useLayerVisibility((s) => s.forestColorMode);
   const setSpeciesFilter = useLayerVisibility((s) => s.setSpeciesFilter);
-  const errorMsg = useLayerVisibility((s) => s.errorMsg);
-  const vpnToast = useLayerVisibility((s) => s.vpnToast);
-  const setVpnToast = useLayerVisibility((s) => s.setVpnToast);
-  const forestHint = useLayerVisibility((s) => s.forestHint);
-  const setForestHint = useLayerVisibility((s) => s.setForestHint);
-  const shareToast = useLayerVisibility((s) => s.shareToast);
   const speciesFilterLabel = useLayerVisibility((s) => s.speciesFilterLabel);
 
   const initialView = useMemo(() => parseInitialView(), []);
@@ -100,41 +95,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   useBaseMap(map, handleStyleApplied);
 
   useUserSpotsSync(map, userSpots);
-
-  // ─── VPN toast on satellite/hybrid switch ─────────────────────────
-  useEffect(() => {
-    if (baseMap === "satellite" || baseMap === "hybrid") {
-      setVpnToast("visible");
-      const t = setTimeout(() => setVpnToast("fading"), 3500);
-      return () => clearTimeout(t);
-    }
-  }, [baseMap, setVpnToast]);
-
-  useEffect(() => {
-    if (vpnToast === "fading") {
-      const t = setTimeout(() => setVpnToast("hidden"), 800);
-      return () => clearTimeout(t);
-    }
-  }, [vpnToast, setVpnToast]);
-
-  // ─── Forest hint fade ─────────────────────────────────────────────
-  useEffect(() => {
-    if (forestHint === "fading") {
-      const t = setTimeout(() => setForestHint("hidden"), 800);
-      return () => clearTimeout(t);
-    }
-  }, [forestHint, setForestHint]);
-
-  // Срабатывает один раз когда forest впервые становится loaded.
-  const forestPrevLoadedRef = useRef(false);
-  useEffect(() => {
-    if (loaded.forest && !forestPrevLoadedRef.current) {
-      forestPrevLoadedRef.current = true;
-      setForestHint("visible");
-      const t = setTimeout(() => setForestHint("fading"), 4000);
-      return () => clearTimeout(t);
-    }
-  }, [loaded.forest, setForestHint]);
+  useToastLifecycles();
 
   // ─── Species filter callback ──────────────────────────────────────
   const handleFlyTo = useCallback((lat: number, lon: number, zoom = 13) => {
@@ -177,76 +138,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
         </div>
       )}
 
-      {shareToast && (
-        <div style={{
-          position: "absolute", bottom: 50, left: "50%", transform: "translateX(-50%)",
-          background: "#323232", color: "white", borderRadius: 6,
-          padding: "8px 16px", fontSize: 13, zIndex: 30,
-          fontFamily: "system-ui, sans-serif",
-        }}>
-          Ссылка скопирована
-        </div>
-      )}
-
-      {errorMsg && (
-        <div style={{
-          position: "absolute", bottom: 50, left: "50%", transform: "translateX(-50%)",
-          background: "#c62828", color: "white", borderRadius: 6,
-          padding: "8px 16px", fontSize: 12, zIndex: 30, maxWidth: 380, textAlign: "center",
-          fontFamily: "system-ui, sans-serif",
-        }}>
-          {errorMsg}
-        </div>
-      )}
-
-      {forestHint !== "hidden" && (
-        <div style={{
-          position: "absolute",
-          bottom: mobile ? 60 : 50,
-          left: "50%",
-          transform: "translateX(-50%)",
-          background: "#2e7d32",
-          color: "white",
-          borderRadius: 8,
-          padding: "14px 22px",
-          fontSize: mobile ? 15 : 17,
-          fontFamily: "system-ui, sans-serif",
-          zIndex: 30,
-          maxWidth: "calc(100vw - 32px)",
-          textAlign: "center",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-          opacity: forestHint === "fading" ? 0 : 1,
-          transition: forestHint === "fading" ? "opacity 0.8s ease" : "none",
-          pointerEvents: "none",
-        }}>
-          Нажмите на любую точку карты, чтобы увидеть подробную информацию
-        </div>
-      )}
-
-      {vpnToast !== "hidden" && (
-        <div style={{
-          position: "absolute",
-          top: mobile ? 90 : 52,
-          left: "50%",
-          transform: "translateX(-50%)",
-          background: "white",
-          color: "#333",
-          borderRadius: 8,
-          padding: "14px 22px",
-          fontSize: mobile ? 16 : 18,
-          fontFamily: "system-ui, sans-serif",
-          zIndex: 30,
-          maxWidth: "calc(100vw - 32px)",
-          textAlign: "center",
-          boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-          border: "1px solid rgba(0,0,0,0.08)",
-          opacity: vpnToast === "fading" ? 0 : 1,
-          transition: vpnToast === "fading" ? "opacity 0.8s ease" : "none",
-          pointerEvents: "none",
-        }}>
-          ℹ️ Спутниковые снимки могут не загружаться при активном VPN-соединении
-        </div>
-      )}
+      <MapOverlays />
 
       {speciesFilterLabel && (
         <div style={{
