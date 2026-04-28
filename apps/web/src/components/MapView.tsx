@@ -689,6 +689,60 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     else m.once("idle", apply);
   }, [forecastChoroplethVisible, forecastRows]);
 
+  // ─── flyTo on district select ────────────────────────────────────
+  // Когда useMapMode переключился в 'district' — летим на bbox района.
+  // Источник bbox — features из source 'districts' (тот же GeoJSON, что
+  // питает choropleth и district lines). 1.2s easing — комфортная
+  // длительность по spec'у.
+  const selectedDistrictId = useMapMode((s) => s.districtId);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || selectedDistrictId == null) return;
+    const fly = () => {
+      const src = m.getSource("districts");
+      if (!src || !("_data" in src) || !m.isSourceLoaded("districts")) {
+        // Source not yet hydrated — schedule one retry on next idle.
+        m.once("idle", fly);
+        return;
+      }
+      // querySourceFeatures requires the layer to be there; districts-line
+      // exists from addDistrictsLayer. Match feature by id.
+      const feats = m.querySourceFeatures("districts", {
+        sourceLayer: undefined,
+      });
+      const target = feats.find((f) => f.id === selectedDistrictId);
+      if (!target || target.geometry.type !== "MultiPolygon"
+          && target.geometry.type !== "Polygon") return;
+      // Compute bbox manually (lightweight, avoids @turf/bbox).
+      let minLng = Infinity, minLat = Infinity;
+      let maxLng = -Infinity, maxLat = -Infinity;
+      const visit = (rings: number[][][]) => {
+        for (const ring of rings) {
+          for (const [lng, lat] of ring) {
+            if (lng < minLng) minLng = lng;
+            if (lat < minLat) minLat = lat;
+            if (lng > maxLng) maxLng = lng;
+            if (lat > maxLat) maxLat = lat;
+          }
+        }
+      };
+      if (target.geometry.type === "Polygon") {
+        visit(target.geometry.coordinates);
+      } else {
+        for (const poly of target.geometry.coordinates) visit(poly);
+      }
+      if (!isFinite(minLng) || !isFinite(maxLng)) return;
+      m.fitBounds(
+        [
+          [minLng, minLat],
+          [maxLng, maxLat],
+        ],
+        { padding: 60, duration: 1200, maxZoom: 11 },
+      );
+    };
+    fly();
+  }, [selectedDistrictId]);
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} className="map-root" />
