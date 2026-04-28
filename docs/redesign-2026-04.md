@@ -650,11 +650,37 @@ State: site visually unchanged; new layer hidden by default; SidebarOverview not
 - [x] 2.o — MapView controller useEffects subscribing to store for forest visibility/mode + soil/hillshade/userSpots visibility (single source of truth = store; legacy MapControls panel may visually drift in transitional mode — accepted Phase 2 trade-off, full reconciliation deferred to MapView decomposition)
 
 **Still outstanding (not done in this run):**
-- MapView 778-line decomposition (still high-risk in unattended mode).
-- BottomSheet impl (deps not yet installed).
+- MapView 954-line decomposition (still high-risk in unattended mode).
+- BottomSheet wire-in to MapLibre popup on mobile (primitive готов с фазы 2, осталось интегрировать в MapView; зависит от MapView decomp).
 - HomePage.tsx + AboutPage.tsx deletion (parked at `/home-legacy` and `/about-legacy` per CLAUDE.md, scheduled for phase 2.5 cleanup).
 
 Verification: `npx tsc --noEmit` clean; `npm run build` green (362 KB gzip, under spec's 600 KB budget); `pytest -q` 103 passed / 1 warning.
+
+---
+
+## Phase 3 progress (autonomous run, 2026-04-28)
+
+- [x] 3.a — `/cabinet/spots` → `/spots` rename + 301 (commit `d047774`)
+- [x] 3.b — `/methodology` 4-section grid hub (commit `772c6f3`)
+- [x] 3.c — `/species/:slug` hero + 2-column body (commit `529a929`)
+- [x] 3.d — Spotlight ⌘K via Radix Dialog (commit `0278355`)
+- [x] 3.e — MDX drafts: about / authors / changelog (commit `5bac23b`)
+- [x] 3.f — Per-page `<title>` + meta-description hook (commit `40194c8`)
+- [x] 3.g — Playwright config + 22 specs across 6 files (commits `131828a` + `df27a9e` + `404d37e` + `0ff2cb5` + `635252b`)
+- [x] 3.h — Header + Footer rebrand to Geobiom + 4-section IA (commit `5fe7406`)
+- [x] 3.i — `/spots/:id` detail page (commit `59062da`)
+- [x] 3.j — `authors.mdx` motivation rewrite + pre-prod-deploy checklist (commit `d0b6e82`)
+- [x] 3.k — CF Pages CI: override commit-message с SHA (избегаем 8000111 на не-ASCII), commit `f22eeb5`
+- [x] 3.l — `/spots` two-pane: SpotsMiniMap + 5-color filter + hover/click sync (commit `ca1188d`)
+
+**Still outstanding from Phase 3 spec (deferred):**
+- Hero photos: `apps/web/public/photos/` пусто, `content/photos.json` — scaffold; пользователь подберёт изображения с CC-лицензией из категорий в `apps/web/src/content/photos-candidates.md` отдельной итерацией.
+- `axe-playwright` a11y suite на /species, /species/:slug, /spots, /methodology, /methodology/:slug — спека требует 0 violations, можно добавить в фазу polish.
+- `linkinator` broken-link check на staging.
+- Visual regression snapshots (Playwright `toHaveScreenshot`) для desktop+mobile.
+- MapView decomposition + BottomSheet wire-in (см. Phase 2 outstanding выше — переносится в phase 2.5 cleanup).
+
+Verification: tsc clean; full Playwright 29 passed; prod build 379 KB gzip (под бюджетом); CF Pages deploy зелёный.
 
 ---
 
