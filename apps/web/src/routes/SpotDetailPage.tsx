@@ -27,6 +27,13 @@ import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { useAuth } from "../auth/useAuth";
 import { SPOT_COLOR_OPTIONS, SPOT_COLOR_HEX } from "../lib/spotColors";
+import {
+  TREE_TAGS,
+  MUSHROOM_TAGS,
+  BERRY_TAGS,
+  tagLabel,
+  type SpotTag,
+} from "../lib/spotTags";
 import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./SpotDetailPage.module.css";
 import prose from "./Prose.module.css";
@@ -47,10 +54,17 @@ export function SpotDetailPage() {
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [color, setColor] = useState<SpotColor>("forest");
+  const [tags, setTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
+  const toggleTag = (slug: string) => {
+    setTags((cur) =>
+      cur.includes(slug) ? cur.filter((s) => s !== slug) : [...cur, slug],
+    );
+  };
+
   usePageTitle(
-    spot ? `${spot.name} — Geobiom` : "Спот — Geobiom",
+    spot ? `${spot.name} — Geobiom` : "Место — Geobiom",
     spot?.note || "Сохранённое место в Geobiom.",
   );
 
@@ -73,6 +87,7 @@ export function SpotDetailPage() {
           setName(found.name);
           setNote(found.note);
           setColor(found.color);
+          setTags(found.tags ?? []);
           setState("ready");
         }
       })
@@ -93,12 +108,12 @@ export function SpotDetailPage() {
   if (state === "not_found") {
     return (
       <Container as="article" size="narrow">
-        <h1 className={prose.h1}>Спот не найден</h1>
+        <h1 className={prose.h1}>Место не найдено</h1>
         <p className={prose.lead}>
-          Возможно, он был удалён или принадлежит другому аккаунту.
+          Возможно, оно было удалено или принадлежит другому аккаунту.
         </p>
         <p className={prose.p}>
-          <Link to="/spots">← Вернуться ко всем спотам</Link>
+          <Link to="/spots">← Вернуться ко всем местам</Link>
         </p>
       </Container>
     );
@@ -110,7 +125,7 @@ export function SpotDetailPage() {
         <h1 className={prose.h1}>Ошибка загрузки</h1>
         <p className={prose.p}>
           Попробуйте обновить страницу.{" "}
-          <Link to="/spots">Назад ко всем спотам</Link>.
+          <Link to="/spots">Назад ко всем местам</Link>.
         </p>
       </Container>
     );
@@ -130,6 +145,7 @@ export function SpotDetailPage() {
         name: name.trim(),
         note: note.trim(),
         color,
+        tags,
       });
       setSpot(updated);
       setEditing(false);
@@ -142,7 +158,7 @@ export function SpotDetailPage() {
   };
 
   const handleDelete = async () => {
-    if (!confirm("Удалить этот спот? Это нельзя отменить.")) return;
+    if (!confirm("Удалить это место? Это нельзя отменить.")) return;
     const tok = getAccessToken();
     if (!tok) return;
     try {
@@ -156,7 +172,7 @@ export function SpotDetailPage() {
   return (
     <Container as="article" size="narrow">
       <nav className={styles.breadcrumb} aria-label="Хлебные крошки">
-        <Link to="/spots">← все споты</Link>
+        <Link to="/spots">← все места</Link>
       </nav>
 
       <header className={styles.header}>
@@ -169,6 +185,26 @@ export function SpotDetailPage() {
       </header>
 
       {spot.note ? <p className={styles.note}>{spot.note}</p> : null}
+
+      {spot.tags && spot.tags.length > 0 ? (
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, margin: "0 0 var(--space-4)" }}>
+          {spot.tags.map((slug) => (
+            <span
+              key={slug}
+              style={{
+                padding: "2px 10px",
+                border: "1px solid var(--rule)",
+                borderRadius: 999,
+                fontSize: "var(--fs-sm)",
+                color: "var(--ink-dim)",
+                background: "var(--paper-rise)",
+              }}
+            >
+              {tagLabel(slug)}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <dl className={styles.facts}>
         <dt>координаты</dt>
@@ -210,6 +246,7 @@ export function SpotDetailPage() {
               setName(spot.name);
               setNote(spot.note);
               setColor(spot.color);
+              setTags(spot.tags ?? []);
               setEditing(true);
             }}
           >
@@ -250,7 +287,7 @@ export function SpotDetailPage() {
             </label>
 
             <fieldset className={styles.colorRow}>
-              <legend className={styles.colorLegend}>Маркер</legend>
+              <legend className={styles.colorLegend}>Цвет маркера</legend>
               {SPOT_COLOR_OPTIONS.map((c) => (
                 <label key={c.value} className={styles.colorOpt}>
                   <input
@@ -265,6 +302,10 @@ export function SpotDetailPage() {
                 </label>
               ))}
             </fieldset>
+
+            <EditTagBlock title="Деревья" options={TREE_TAGS} selected={tags} onToggle={toggleTag} />
+            <EditTagBlock title="Грибы"   options={MUSHROOM_TAGS} selected={tags} onToggle={toggleTag} />
+            <EditTagBlock title="Ягоды"   options={BERRY_TAGS} selected={tags} onToggle={toggleTag} />
 
             <div className={styles.formActions}>
               <Button type="submit" disabled={submitting || name.trim().length === 0}>
@@ -282,5 +323,47 @@ export function SpotDetailPage() {
         <p className={prose.p} style={{ color: "var(--danger)" }}>{error}</p>
       ) : null}
     </Container>
+  );
+}
+
+function EditTagBlock({ title, options, selected, onToggle }: {
+  title: string;
+  options: SpotTag[];
+  selected: string[];
+  onToggle: (slug: string) => void;
+}) {
+  return (
+    <fieldset style={{ border: "none", padding: 0, margin: 0 }}>
+      <legend style={{ fontSize: "var(--fs-sm)", color: "var(--ink-dim)", marginBottom: "var(--space-1)" }}>
+        {title}
+      </legend>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {options.map((t) => {
+          const on = selected.includes(t.slug);
+          return (
+            <button
+              key={t.slug}
+              type="button"
+              role="checkbox"
+              aria-checked={on}
+              onClick={() => onToggle(t.slug)}
+              style={{
+                padding: "4px 10px",
+                border: `1px solid ${on ? "var(--forest)" : "var(--rule)"}`,
+                background: on ? "var(--forest)" : "var(--paper)",
+                color: on ? "#fff" : "var(--ink)",
+                borderRadius: 999,
+                fontSize: "var(--fs-sm)",
+                fontFamily: "var(--font-body)",
+                cursor: "pointer",
+                lineHeight: 1.3,
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }

@@ -40,6 +40,7 @@ class SpotCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     note: str = Field(default="", max_length=4000)
     color: str = Field(default="forest")
+    tags: list[str] = Field(default_factory=list, max_length=64)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
 
@@ -48,15 +49,17 @@ class SpotPatch(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     note: Optional[str] = Field(default=None, max_length=4000)
     color: Optional[str] = Field(default=None)
+    tags: Optional[list[str]] = Field(default=None, max_length=64)
 
 
 def _row_to_spot(row: tuple) -> dict:
-    sid, name, note, color, lon, lat, created_at, updated_at = row
+    sid, name, note, color, tags, lon, lat, created_at, updated_at = row
     return {
         "id":         str(sid),
         "name":       name,
         "note":       note,
         "color":      color,
+        "tags":       list(tags) if tags else [],
         "lat":        float(lat),
         "lon":        float(lon),
         "created_at": created_at.isoformat(),
@@ -65,10 +68,24 @@ def _row_to_spot(row: tuple) -> dict:
 
 
 _SELECT_COLUMNS = """
-    id, name, note, color,
+    id, name, note, color, tags,
     ST_X(geom) AS lon, ST_Y(geom) AS lat,
     created_at, updated_at
 """
+
+
+def _normalize_tags(raw: list[str]) -> list[str]:
+    """Дедуп + триминг + cap длины каждого slug'а. Никакой word-list-validation
+    на сервере: словарь живёт во фронте (apps/web/src/lib/spotTags.ts), сервер
+    лишь хранит. Добавление нового вида в UI не требует деплоя API."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for t in raw:
+        s = t.strip()[:64]
+        if s and s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -101,14 +118,16 @@ def create_spot(payload: SpotCreate, user: CurrentUser) -> dict:
             status_code=400,
             detail=f"color must be one of: {sorted(ALLOWED_COLORS)}",
         )
+    tags = _normalize_tags(payload.tags)
     with get_conn() as conn:
         row = conn.execute(
             f"""
-            INSERT INTO user_spot (user_id, name, note, color, geom)
-            VALUES (%s, %s, %s, %s, ST_SetSRID(ST_MakePoint(%s, %s), 4326))
+            INSERT INTO user_spot (user_id, name, note, color, tags, geom)
+            VALUES (%s, %s, %s, %s, %s,
+                    ST_SetSRID(ST_MakePoint(%s, %s), 4326))
             RETURNING {_SELECT_COLUMNS}
             """,
-            (user.id, payload.name, payload.note, payload.color,
+            (user.id, payload.name, payload.note, payload.color, tags,
              payload.lon, payload.lat),
         ).fetchone()
         conn.commit()
@@ -137,6 +156,9 @@ def patch_spot(spot_id: UUID, payload: SpotPatch, user: CurrentUser) -> dict:
             )
         fields.append("color = %s")
         values.append(payload.color)
+    if payload.tags is not None:
+        fields.append("tags = %s")
+        values.append(_normalize_tags(payload.tags))
 
     if not fields:
         raise HTTPException(status_code=400, detail="no fields to update")

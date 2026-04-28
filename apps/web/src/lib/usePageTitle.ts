@@ -7,7 +7,7 @@ import { useEffect } from "react";
 
 const DEFAULT_TITLE = "Geobiom — лес ленобласти";
 const DEFAULT_DESC =
-  "Грибная погода Ленобласти: индекс плодоношения по 18 районам, тип леса и микориза для каждого выдела, личные споты в кабинете.";
+  "Грибная погода Ленобласти: индекс плодоношения по 18 районам, тип леса и микориза для каждого выдела, сохранённые места в кабинете.";
 
 export function usePageTitle(title: string, description?: string): void {
   useEffect(() => {

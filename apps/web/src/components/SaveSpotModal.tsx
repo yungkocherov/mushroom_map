@@ -13,6 +13,7 @@ import { createSpot } from "@mushroom-map/api-client";
 import type { SpotColor } from "@mushroom-map/types";
 import { useAuth } from "../auth/useAuth";
 import { SPOT_COLOR_OPTIONS } from "../lib/spotColors";
+import { TREE_TAGS, MUSHROOM_TAGS, BERRY_TAGS, type SpotTag } from "../lib/spotTags";
 
 
 interface Props {
@@ -30,7 +31,14 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [color, setColor] = useState<SpotColor>("forest");
+  const [tags, setTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  const toggleTag = (slug: string) => {
+    setTags((cur) =>
+      cur.includes(slug) ? cur.filter((s) => s !== slug) : [...cur, slug],
+    );
+  };
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +59,7 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
         name: name.trim(),
         note: note.trim(),
         color,
+        tags,
         lat,
         lon,
       });
@@ -137,7 +146,7 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
                 to="/spots"
                 style={{ ...modalBtnStyle("primary"), textDecoration: "none" }}
               >
-                Открыть споты
+                Все места
               </Link>
             </div>
           </>
@@ -169,24 +178,28 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
               />
             </label>
 
-            <fieldset style={{ border: "none", padding: 0, margin: 0, display: "flex", flexWrap: "wrap", gap: "var(--space-3)" }}>
-              <legend style={{ fontSize: "var(--fs-sm)", color: "var(--ink-dim)", marginBottom: "var(--space-1)" }}>
-                Маркер
-              </legend>
-              {SPOT_COLOR_OPTIONS.map((c) => (
-                <label key={c.value} style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1)", fontSize: "var(--fs-sm)", cursor: "pointer" }}>
-                  <input
-                    type="radio"
-                    name="spot-color"
-                    value={c.value}
-                    checked={color === c.value}
-                    onChange={() => setColor(c.value)}
-                  />
-                  <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: "50%", border: "1px solid var(--rule)", background: c.cssVar }} />
-                  <span>{c.label}</span>
-                </label>
-              ))}
+            <fieldset style={fieldsetStyle}>
+              <legend style={legendStyle}>Цвет маркера</legend>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-3)" }}>
+                {SPOT_COLOR_OPTIONS.map((c) => (
+                  <label key={c.value} style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1)", fontSize: "var(--fs-sm)", cursor: "pointer" }}>
+                    <input
+                      type="radio"
+                      name="spot-color"
+                      value={c.value}
+                      checked={color === c.value}
+                      onChange={() => setColor(c.value)}
+                    />
+                    <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: "50%", border: "1px solid var(--rule)", background: c.cssVar }} />
+                    <span>{c.label}</span>
+                  </label>
+                ))}
+              </div>
             </fieldset>
+
+            <TagBlock title="Деревья" options={TREE_TAGS} selected={tags} onToggle={toggleTag} />
+            <TagBlock title="Грибы"   options={MUSHROOM_TAGS} selected={tags} onToggle={toggleTag} />
+            <TagBlock title="Ягоды"   options={BERRY_TAGS} selected={tags} onToggle={toggleTag} />
 
             <p style={{ fontSize: "var(--fs-xs)", color: "var(--ink-faint)", margin: 0, fontFamily: "var(--font-mono)" }}>
               {lat.toFixed(5)}, {lon.toFixed(5)}
@@ -218,7 +231,60 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
 }
 
 
+// Tag-picker блок: чипы с checkbox-семантикой. Multi-select без verbose UI.
+function TagBlock({ title, options, selected, onToggle }: {
+  title: string;
+  options: SpotTag[];
+  selected: string[];
+  onToggle: (slug: string) => void;
+}) {
+  return (
+    <fieldset style={fieldsetStyle}>
+      <legend style={legendStyle}>{title}</legend>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {options.map((t) => {
+          const on = selected.includes(t.slug);
+          return (
+            <button
+              key={t.slug}
+              type="button"
+              role="checkbox"
+              aria-checked={on}
+              onClick={() => onToggle(t.slug)}
+              style={{
+                padding: "4px 10px",
+                border: `1px solid ${on ? "var(--forest)" : "var(--rule)"}`,
+                background: on ? "var(--forest)" : "var(--paper)",
+                color: on ? "#fff" : "var(--ink)",
+                borderRadius: 999,
+                fontSize: "var(--fs-sm)",
+                fontFamily: "var(--font-body)",
+                cursor: "pointer",
+                lineHeight: 1.3,
+              }}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
 // Inline styles — для one-shot модалки нет смысла заводить отдельный CSS-modul.
+
+const fieldsetStyle: React.CSSProperties = {
+  border: "none",
+  padding: 0,
+  margin: 0,
+};
+const legendStyle: React.CSSProperties = {
+  fontSize: "var(--fs-sm)",
+  color: "var(--ink-dim)",
+  marginBottom: "var(--space-1)",
+  padding: 0,
+};
 
 const fieldLabel: React.CSSProperties = {
   display: "grid",

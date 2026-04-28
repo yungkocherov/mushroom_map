@@ -24,6 +24,7 @@ import { Button } from "../components/ui/Button";
 import { SpotsMiniMap } from "../components/SpotsMiniMap";
 import { useAuth } from "../auth/useAuth";
 import { SPOT_COLOR_OPTIONS } from "../lib/spotColors";
+import { tagLabel } from "../lib/spotTags";
 import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./CabinetSpotsPage.module.css";
 import prose from "./Prose.module.css";
@@ -31,7 +32,7 @@ import prose from "./Prose.module.css";
 
 export function CabinetSpotsPage() {
   usePageTitle(
-    "Споты — Geobiom",
+    "Сохранённые места — Geobiom",
     "Приватный список грибных мест. Видишь только ты, ничего не публикуется.",
   );
 
@@ -151,7 +152,7 @@ export function CabinetSpotsPage() {
       <nav className={styles.breadcrumbs} aria-label="Хлебные крошки">
         <Link to="/cabinet">Кабинет</Link>
         <span aria-hidden="true">/</span>
-        <span>Споты</span>
+        <span>Места</span>
       </nav>
 
       <p
@@ -164,7 +165,7 @@ export function CabinetSpotsPage() {
           margin: "0 0 var(--space-2)",
         }}
       >
-        Мои споты
+        Мои места
       </p>
       <h1 className={prose.h1}>
         {spots && spots.length > 0
@@ -323,6 +324,25 @@ export function CabinetSpotsPage() {
                       </Link>
                     </div>
                     {s.note && <div className={styles.rowNote}>{s.note}</div>}
+                    {s.tags && s.tags.length > 0 ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2 }}>
+                        {s.tags.map((slug) => (
+                          <span
+                            key={slug}
+                            style={{
+                              padding: "1px 8px",
+                              border: "1px solid var(--rule)",
+                              borderRadius: 999,
+                              fontSize: "var(--fs-xs)",
+                              color: "var(--ink-dim)",
+                              background: "var(--paper)",
+                            }}
+                          >
+                            {tagLabel(slug)}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
                     <div className={styles.rowMeta}>
                       <Link
                         to={`/?lat=${s.lat}&lon=${s.lon}&z=14`}

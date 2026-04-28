@@ -8,7 +8,7 @@ import styles from "./Header.module.css";
 const NAV_ITEMS = [
   { to: "/",            label: "Карта", end: true },
   { to: "/species",     label: "Виды" },
-  { to: "/spots",       label: "Споты" },
+  { to: "/spots",       label: "Места" },
   { to: "/methodology", label: "Методология" },
 ];
 

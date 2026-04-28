@@ -22,7 +22,7 @@ import styles from "./Prose.module.css";
 export function AuthPage() {
   usePageTitle(
     "Вход — Geobiom",
-    "Войти в Geobiom через Яндекс ID, чтобы сохранять личные споты в кабинете.",
+    "Войти в Geobiom через Яндекс ID, чтобы сохранять любимые места в кабинете.",
   );
   const { status, login } = useAuth();
   const [searchParams] = useSearchParams();

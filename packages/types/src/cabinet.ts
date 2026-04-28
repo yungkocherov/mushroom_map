@@ -16,6 +16,8 @@ export interface UserSpot {
   name: string;
   note: string;
   color: SpotColor;
+  /** Slug'и из apps/web/src/lib/spotTags.ts (деревья + грибы + ягоды). */
+  tags: string[];
   lat: number;
   lon: number;
   created_at: string;
@@ -27,6 +29,7 @@ export interface SpotCreatePayload {
   name: string;
   note?: string;
   color?: SpotColor;
+  tags?: string[];
   lat: number;
   lon: number;
 }
@@ -36,4 +39,5 @@ export interface SpotPatchPayload {
   name?: string;
   note?: string;
   color?: SpotColor;
+  tags?: string[];
 }
