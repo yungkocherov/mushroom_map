@@ -636,6 +636,26 @@ PMTiles на R2 — не трогаем (один и тот же URL обслу�
 
 State: site visually unchanged; new layer hidden by default; SidebarOverview not mounted in any route yet (Phase 2.f, deferred). `npx tsc --noEmit` clean across all touched files; `pytest -q` 29 passed / 3 smoke skipped (no live API in sandbox).
 
+## Phase 2 continued (autonomous run, 2026-04-28)
+
+- [x] 2.f — `/` → MapHomePage swapped (commit `815b802`)
+- [x] 2.g — Popup redesign: dropped запас/уклон, simplified terrain block (commit `5bf5f7e`)
+- [x] 2.h — Router redirects `/map` `/forecast` `/about` `/guide` → 301 (commit `0db7937`)
+- [x] 2.i — CLAUDE.md updated for redesign IA, routes, Zustand stores, brand (commit `fa47f4d`)
+- [x] 2.j — OG/SEO planner-first messaging, Geobiom brand (commit `ea5d927`)
+- [x] 2.k — SidebarDistrict substantive (eyebrow + accent + index + scrubber + top species) (commit `5454c04`)
+- [x] 2.l — flyTo on district select (commit `11d1107`)
+- [x] 2.m — LayerGrid substantive: 7 chips (Прогноз / Породы / Бонитет / Возраст / Почва / Рельеф / Споты), auth-aware Споты chip
+- [x] 2.n — store: `useLayerVisibility.selectForestMode()` action; `'age'` → `'age_group'` (matches `lib/forestStyle.ts:ForestColorMode`)
+- [x] 2.o — MapView controller useEffects subscribing to store for forest visibility/mode + soil/hillshade/userSpots visibility (single source of truth = store; legacy MapControls panel may visually drift in transitional mode — accepted Phase 2 trade-off, full reconciliation deferred to MapView decomposition)
+
+**Still outstanding (not done in this run):**
+- MapView 778-line decomposition (still high-risk in unattended mode).
+- BottomSheet impl (deps not yet installed).
+- HomePage.tsx + AboutPage.tsx deletion (parked at `/home-legacy` and `/about-legacy` per CLAUDE.md, scheduled for phase 2.5 cleanup).
+
+Verification: `npx tsc --noEmit` clean; `npm run build` green (362 KB gzip, under spec's 600 KB budget); `pytest -q` 103 passed / 1 warning.
+
 ---
 
 ## Ссылки на ресурсы brainstorm-сессии

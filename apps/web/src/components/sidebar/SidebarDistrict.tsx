@@ -13,9 +13,6 @@
  * Phase 2.X partial: lead description пока статичная заглушка
  * («Район Ленинградской области») — будущая phase 2.5 либо вытянет её
  * из admin_area.meta, либо хранит в JSON-словаре по osm_rel_id.
- *
- * LayerGrid в этом sidebar пока не отрисован — компонент заглушка
- * (Phase 2.Y task).
  */
 import {
   DISTRICT_ACCENTS,
@@ -23,6 +20,7 @@ import {
   DEFAULT_ACCENT,
 } from "@mushroom-map/tokens/district-accents";
 
+import { LayerGrid } from "../mapView/LayerGrid";
 import { useForecastDate } from "../../store/useForecastDate";
 import { useForecastDistricts } from "../../store/useForecastDistricts";
 import { useMapMode } from "../../store/useMapMode";
@@ -123,6 +121,11 @@ export function SidebarDistrict({ className }: SidebarDistrictProps) {
       ) : null}
 
       <DateScrubber />
+
+      <section className={styles.section} aria-label="Слои карты">
+        <p className={styles.sectionLabel}>Слой</p>
+        <LayerGrid />
+      </section>
 
       <section className={styles.section} aria-label="Что можно собирать в районе">
         <p className={styles.sectionLabel}>В районе сейчас</p>

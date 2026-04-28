@@ -29,7 +29,11 @@ export type LayerKey =
   | "forecastChoropleth"
   | "userSpots";
 
-export type ForestColorMode = "species" | "bonitet" | "age";
+// Совпадает по литералам с `lib/forestStyle.ts:ForestColorMode` —
+// LayerGrid → store → MapView controller передаёт строку 1-в-1, без
+// маппинга. Перименование `age_group` → `age` потребует синхронной
+// правки в обоих файлах.
+export type ForestColorMode = "species" | "bonitet" | "age_group";
 
 export interface LayerVisibilityState {
   visible: Record<LayerKey, boolean>;
@@ -40,6 +44,8 @@ export interface LayerVisibilityState {
   toggleVisible: (key: LayerKey) => void;
   setLoaded: (key: LayerKey, value: boolean) => void;
   setForestColorMode: (mode: ForestColorMode) => void;
+  /** Включить forest и переключить mode одним действием — для LayerGrid. */
+  selectForestMode: (mode: ForestColorMode) => void;
 }
 
 const DEFAULT_VISIBLE: Record<LayerKey, boolean> = {
@@ -74,4 +80,9 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
   setLoaded: (key, value) =>
     set((s) => ({ loaded: { ...s.loaded, [key]: value } })),
   setForestColorMode: (mode) => set({ forestColorMode: mode }),
+  selectForestMode: (mode) =>
+    set((s) => ({
+      visible: { ...s.visible, forest: true },
+      forestColorMode: mode,
+    })),
 }));

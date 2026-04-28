@@ -1,0 +1,97 @@
+/*
+ * LayerGrid — 2×4 чипы (один пустой слот) на десктопе,
+ * горизонтальная лента на мобайле. Стили под токены проекта.
+ */
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.strip {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.strip::-webkit-scrollbar {
+  display: none;
+}
+
+.strip > .item {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+}
+
+.item {
+  margin: 0;
+}
+
+.chip {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--paper);
+  color: var(--ink-dim);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.chip:hover:not(:disabled) {
+  background: var(--paper-rise);
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.chipActive {
+  background: var(--paper-rise);
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.chip:disabled,
+.chipDisabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.label {
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.subLabel {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chipActive .subLabel {
+  color: var(--ink-dim);
+}

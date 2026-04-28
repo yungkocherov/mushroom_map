@@ -689,6 +689,64 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     else m.once("idle", apply);
   }, [forecastChoroplethVisible, forecastRows]);
 
+  // ─── Store → map controller (LayerGrid driving) ──────────────────
+  // SidebarDistrict + LayerGrid пишут желаемое состояние слоёв в
+  // useLayerVisibility. Эти эффекты сводят store к существующим
+  // legacy-handler'ам (handleForestToggle, handleSoilToggle, ...) —
+  // они умеют lazy-add и HEAD-проверку pmtiles.
+  //
+  // Дрейф с MapControls (legacy UI) принят как Phase 2 transitional:
+  // LayerGrid переключает слой → MapControls-панель не обновляется,
+  // но карта-источник правды совпадает со store. Полный refactor (один
+  // источник правды) — в deferred-задаче «MapView decomposition».
+  const storeForestVisible = useLayerVisibility((s) => s.visible.forest);
+  const storeForestColorMode = useLayerVisibility((s) => s.forestColorMode);
+  const storeSoilVisible = useLayerVisibility((s) => s.visible.soil);
+  const storeHillshadeVisible = useLayerVisibility((s) => s.visible.hillshade);
+  const storeUserSpotsVisible = useLayerVisibility((s) => s.visible.userSpots);
+
+  useEffect(() => {
+    if (storeForestVisible !== forestVisibleRef.current) {
+      // legacy handler — toggle: если loaded → flip visibility;
+      // если не loaded и storeVisible=true → lazy-add + show.
+      if (forestLoadedRef.current || storeForestVisible) {
+        handleForestToggle();
+      }
+    }
+  }, [storeForestVisible, handleForestToggle]);
+
+  useEffect(() => {
+    if (storeForestColorMode !== forestColorMode) {
+      handleForestColorMode(storeForestColorMode);
+    }
+  }, [storeForestColorMode, forestColorMode, handleForestColorMode]);
+
+  useEffect(() => {
+    if (storeSoilVisible !== soilVisibleRef.current) {
+      if (soilLoadedRef.current || storeSoilVisible) {
+        void handleSoilToggle();
+      }
+    }
+  }, [storeSoilVisible, handleSoilToggle]);
+
+  useEffect(() => {
+    if (storeHillshadeVisible !== hillshadeVisibleRef.current) {
+      if (hillshadeLoadedRef.current || storeHillshadeVisible) {
+        void handleHillshadeToggle();
+      }
+    }
+  }, [storeHillshadeVisible, handleHillshadeToggle]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !m.getLayer("user-spots")) return;
+    m.setLayoutProperty(
+      "user-spots",
+      "visibility",
+      storeUserSpotsVisible ? "visible" : "none",
+    );
+  }, [storeUserSpotsVisible]);
+
   // ─── flyTo on district select ────────────────────────────────────
   // Когда useMapMode переключился в 'district' — летим на bbox района.
   // Источник bbox — features из source 'districts' (тот же GeoJSON, что
