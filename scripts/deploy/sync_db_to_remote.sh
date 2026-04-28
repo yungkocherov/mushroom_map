@@ -32,9 +32,29 @@ POSTGRES_USER="${POSTGRES_USER:-mushroom}"
 POSTGRES_DB="${POSTGRES_DB:-mushroom_map}"
 
 echo "[1/3] pg_dump локально -> $DUMP_LOCAL"
-pg_dump --format=custom --no-owner --no-acl \
-    --exclude-table-data='vk_post' \
-    "$LOCAL_DSN" > "$DUMP_LOCAL"
+# Если на хосте есть pg_dump — используем его. Если нет (Windows / Git
+# Bash без postgres-client) — фоллбек на docker exec в локальный
+# mushroom_db контейнер.
+# vk_post.text тяжёлый и не нужен в проде (текст VK-постов нужен только
+# для extract_vk_districts.py / model retrain'а — это локальный пайплайн).
+# vk_post_model_result имеет FK на vk_post.id, поэтому его data тоже
+# исключаем — иначе pg_restore оставит orphan-строки и FK-constraint не
+# создастся.
+EXCLUDE_TABLES=(
+    --exclude-table-data='vk_post'
+    --exclude-table-data='vk_post_model_result'
+)
+
+if command -v pg_dump >/dev/null 2>&1; then
+    pg_dump --format=custom --no-owner --no-acl \
+        "${EXCLUDE_TABLES[@]}" \
+        "$LOCAL_DSN" > "$DUMP_LOCAL"
+else
+    echo "      pg_dump не найден на хосте — используем docker exec mushroom_db"
+    docker exec -i mushroom_db pg_dump --format=custom --no-owner --no-acl \
+        "${EXCLUDE_TABLES[@]}" \
+        -U "$POSTGRES_USER" "$POSTGRES_DB" > "$DUMP_LOCAL"
+fi
 echo "      размер: $(du -h "$DUMP_LOCAL" | cut -f1)"
 
 echo "[2/3] scp -> $REMOTE:$DUMP_REMOTE"
