@@ -2,8 +2,17 @@
 
 This file is auto-loaded at the start of every session. It contains the
 durable conventions, commands, and known gotchas. For architecture see
-`docs/architecture.md`; for roadmap see `docs/roadmap_content_ideas.md`;
-for why we ended up with Rosleshoz see `docs/forest_sources_analysis.md`.
+`docs/architecture.md`; for the active **redesign 2026-04 spec** see
+**`docs/redesign-2026-04.md`** (planner-first IA, map-as-home, 3-phase
+rollout — phases 1 done, phase 2 in progress); for roadmap see
+`docs/roadmap_content_ideas.md`; for why we ended up with Rosleshoz see
+`docs/forest_sources_analysis.md`.
+
+**Brand:** the project is being renamed `mushroom-map` → **Geobiom**
+(Title Case in prose/UI/OG, lowercase `geobiom` in URL/files; wordmark
+may use lowercase). Domain `geobiom.ru` is author-owned, parked at
+Cloudflare. The repo name and npm-workspace names (`@mushroom-map/*`)
+will rename in a later phase.
 
 **Sibling repo `mushroom-forecast`** живёт в `C:\Users\ikoch\mushroom-forecast`
 (GitHub: yungkocherov/mushroom-forecast, private). Он владеет схемой
@@ -22,11 +31,39 @@ exit-state в активном plan-файле если он был. Полна�
 
 ## One-line summary
 
-Interactive mushroom map for Leningrad Oblast. PostGIS + FastAPI + React
-+ MapLibre GL + PMTiles. Forest polygons from Rosleshoz/ФГИСЛК (~2M,
-full LoO coverage 27.8-36.0°E), painted by dominant tree species /
-bonitet / age group; click → popup with bonitet/timber_stock/age_group +
-fungi theoretical from species registry.
+Interactive forest+forage map for Leningrad Oblast (rebranding to
+Geobiom). PostGIS + FastAPI + React + MapLibre GL + PMTiles + Zustand.
+Forest polygons from Rosleshoz/ФГИСЛК (~2M, full LoO coverage), painted
+by dominant tree species / bonitet / age group / forecast index; click →
+popup with bonitet/age + fungi theoretical from species registry. The
+home page (`/`) is the map itself with sidebar (variant C composition);
+old hero+widgets HomePage parked at `/home-legacy` for phase-2.5 cleanup.
+
+## IA & key routes (post-redesign 2026-04)
+
+```
+/                        → map-as-home (MapHomePage = SidebarOverview + MapView)
+/map                     → 301 → /
+/map/:district           → district detail (URL-driven; SidebarDistrict — phase 2.Y)
+/forecast                → 301 → /
+/species                 → catalog
+/species/:slug           → species detail
+/spots, /spots/:id       → cabinet (auth-gated; will rename from /cabinet/spots)
+/methodology             → hub (umbrella: data sources, model, about, authors, legal)
+/methodology/:slug       → article (forest-data, vk-pipeline, species-registry, about, …)
+/about                   → 301 → /methodology/about
+/guide                   → 301 → /methodology
+/legal/{privacy,terms}   → still live; phase 2.5 will redirect to /methodology/{privacy,terms}
+/auth/*                  → unchanged Yandex OAuth flow
+/home-legacy             → parked old HomePage (phase 2.5 delete)
+/about-legacy            → parked old AboutPage (phase 2.5 delete)
+```
+
+State for the map sub-app lives in three Zustand stores:
+- `apps/web/src/store/useLayerVisibility.ts` — 13 layer keys + forestColorMode
+- `apps/web/src/store/useMapMode.ts` — `'overview' | 'district'` + selected district
+- `apps/web/src/store/useForecastDate.ts` — date scrubber state
+- `apps/web/src/store/useForecastDistricts.ts` — cached fetch hook for `/api/forecast/districts`
 
 ## Environment quirks — read this first
 
