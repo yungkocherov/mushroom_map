@@ -1,0 +1,13 @@
+.box {
+  position: absolute;
+  bottom: 28px;
+  right: 50px;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 4px;
+  padding: 2px 7px;
+  font-size: 11px;
+  color: #555;
+  font-family: monospace;
+  z-index: 10;
+  pointer-events: none;
+}

@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import { useCallback, useMemo, useRef } from "react";
 
 import { useIsMobile } from "../lib/useIsMobile";
 import { Legend } from "./Legend";
@@ -18,6 +17,7 @@ import { BaseMapPicker } from "./mapView/BaseMapPicker";
 import { LayerGrid } from "./mapView/LayerGrid";
 import { ShareButton } from "./mapView/ShareButton";
 import { MapOverlays } from "./mapView/MapOverlays";
+import { CursorReadout } from "./mapView/CursorReadout";
 
 import {
   useLayerVisibility,
@@ -35,7 +35,6 @@ interface MapViewProps {
 export function MapView({ userSpots = null }: MapViewProps = {}) {
   const mobile = useIsMobile();
   const mapRef = useRef<HTMLDivElement>(null);
-  const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
   const userSpotsRef = useRef<UserSpot[] | null>(userSpots);
   userSpotsRef.current = userSpots;
 
@@ -58,21 +57,6 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   const { reapplyAll } = useMapLayers(map, mapReady);
   useMapPopup(map);
   useMapUrl(map);
-
-  // ─── Cursor tracking ─────────────────────────────────────────────────
-  useEffect(() => {
-    const m = map.current;
-    if (!m) return;
-
-    const onMouseMove = (e: maplibregl.MapMouseEvent) =>
-      setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng });
-    m.on("mousemove", onMouseMove);
-
-    return () => {
-      m.off("mousemove", onMouseMove);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   // ─── Basemap switch ───────────────────────────────────────────────
   // После setStyle: places — только для scheme/hybrid (satellite/osm имеют
@@ -126,17 +110,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
         />
       )}
 
-      {cursor && !mobile && (
-        <div style={{
-          position: "absolute", bottom: 28, right: 50,
-          background: "rgba(255,255,255,0.85)", borderRadius: 4,
-          padding: "2px 7px", fontSize: 11, color: "#555",
-          fontFamily: "monospace", zIndex: 10,
-          pointerEvents: "none",
-        }}>
-          {cursor.lat.toFixed(5)}, {cursor.lon.toFixed(5)}
-        </div>
-      )}
+      <CursorReadout mapRef={map} />
 
       <MapOverlays />
 
