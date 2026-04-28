@@ -15,10 +15,15 @@ import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { useAuth } from "../auth/useAuth";
 import { safeNext } from "../auth/safeNext";
+import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./Prose.module.css";
 
 
 export function AuthPage() {
+  usePageTitle(
+    "Вход — Geobiom",
+    "Войти в Geobiom через Яндекс ID, чтобы сохранять личные споты в кабинете.",
+  );
   const { status, login } = useAuth();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();

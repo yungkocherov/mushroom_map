@@ -1,8 +1,13 @@
 import { Container } from "../components/layout/Container";
 import { Button } from "../components/ui/Button";
+import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./NotFoundPage.module.css";
 
 export function NotFoundPage() {
+  usePageTitle(
+    "Страница не найдена — Geobiom",
+    "Запрошенная страница не существует. Карта и остальные разделы Geobiom доступны.",
+  );
   return (
     <Container as="article" size="narrow">
       <div className={styles.wrap}>

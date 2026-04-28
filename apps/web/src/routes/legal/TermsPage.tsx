@@ -1,10 +1,15 @@
 import { Link } from "react-router-dom";
 import { Container } from "../../components/layout/Container";
 import { Card } from "../../components/ui/Card";
+import { usePageTitle } from "../../lib/usePageTitle";
 import styles from "../Prose.module.css";
 
 
 export function TermsPage() {
+  usePageTitle(
+    "Условия использования — Geobiom",
+    "Условия использования Geobiom: что можно делать с сайтом, какие гарантии и ограничения.",
+  );
   return (
     <Container as="article" size="narrow">
       <h1 className={styles.h1}>Условия использования</h1>

@@ -1,10 +1,15 @@
 import { Link } from "react-router-dom";
 import { Container } from "../../components/layout/Container";
 import { Card } from "../../components/ui/Card";
+import { usePageTitle } from "../../lib/usePageTitle";
 import styles from "../Prose.module.css";
 
 
 export function PrivacyPage() {
+  usePageTitle(
+    "Политика конфиденциальности — Geobiom",
+    "Какие данные Geobiom собирает, как и зачем хранит, и как их удалить.",
+  );
   return (
     <Container as="article" size="narrow">
       <h1 className={styles.h1}>Политика конфиденциальности</h1>
