@@ -14,13 +14,12 @@
  * *             - 404
  */
 import { lazy, Suspense } from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { Layout } from "./components/layout/Layout";
 import { HomePage } from "./routes/HomePage";
 import { MapHomePage } from "./routes/MapHomePage";
 import { AboutPage } from "./routes/AboutPage";
-import { PlaceholderPage } from "./routes/PlaceholderPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
 import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
@@ -73,31 +72,35 @@ export const router = createBrowserRouter([
       // оставлен в коде для возможного восстановления и будет удалён в
       // фазе 2.5 cleanup. См. docs/redesign-2026-04.md.
       { index: true, element: <MapHomePage /> },
+      // /map → 301-style redirect на главную (главная и есть карта).
+      { path: "map", element: <Navigate to="/" replace /> },
+      // /map/:district — детальный режим района (slug = osm_rel_id или
+      // транслит). Phase 2.X partial: пока подсасываем тот же MapPage,
+      // SidebarDistrict пока пустой. Phase 2.Y допишет его.
       {
-        path: "map",
+        path: "map/:district",
         element: (
           <Suspense fallback={<MapPageLoader />}>
             <MapPage />
           </Suspense>
         ),
       },
+      // /forecast — старый плейсхолдер, теперь главная и есть прогноз.
+      { path: "forecast", element: <Navigate to="/" replace /> },
+      // /guide — старый плейсхолдер для гайдов; контент уехал в /methodology.
+      { path: "guide", element: <Navigate to="/methodology" replace /> },
       // /home — временный путь к старому HomePage, на случай если нужно
       // быстро откатиться визуально без revert-коммита (фаза 2 страховка).
       { path: "home-legacy", element: <HomePage /> },
       { path: "species",        element: <SpeciesListPage /> },
       { path: "species/:slug",  element: <SpeciesDetailPage /> },
-      {
-        path: "guide",
-        element: (
-          <PlaceholderPage
-            title="Полевые гайды"
-            description="Сезоны, безопасность, правовые вопросы сбора, снаряжение. Раздел готовится."
-          />
-        ),
-      },
       { path: "methodology",         element: <MethodologyPage /> },
       { path: "methodology/:slug",    element: <MethodologyArticlePage /> },
-      { path: "about", element: <AboutPage /> },
+      // /about → /methodology/about (контент в content/methodology/about.mdx
+      // с фазы 1 routine commit). Старый AboutPage остаётся для phase-2.5
+      // удаления.
+      { path: "about",         element: <Navigate to="/methodology/about" replace /> },
+      { path: "about-legacy",  element: <AboutPage /> },
 
       // Auth flow: /auth (login) -> Yandex -> /api/auth/yandex/callback
       // (backend, устанавливает cookie) -> /auth/complete (hydrate) ->
@@ -122,7 +125,12 @@ export const router = createBrowserRouter([
         ),
       },
 
-      // Legal drafts — на них линкуется footer, AuthPage и MDX-методология.
+      // Legal drafts — линкуется footer, AuthPage, MDX-методология.
+      // /legal/privacy и /legal/terms → новые URL под /methodology/{privacy,terms}.
+      // Старые /legal/* пути остаются для не-редиректящих гипер-ссылок
+      // в существующих внешних местах (соцсети, Yandex Cloud OAuth).
+      // TODO(phase-2.5): полностью переехать на /methodology/* и
+      // вернуть /legal/* как 301.
       { path: "legal/privacy", element: <PrivacyPage /> },
       { path: "legal/terms",   element: <TermsPage /> },
 
