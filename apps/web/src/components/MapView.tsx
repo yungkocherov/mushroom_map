@@ -78,17 +78,9 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   useUserSpotsSync(map, userSpots);
   useToastLifecycles();
 
-  // ─── Species filter callback ──────────────────────────────────────
   const handleFlyTo = useCallback((lat: number, lon: number, zoom = 13) => {
     map.current?.flyTo({ center: [lon, lat], zoom, speed: 1.5 });
   }, []);
-
-  const handleSpeciesFilter = useCallback(
-    (forestTypes: string[] | null, label: string | null) => {
-      setSpeciesFilter(forestTypes, label);
-    },
-    [setSpeciesFilter],
-  );
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
@@ -98,7 +90,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
       <LayerGrid layout={mobile ? "strip" : "grid"} />
       <ShareButton mapRef={map} />
 
-      <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={handleSpeciesFilter} />
+      <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={setSpeciesFilter} />
 
       <Legend />
       <CursorReadout mapRef={map} />
