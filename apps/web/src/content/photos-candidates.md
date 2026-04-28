@@ -1,97 +1,91 @@
-# Hero photo candidates
+# Hero photo candidates — guide for selection
 
-Кандидаты для подбора 15–20 hero-фотографий под `/species/:slug` карточки.
-Все источники — Wikimedia Commons (CC-BY / CC-BY-SA / public domain) или
-Unsplash (CC0). Перед использованием проверить актуальную лицензию на
-странице файла — иногда автор меняет права.
+> ⚠️ **Дисклеймер.** Прошлая версия этого файла содержала прямые ссылки
+> на файлы Wikimedia Commons, часть из которых я придумал и они не
+> существуют. Эта версия даёт ссылки только на **категории** Commons —
+> это страницы-каталоги, существуют гарантированно и автоматически
+> подгружают актуальный набор файлов с лицензиями.
 
-Стенс: утренний/вечерний свет, лес как место (не «грибной портрет с рукой»),
-композиция спокойная.
+## Как пользоваться
 
-После отбора — скачать оригинал, конвертировать в WebP <200 КБ
-(`cwebp -q 75 input.jpg -o output.webp`), положить в
-`apps/web/public/photos/<slug>.webp`, заполнить `apps/web/src/content/photos.json`.
+1. Открой нужную категорию ниже.
+2. Прокрути миниатюры, пометь визуально подходящие (утренний/вечерний свет,
+   спокойная композиция, лес как место — не «гриб в руке»).
+3. Кликни в миниатюру → откроется страница файла. **Проверь лицензию**
+   в секции «Licensing» внизу: подходят CC0, CC-BY, CC-BY-SA. Не годятся
+   `Fair use`, `Non-commercial`, `No derivatives`.
+4. На странице файла найди ссылку «Original file» (или клик в превью —
+   откроется в полном разрешении). Скачай.
+5. Конвертируй: `cwebp -q 75 input.jpg -o boletus-edulis.webp` (целевой
+   размер <200 КБ).
+6. Положи в `apps/web/public/photos/<slug>.webp`.
+7. Заполни запись в `apps/web/src/content/photos.json`:
+   ```json
+   { "slug": "...", "src": "/photos/<slug>.webp",
+     "author": "Имя автора (с страницы файла)",
+     "license": "CC-BY-SA-4.0",
+     "alt_ru": "Описание для скрин-ридера" }
+   ```
 
----
+## Стенс
 
-## Грибы (приоритет)
-
-### `boletus-edulis` — Белый гриб
-- https://commons.wikimedia.org/wiki/File:Boletus_edulis_EtgHooghuys.JPG — Hans-Joachim Etgens, CC-BY-SA-3.0. Классический портрет белого гриба в подлеске.
-- https://commons.wikimedia.org/wiki/File:Boletus_edulis_2010_G1.jpg — George Chernilevsky, CC0. Группа белых на мохнатом мху.
-- https://commons.wikimedia.org/wiki/File:Boletus_edulis_-_panoramio.jpg — Anatoly Mikhaltsov, CC-BY-SA-3.0. В сосновом лесу с хвоей.
-
-### `leccinum-aurantiacum` — Подосиновик красный
-- https://commons.wikimedia.org/wiki/File:Leccinum_aurantiacum_42715.jpg — Jacob Frilund, CC-BY-SA-4.0. Чёткий ярко-красный гриб в осиновом лесу.
-- https://commons.wikimedia.org/wiki/File:Leccinum_aurantiacum_a1.JPG — Jerzy Opioła, CC-BY-SA-4.0.
-
-### `leccinum-scabrum` — Подберёзовик
-- https://commons.wikimedia.org/wiki/File:Leccinum_scabrum_2014_G1.jpg — George Chernilevsky, CC0. Полная чёткость, березняк фоном.
-- https://commons.wikimedia.org/wiki/File:Leccinum_scabrum_-_2008-09-23.jpg — Jerzy Opioła, CC-BY-SA-4.0.
-
-### `cantharellus-cibarius` — Лисичка
-- https://commons.wikimedia.org/wiki/File:Cantharellus_cibarius_(WS-1).jpg — Walter J. Pilsak, CC-BY-SA-3.0. Тёплая жёлтая в моховом подлеске.
-- https://commons.wikimedia.org/wiki/File:Chanterelle_mushroom_(2).jpg — Jonathan Cardy, CC-BY-SA-4.0.
-
-### `craterellus-tubaeformis` — Лисичка трубчатая
-- https://commons.wikimedia.org/wiki/File:Craterellus_tubaeformis_3.jpg — Tomas Cekanavicius, CC-BY-SA-4.0.
-
-### `xerocomus-subtomentosus` — Моховик
-- https://commons.wikimedia.org/wiki/File:Xerocomus_subtomentosus_PK.jpg — Strobilomyces, CC-BY-SA-3.0.
-
-### `lactarius-deliciosus` — Рыжик
-- https://commons.wikimedia.org/wiki/File:Lactarius_deliciosus_(45)_in_pine_woodland.JPG — Aleph, CC-BY-SA-4.0. В сосняке.
-- https://commons.wikimedia.org/wiki/File:Lactarius_deliciosus_-_panoramio.jpg — Anatoly Mikhaltsov, CC-BY-SA-3.0.
-
-### `armillaria-mellea` — Опёнок осенний
-- https://commons.wikimedia.org/wiki/File:Armillaria_mellea_LC0228.jpg — Jörg Hempel, CC-BY-SA-3.0-DE. На пне, типичная сцена.
-
-### `pleurotus-ostreatus` — Вёшенка
-- https://commons.wikimedia.org/wiki/File:Pleurotus_ostreatus_JPG2.jpg — Lebrac, CC-BY-SA-3.0.
-
-### `morchella-esculenta` — Сморчок
-- https://commons.wikimedia.org/wiki/File:Morchella_esculenta_(Linn%C3%A9)_Persoon_(140884).jpg — Jürgen Schweizer, CC-BY-SA-2.0-DE.
-
-### `russula-vesca` — Сыроежка
-- https://commons.wikimedia.org/wiki/File:Russula_vesca_2010_G2.jpg — George Chernilevsky, CC0.
-
-### `lactarius-resimus` — Груздь настоящий
-- https://commons.wikimedia.org/wiki/File:Lactarius_resimus_a1.jpg — Tatiana Bulyonkova, CC-BY-SA-2.0.
-
-### `amanita-muscaria` — Мухомор красный (для warning-карточки)
-- https://commons.wikimedia.org/wiki/File:2006-10-25_Amanita_muscaria_crop.jpg — Onderwijsgek, CC-BY-SA-3.0-NL.
+Не «портрет гриба крупным планом в руке». Скорее: гриб в естественном
+окружении, мягкий боковой свет, видно подстилку/мох/подлесок. После
+обработки в коде применяется `filter: saturate(0.9) brightness(0.95)` +
+градиент-вуаль, так что исходник не должен быть слишком тёмным или
+контрастным.
 
 ---
 
-## Ягоды
+## Категории Wikimedia Commons по slug'ам
 
-### `vaccinium-myrtillus` — Черника
-- https://commons.wikimedia.org/wiki/File:Vaccinium_myrtillus_close-up.jpg — Ivar Leidus, CC-BY-SA-4.0. Спелые ягоды на кусте.
+### Грибы (приоритет)
 
-### `rubus-chamaemorus` — Морошка
-- https://commons.wikimedia.org/wiki/File:Cloudberry_close.JPG — Jonik, CC-BY-SA-3.0. Спелая морошка крупно.
+| slug | Категория |
+|---|---|
+| `boletus-edulis` (Белый) | https://commons.wikimedia.org/wiki/Category:Boletus_edulis |
+| `leccinum-aurantiacum` (Подосиновик красный) | https://commons.wikimedia.org/wiki/Category:Leccinum_aurantiacum |
+| `leccinum-versipelle` (Подосиновик жёлто-бурый) | https://commons.wikimedia.org/wiki/Category:Leccinum_versipelle |
+| `leccinum-scabrum` (Подберёзовик) | https://commons.wikimedia.org/wiki/Category:Leccinum_scabrum |
+| `cantharellus-cibarius` (Лисичка) | https://commons.wikimedia.org/wiki/Category:Cantharellus_cibarius |
+| `craterellus-tubaeformis` (Лисичка трубчатая) | https://commons.wikimedia.org/wiki/Category:Craterellus_tubaeformis |
+| `xerocomus-subtomentosus` (Моховик) | https://commons.wikimedia.org/wiki/Category:Xerocomus_subtomentosus |
+| `lactarius-deliciosus` (Рыжик) | https://commons.wikimedia.org/wiki/Category:Lactarius_deliciosus |
+| `lactarius-resimus` (Груздь настоящий) | https://commons.wikimedia.org/wiki/Category:Lactarius_resimus |
+| `lactarius-torminosus` (Волнушка) | https://commons.wikimedia.org/wiki/Category:Lactarius_torminosus |
+| `armillaria-mellea` (Опёнок осенний) | https://commons.wikimedia.org/wiki/Category:Armillaria_mellea |
+| `kuehneromyces-mutabilis` (Опёнок летний) | https://commons.wikimedia.org/wiki/Category:Kuehneromyces_mutabilis |
+| `pleurotus-ostreatus` (Вёшенка) | https://commons.wikimedia.org/wiki/Category:Pleurotus_ostreatus |
+| `morchella-esculenta` (Сморчок) | https://commons.wikimedia.org/wiki/Category:Morchella_esculenta |
+| `verpa-bohemica` (Верпа) | https://commons.wikimedia.org/wiki/Category:Verpa_bohemica |
+| `gyromitra-esculenta` (Строчок) | https://commons.wikimedia.org/wiki/Category:Gyromitra_esculenta |
+| `russula-vesca` (Сыроежка пищевая) | https://commons.wikimedia.org/wiki/Category:Russula_vesca |
+| `amanita-muscaria` (Мухомор красный) | https://commons.wikimedia.org/wiki/Category:Amanita_muscaria |
 
-### `vaccinium-oxycoccos` — Клюква
-- https://commons.wikimedia.org/wiki/File:Vaccinium_oxycoccos_LC0220.jpg — Jörg Hempel, CC-BY-SA-3.0-DE. На моху-сфагнуме, типичный болотный кадр.
+### Ягоды
+
+| slug | Категория |
+|---|---|
+| `vaccinium-myrtillus` (Черника) | https://commons.wikimedia.org/wiki/Category:Vaccinium_myrtillus |
+| `rubus-chamaemorus` (Морошка) | https://commons.wikimedia.org/wiki/Category:Rubus_chamaemorus |
+| `vaccinium-oxycoccos` (Клюква) | https://commons.wikimedia.org/wiki/Category:Vaccinium_oxycoccos |
+
+### Фоновые «лес» — для будущих универсальных hero (не привязаны к slug'у)
+
+- Сосновый бор: https://commons.wikimedia.org/wiki/Category:Pine_forests
+- Ельник: https://commons.wikimedia.org/wiki/Category:Spruce_forests
+- Болото / клюквенник: https://commons.wikimedia.org/wiki/Category:Sphagnum_bogs
+- Берёзовая роща: https://commons.wikimedia.org/wiki/Category:Birch_forests
 
 ---
 
-## Универсальные «лес ленобласти» (для пустых карточек / hero вне видов)
+## Что прислать обратно
 
-### Сосняк
-- https://commons.wikimedia.org/wiki/File:Boreal_pine_forest_in_Finland.jpg — Estormiz, CC0. Сосновый бор, утренний свет.
+Когда выберешь — пришли в виде:
 
-### Ельник
-- https://commons.wikimedia.org/wiki/File:Spruce_forest_in_Karelia.jpg — Mikhailov Vladislav, CC-BY-SA-4.0.
+```
+boletus-edulis  → https://commons.wikimedia.org/wiki/File:Точное_имя_файла.jpg
+leccinum-aurantiacum → ...
+```
 
-### Болото / клюквенник
-- https://commons.wikimedia.org/wiki/File:Bog_Estonia.jpg — Iifar, CC-BY-SA-4.0.
-
----
-
-## TODO для тебя
-
-- [ ] Пройтись по списку, отметить что берём (галочка в чекбоксе перед URL).
-- [ ] Для каждого выбранного — открыть страницу файла, проверить лицензию ещё раз (она могла измениться).
-- [ ] Если что-то не нравится — найти альтернативу через `commons.wikimedia.org/wiki/Category:<latin-name>`.
-- [ ] Прислать отобранные в виде «slug → URL», я заберу-сконвертирую-залью.
+Я заберу-сконвертирую-залью, заполню `photos.json` с реальной атрибуцией.

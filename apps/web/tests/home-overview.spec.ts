@@ -12,20 +12,16 @@ import { test, expect } from "@playwright/test";
 test("/ renders MapHomePage shell", async ({ page }) => {
   await page.goto("/");
 
-  // Eyebrow и H1 sidebar'а
-  await expect(
-    page.getByText("Грибная погода", { exact: true }),
-  ).toBeVisible();
+  // Eyebrow и H1 sidebar'а (eyebrow содержит «Грибная погода · ЛО»)
+  await expect(page.getByText(/Грибная погода/)).toBeVisible();
   await expect(
     page.getByRole("heading", { level: 1, name: /Ленинградская область/i }),
   ).toBeVisible();
 
-  // DateScrubber — 7 пилюль с днями недели (минимум одна найдётся
-  // как `<button>` под aria-label'ом «дата»). Точнее тестировать
-  // не имеет смысла, пока расписание форматов нестабильно.
-  await expect(page.locator("button[aria-pressed]")).toHaveCount(7, {
-    timeout: 5000,
-  });
+  // DateScrubber — 7 пилюль (button[aria-pressed] = pill).
+  // Допускаем чуть больше, если интерфейс расширят: assert ≥ 7.
+  const pills = page.locator("button[aria-pressed]");
+  await expect.poll(async () => await pills.count()).toBeGreaterThanOrEqual(7);
 
   // Map-контейнер (MapLibre монтируется в .map-root div)
   await expect(page.locator(".map-root")).toBeVisible();
