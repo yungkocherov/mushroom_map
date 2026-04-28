@@ -78,21 +78,14 @@ function buildWaterHtml(water: WaterDistanceResponse | null): string {
     </div>`;
 }
 
-const ASPECT_RU: Record<string, string> = {
-  N: "С", NE: "СВ", E: "В", SE: "ЮВ",
-  S: "Ю", SW: "ЮЗ", W: "З", NW: "СЗ",
-};
-
 function buildTerrainHtml(t: TerrainAtResponse | null): string {
+  // По редизайну (docs/redesign-2026-04.md, popup mockup) уклон/экспозиция
+  // вместе с запасом убраны — не помогают грибнику. Высоту оставляем как
+  // компактный геофакт в одну строку.
   if (!t || t.elevation_m == null) return "";
-  const bits: string[] = [`${Math.round(t.elevation_m)} м`];
-  if (t.slope_deg != null && t.slope_deg >= 0.5) {
-    const aspect = t.aspect_cardinal ? ASPECT_RU[t.aspect_cardinal] ?? t.aspect_cardinal : null;
-    bits.push(`склон ${t.slope_deg.toFixed(1)}°${aspect ? ` на ${aspect}` : ""}`);
-  }
   return `
     <div style="margin-top:6px;font-size:11px;color:#555">
-      ⛰ Рельеф: <b>${bits.join(" · ")}</b>
+      ⛰ Высота: <b>${Math.round(t.elevation_m)} м</b>
     </div>`;
 }
 
@@ -198,13 +191,15 @@ export function buildPopupHtml(
   const areaStr = f.area_m2 ? `${(f.area_m2 / 10_000).toFixed(1)} га` : "";
   const curMonth = new Date().getMonth() + 1;
 
+  // Поля попапа выдела (редизайн docs/redesign-2026-04.md):
+  // — порода (заголовок) · возраст · бонитет · почва · до воды.
+  // Удалены: «выдел #N» (не было), запас (timber_stock), уклон/экспозиция,
+  // композиция пород в %% (нет в данных). Эти поля не помогают грибнику.
   const metaBits: string[] = [];
-  if (f.bonitet != null && f.bonitet >= 1 && f.bonitet <= 5)
-    metaBits.push(`бонитет ${ROMAN[f.bonitet]}`);
-  if (f.timber_stock != null)
-    metaBits.push(`${Math.round(f.timber_stock)} м³/га`);
   if (f.age_group != null)
     metaBits.push(f.age_group);
+  if (f.bonitet != null && f.bonitet >= 1 && f.bonitet <= 5)
+    metaBits.push(`бонитет ${ROMAN[f.bonitet]}`);
   const metaStr = metaBits.join(" · ");
 
   const speciesRows = data.species_theoretical
