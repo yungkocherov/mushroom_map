@@ -1,25 +1,23 @@
 /**
  * Phase 2: главная страница (MapHomePage) рендерит SidebarOverview +
  * MapView. Тут проверяем минимум, не зависящий от живого API:
- *  - sidebar монтируется (eyebrow + H1 + DateScrubber)
+ *  - H1 sidebar'а монтируется
  *  - map-контейнер существует
  *
- * Тесты с forecast-чисел и flyTo'ом — отдельно, когда API будет
- * подниматься в test-fixture'е.
+ * Eyebrow-тексты разные на разных вариантах (могут меняться) —
+ * не проверяем чтобы не привязываться к конкретной фразе.
  */
 import { test, expect } from "@playwright/test";
 
 test("/ renders MapHomePage shell", async ({ page }) => {
   await page.goto("/");
 
-  // Eyebrow и H1 sidebar'а (eyebrow содержит «Грибная погода · ЛО»)
-  await expect(page.getByText(/Грибная погода/)).toBeVisible();
+  // H1 — стабильный якорь, sidebar его рендерит сразу
   await expect(
     page.getByRole("heading", { level: 1, name: /Ленинградская область/i }),
   ).toBeVisible();
 
-  // DateScrubber — 7 пилюль (button[aria-pressed] = pill).
-  // Допускаем чуть больше, если интерфейс расширят: assert ≥ 7.
+  // DateScrubber — 7+ пилюль (button[aria-pressed])
   const pills = page.locator("button[aria-pressed]");
   await expect.poll(async () => await pills.count()).toBeGreaterThanOrEqual(7);
 
@@ -27,20 +25,22 @@ test("/ renders MapHomePage shell", async ({ page }) => {
   await expect(page.locator(".map-root")).toBeVisible();
 });
 
-test("Spotlight opens on Cmd+K", async ({ page }) => {
+test("Spotlight opens on Ctrl+K", async ({ page }) => {
   await page.goto("/");
 
-  // Modifier varies по платформе: используем Meta+K (mac) с fallback'ом
-  // на Control+K — Playwright сам подберёт раскладку.
+  // Ждём H1, чтобы page точно был интерактивный
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Ленинградская область/i }),
+  ).toBeVisible();
+
   await page.keyboard.press("Control+K");
 
-  await expect(
-    page.getByRole("dialog", { name: "Поиск" }),
-  ).toBeVisible();
+  // Radix Dialog labelledby → DialogTitle "Поиск по видам и местам",
+  // не aria-label. Используем regex.
+  const dialog = page.getByRole("dialog", { name: /Поиск/i });
+  await expect(dialog).toBeVisible();
 
   // Esc закрывает
   await page.keyboard.press("Escape");
-  await expect(
-    page.getByRole("dialog", { name: "Поиск" }),
-  ).not.toBeVisible();
+  await expect(dialog).not.toBeVisible();
 });

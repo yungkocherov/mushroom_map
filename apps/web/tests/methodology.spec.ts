@@ -8,10 +8,7 @@ import { test, expect } from "@playwright/test";
 test("/methodology renders all 4 categories", async ({ page }) => {
   await page.goto("/methodology");
 
-  // Eyebrow + H1
-  await expect(
-    page.getByText("Откуда мы это знаем", { exact: true }),
-  ).toBeVisible();
+  // H1 — стабильный якорь
   await expect(
     page.getByRole("heading", { level: 1, name: "Методология проекта" }),
   ).toBeVisible();
