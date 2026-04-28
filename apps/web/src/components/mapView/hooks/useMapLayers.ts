@@ -59,6 +59,7 @@ export function useMapLayers(mapRef: React.MutableRefObject<Map | null>) {
 
     async function lazyAdd(m: Map, entry: LayerEntry) {
       inFlightRef.current.add(entry.id);
+      let mustReleaseInFlight = true;
       try {
         if (entry.pmtiles) {
           const resp = await fetch(`${TILES_BASE}/${entry.pmtiles}`, { method: "HEAD" });
@@ -69,19 +70,31 @@ export function useMapLayers(mapRef: React.MutableRefObject<Map | null>) {
             return;
           }
         }
+        // Re-read user intent: store may have flipped to false during HEAD await.
+        // Layer-modules' add() are idempotent (getLayer guard), so even adding +
+        // immediately hiding is fine; but skipping the work when not wanted is cleaner.
         const doAdd = () => {
-          entry.add(m);
-          setLoaded(entry.id, true);
-          entry.setVisibility(m, true);
+          try {
+            const stillWanted = useLayerVisibility.getState().visible[entry.id];
+            entry.add(m);
+            setLoaded(entry.id, true);
+            entry.setVisibility(m, stillWanted);
+          } finally {
+            inFlightRef.current.delete(entry.id);
+          }
         };
-        if (m.isStyleLoaded()) doAdd();
-        else m.once("idle", doAdd);
+        if (m.isStyleLoaded()) {
+          doAdd();
+        } else {
+          m.once("idle", doAdd);
+        }
+        mustReleaseInFlight = false; // doAdd will release it
       } catch {
         setErrorMsg(`Не удалось проверить ${entry.pmtiles ?? entry.id}`);
         setTimeout(() => setErrorMsg(null), 4000);
         setVisible(entry.id, false);
       } finally {
-        inFlightRef.current.delete(entry.id);
+        if (mustReleaseInFlight) inFlightRef.current.delete(entry.id);
       }
     }
 
@@ -123,16 +136,16 @@ export function useMapLayers(mapRef: React.MutableRefObject<Map | null>) {
     if (!m) return;
 
     LAYER_REGISTRY.forEach((entry) => {
+      if (!loaded[entry.id]) return; // never lazy-added; nothing to re-apply
+      // setStyle({ diff: false }) уже снёс layers + sources, но defensive guard:
       entry.layers.forEach((l) => {
         if (m.getLayer(l)) m.removeLayer(l);
       });
       entry.sources.forEach((s) => {
         if (m.getSource(s)) m.removeSource(s);
       });
-      if (loaded[entry.id]) {
-        entry.add(m);
-        entry.setVisibility(m, visible[entry.id]);
-      }
+      entry.add(m);
+      entry.setVisibility(m, visible[entry.id]);
     });
 
     if (m.getLayer("forest-fill")) {

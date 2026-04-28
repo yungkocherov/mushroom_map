@@ -43,7 +43,7 @@ export interface LayerEntry {
   layers: string[];
 }
 
-export const LAYER_REGISTRY: LayerEntry[] = [
+export const LAYER_REGISTRY: ReadonlyArray<LayerEntry> = [
   {
     id: "forest",
     pmtiles: "forest.pmtiles",
@@ -134,6 +134,12 @@ export const LAYER_REGISTRY: LayerEntry[] = [
     sources: ["hillshade"],
     layers: ["hillshade-raster"],
   },
+  // Внимание: districts и forecastChoropleth используют ОДИН source "districts"
+  // (forecastChoropleth-модуль защищается `if (!m.getSource("districts"))`).
+  // useMapLayers.reapplyAll() удаляет source у одного entry, у второго получает
+  // no-op через `if (m.getSource(s))` guard — это работает, но абстракция «source
+  // owns by entry» здесь leaky. При добавлении третьего слоя на тот же source —
+  // придётся явно ввести "shared sources" концепт.
   {
     id: "districts",
     pmtiles: null,
