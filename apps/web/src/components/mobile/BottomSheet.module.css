@@ -1,0 +1,57 @@
+/* BottomSheet — мобильная нижняя шторка. Стилизуется под токены проекта. */
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 24, 18, 0.45);
+  z-index: 900;
+  pointer-events: auto;
+}
+
+.sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 901;
+  background: var(--paper-rise);
+  border-top-left-radius: var(--radius-lg);
+  border-top-right-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  display: flex;
+  flex-direction: column;
+  /* высота фиксирована — содержимое скроллится внутри */
+  height: 92vh;
+  touch-action: none;
+  font-family: var(--font-body);
+  color: var(--ink);
+  will-change: transform;
+}
+
+.handleWrap {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  padding: var(--space-2) 0 var(--space-1);
+  cursor: grab;
+}
+
+.handleWrap:active {
+  cursor: grabbing;
+}
+
+.handle {
+  width: 36px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--ink-faint);
+  opacity: 0.5;
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 var(--space-5) var(--space-5);
+}
