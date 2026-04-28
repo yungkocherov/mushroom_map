@@ -95,3 +95,46 @@
 .chipActive .subLabel {
   color: var(--ink-dim);
 }
+
+.secondaryToggle {
+  margin-top: var(--space-3);
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-body);
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.secondaryToggle:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.secondaryToggle:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.secondaryGroup {
+  margin-top: var(--space-2);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-bottom: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.strip ~ .secondaryToggle,
+.strip ~ .secondaryGroup {
+  display: none;
+}

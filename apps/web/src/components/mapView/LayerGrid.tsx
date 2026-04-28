@@ -1,26 +1,21 @@
 /**
- * LayerGrid — 7 чипов слоёв карты для SidebarDistrict (по spec'у
- * docs/redesign-2026-04.md, секция «Детальный режим района»).
+ * LayerGrid — все слои карты, объединённые в один UI после Phase 4.
  *
  * Layout:
- *  - desktop ('grid'): 2×4 grid, 7 заполнено + 1 пустой слот
- *  - mobile ('strip'): горизонтально-скроллируемая лента
+ *  - desktop ('grid'): 2-колоночный grid из 7 primary chip'ов + кнопка
+ *    «Ещё слои» с disclosure для 8 secondary chip'ов
+ *  - mobile ('strip'): горизонтально-скроллируемая лента primary chip'ов;
+ *    secondary недоступны — для них disclosure не имеет смысла на мобайле
  *
- * Слои:
- *   Прогноз     → useLayerVisibility.visible.forecastChoropleth
- *   Породы      → forest.visible + forestColorMode='species'
- *   Бонитет     → forest.visible + forestColorMode='bonitet'
- *   Возраст     → forest.visible + forestColorMode='age_group'
- *   Почва       → useLayerVisibility.visible.soil
- *   Рельеф      → useLayerVisibility.visible.hillshade
- *   Споты       → useLayerVisibility.visible.userSpots (auth-aware:
- *                 unauth — показываем «Войти» и линк на /auth)
+ * Primary chip'ы (7) — основной набор для грибника:
+ *   Прогноз, Породы, Бонитет, Возраст, Почва, Рельеф, Сохранённые
  *
- * Single source of truth — useLayerVisibility store. MapView
- * подписывается на store отдельным controller-эффектом и применяет
- * изменения к MapLibre. Эту шину делит с forecastChoroplethLayer'ом
- * (Phase 2 commit `66d1ea8`).
+ * Secondary chip'ы (8) — служебные/расширенные:
+ *   Водотоки, Болота, Водоохранные, ООПТ, Дороги, Вырубки, Защитные, Районы
+ *
+ * Single source of truth — useLayerVisibility store.
  */
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../auth/useAuth";
 import {
@@ -49,10 +44,13 @@ export function LayerGrid({ className, layout = "grid" }: LayerGridProps) {
   const visible = useLayerVisibility((s) => s.visible);
   const forestColorMode = useLayerVisibility((s) => s.forestColorMode);
   const setVisible = useLayerVisibility((s) => s.setVisible);
+  const toggleVisible = useLayerVisibility((s) => s.toggleVisible);
   const selectForestMode = useLayerVisibility((s) => s.selectForestMode);
 
   const auth = useAuth();
   const authStatus = auth.status;
+
+  const [secondaryOpen, setSecondaryOpen] = useState(false);
 
   const toggleForestMode = (mode: ForestColorMode) => {
     if (visible.forest && forestColorMode === mode) {
@@ -72,7 +70,7 @@ export function LayerGrid({ className, layout = "grid" }: LayerGridProps) {
           key: "userSpots",
           label: "Сохранённые",
           active: visible.userSpots,
-          onClick: () => setVisible("userSpots", !visible.userSpots),
+          onClick: () => toggleVisible("userSpots"),
         }
       : {
           key: "userSpots",
@@ -87,13 +85,12 @@ export function LayerGrid({ className, layout = "grid" }: LayerGridProps) {
           disabled: authStatus === "loading",
         };
 
-  const chips: ChipDescriptor[] = [
+  const primaryChips: ChipDescriptor[] = [
     {
       key: "forecastChoropleth",
       label: "Прогноз",
       active: visible.forecastChoropleth,
-      onClick: () =>
-        setVisible("forecastChoropleth", !visible.forecastChoropleth),
+      onClick: () => toggleVisible("forecastChoropleth"),
     },
     {
       key: "forest-species",
@@ -117,31 +114,67 @@ export function LayerGrid({ className, layout = "grid" }: LayerGridProps) {
       key: "soil",
       label: "Почва",
       active: visible.soil,
-      onClick: () => setVisible("soil", !visible.soil),
+      onClick: () => toggleVisible("soil"),
     },
     {
       key: "hillshade",
       label: "Рельеф",
       active: visible.hillshade,
-      onClick: () => setVisible("hillshade", !visible.hillshade),
+      onClick: () => toggleVisible("hillshade"),
     },
     spotsChip,
+  ];
+
+  const secondaryChips: ChipDescriptor[] = [
+    { key: "waterway", label: "Водотоки", active: visible.waterway, onClick: () => toggleVisible("waterway") },
+    { key: "wetland",  label: "Болота",   active: visible.wetland,  onClick: () => toggleVisible("wetland") },
+    { key: "water",    label: "Водоохранные", active: visible.water, onClick: () => toggleVisible("water") },
+    { key: "oopt",     label: "ООПТ",     active: visible.oopt,     onClick: () => toggleVisible("oopt") },
+    { key: "roads",    label: "Дороги",   active: visible.roads,    onClick: () => toggleVisible("roads") },
+    { key: "felling",  label: "Вырубки",  active: visible.felling,  onClick: () => toggleVisible("felling") },
+    { key: "protective", label: "Защитные", active: visible.protective, onClick: () => toggleVisible("protective") },
+    { key: "districts", label: "Районы",  active: visible.districts, onClick: () => toggleVisible("districts") },
   ];
 
   const containerClass = layout === "strip" ? styles.strip : styles.grid;
 
   return (
-    <ul
-      className={`${containerClass}${className ? ` ${className}` : ""}`}
-      role="group"
-      aria-label="Слои карты"
-    >
-      {chips.map((c) => (
-        <li key={c.key} className={styles.item}>
-          <ChipButton chip={c} />
-        </li>
-      ))}
-    </ul>
+    <div className={className}>
+      <ul
+        className={containerClass}
+        role="group"
+        aria-label="Слои карты"
+      >
+        {primaryChips.map((c) => (
+          <li key={c.key} className={styles.item}>
+            <ChipButton chip={c} />
+          </li>
+        ))}
+      </ul>
+
+      {layout === "grid" && (
+        <>
+          <button
+            type="button"
+            className={styles.secondaryToggle}
+            onClick={() => setSecondaryOpen((o) => !o)}
+            aria-expanded={secondaryOpen}
+          >
+            <span>Ещё слои</span>
+            <span aria-hidden="true">{secondaryOpen ? "▴" : "▾"}</span>
+          </button>
+          {secondaryOpen && (
+            <ul className={styles.secondaryGroup} role="group" aria-label="Дополнительные слои карты">
+              {secondaryChips.map((c) => (
+                <li key={c.key}>
+                  <ChipButton chip={c} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
