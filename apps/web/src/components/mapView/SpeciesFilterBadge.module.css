@@ -1,0 +1,16 @@
+.badge {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #e8f5e9;
+  border: 1px solid #a5d6a7;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: #2e7d32;
+  font-family: system-ui, sans-serif;
+  z-index: 15;
+}
+
+.badge strong { font-weight: 600; }

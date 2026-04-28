@@ -1,12 +1,12 @@
 import { useState } from "react";
 import {
   FOREST_COLORS,
-  ForestColorMode,
   BONITET_LEGEND,
   AGE_GROUP_LEGEND,
 } from "../lib/forestStyle";
 import { SOIL_LEGEND } from "../lib/soilStyle";
 import { useIsMobile } from "../lib/useIsMobile";
+import { useLayerVisibility } from "../store/useLayerVisibility";
 
 const SPECIES_LEGEND = [
   { slug: "pine",             label: "Сосна" },
@@ -23,12 +23,7 @@ const SPECIES_LEGEND = [
 
 // Что показывать в легенде. Если включена почва — её легенда важнее
 // (перекрывает лес визуально), иначе — лес по выбранному режиму.
-export type LegendMode = "soil" | "forest";
-
-interface Props {
-  mode: LegendMode;
-  colorMode: ForestColorMode;
-}
+type LegendMode = "soil" | "forest";
 
 const WRAP: React.CSSProperties = {
   position: "absolute",
@@ -61,10 +56,19 @@ const SWATCH = (color: string): React.CSSProperties => ({
   flexShrink: 0,
 });
 
-export function Legend({ mode, colorMode }: Props) {
+export function Legend() {
+  const colorMode = useLayerVisibility((s) => s.forestColorMode);
+  const forestLoaded = useLayerVisibility((s) => s.loaded.forest);
+  const soilLoaded = useLayerVisibility((s) => s.loaded.soil);
+  const soilVisible = useLayerVisibility((s) => s.visible.soil);
   const mobile = useIsMobile();
   // На мобильном легенда сворачивается в иконку, чтобы не закрывать карту.
   const [open, setOpen] = useState(!mobile);
+
+  // Show only when forest is loaded OR soil is loaded+visible
+  // (matching old behavior when MapView decided whether to render Legend).
+  if (!forestLoaded && !(soilLoaded && soilVisible)) return null;
+  const mode: LegendMode = soilLoaded && soilVisible ? "soil" : "forest";
 
   let title = "";
   let items: Array<{ label: string; color: string }> = [];

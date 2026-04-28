@@ -18,6 +18,7 @@ import { LayerGrid } from "./mapView/LayerGrid";
 import { ShareButton } from "./mapView/ShareButton";
 import { MapOverlays } from "./mapView/MapOverlays";
 import { CursorReadout } from "./mapView/CursorReadout";
+import { SpeciesFilterBadge } from "./mapView/SpeciesFilterBadge";
 
 import {
   useLayerVisibility,
@@ -39,11 +40,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   userSpotsRef.current = userSpots;
 
   // ─── Store subscriptions ──────────────────────────────────────────
-  const visible = useLayerVisibility((s) => s.visible);
-  const loaded = useLayerVisibility((s) => s.loaded);
-  const forestColorMode = useLayerVisibility((s) => s.forestColorMode);
   const setSpeciesFilter = useLayerVisibility((s) => s.setSpeciesFilter);
-  const speciesFilterLabel = useLayerVisibility((s) => s.speciesFilterLabel);
 
   const initialView = useMemo(() => parseInitialView(), []);
   const { map, ready: mapReady } = useMapInstance(mapRef, initialView, (m) => {
@@ -103,27 +100,10 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
 
       <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={handleSpeciesFilter} />
 
-      {(loaded.forest || (loaded.soil && visible.soil)) && (
-        <Legend
-          mode={loaded.soil && visible.soil ? "soil" : "forest"}
-          colorMode={forestColorMode}
-        />
-      )}
-
+      <Legend />
       <CursorReadout mapRef={map} />
-
       <MapOverlays />
-
-      {speciesFilterLabel && (
-        <div style={{
-          position: "absolute", top: 56, left: "50%", transform: "translateX(-50%)",
-          background: "#e8f5e9", border: "1px solid #a5d6a7", borderRadius: 6,
-          padding: "5px 12px", fontSize: 12, color: "#2e7d32",
-          fontFamily: "system-ui, sans-serif", zIndex: 15,
-        }}>
-          Показаны леса для: <strong>{speciesFilterLabel}</strong>
-        </div>
-      )}
+      <SpeciesFilterBadge />
     </div>
   );
 }
