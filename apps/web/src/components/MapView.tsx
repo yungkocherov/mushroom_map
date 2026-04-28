@@ -10,15 +10,12 @@ import { INLINE_STYLE, SATELLITE_STYLE } from "./mapView/styles/inline";
 import { buildSchemeStyle, SCHEME_STYLE_FALLBACK } from "./mapView/styles/scheme";
 import { buildHybridStyle, HYBRID_STYLE_FALLBACK } from "./mapView/styles/hybrid";
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
-import {
-  addUserSpotsLayer,
-  removeUserSpotsLayer,
-  updateUserSpots,
-} from "./mapView/layers/userSpots";
+import { addUserSpotsLayer } from "./mapView/layers/userSpots";
 import { useMapLayers } from "./mapView/hooks/useMapLayers";
 import { useMapInstance, parseInitialView } from "./mapView/hooks/useMapInstance";
 import { useMapPopup } from "./mapView/hooks/useMapPopup";
 import { useMapUrl } from "./mapView/hooks/useMapUrl";
+import { useUserSpotsSync } from "./mapView/hooks/useUserSpotsSync";
 
 import {
   useLayerVisibility,
@@ -148,36 +145,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     return () => { cancelled = true; };
   }, [baseMap, reapplyAll]);
 
-  // ─── userSpots data-driven sync ───────────────────────────────────
-  // Реагируем на смену userSpots prop — добавляем / обновляем / убираем
-  // приватный слой. Карта может ещё не быть готова (style loading),
-  // тогда откладываем до idle.
-  useEffect(() => {
-    const m = map.current;
-    if (!m) return;
-    const apply = () => {
-      const spots = userSpots;
-      if (!spots || spots.length === 0) {
-        removeUserSpotsLayer(m);
-        return;
-      }
-      if (m.getLayer("user-spots")) {
-        updateUserSpots(m, spots);
-      } else {
-        addUserSpotsLayer(m, spots);
-      }
-    };
-    if (m.isStyleLoaded()) apply();
-    else m.once("idle", apply);
-  }, [userSpots]);
-
-  // ─── userSpots visibility (store-driven) ──────────────────────────
-  const storeUserSpotsVisible = useLayerVisibility((s) => s.visible.userSpots);
-  useEffect(() => {
-    const m = map.current;
-    if (!m || !m.getLayer("user-spots")) return;
-    m.setLayoutProperty("user-spots", "visibility", storeUserSpotsVisible ? "visible" : "none");
-  }, [storeUserSpotsVisible]);
+  useUserSpotsSync(map, userSpots);
 
   // ─── VPN toast on satellite/hybrid switch ─────────────────────────
   useEffect(() => {
