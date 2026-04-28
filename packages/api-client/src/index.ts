@@ -214,6 +214,33 @@ export async function deleteSpot(accessToken: string, id: string): Promise<void>
   }
 }
 
+/**
+ * Spotlight (⌘K) — поиск по `gazetteer_entry` через FastAPI.
+ * Используется отдельно от `searchPlaces` (Nominatim) — тот остался
+ * для существующего адресного поиска на карте.
+ */
+export interface GazetteerSearchResult {
+  id: number;
+  name_ru: string;
+  kind: string;
+  lat: number;
+  lon: number;
+  admin_area_id: number | null;
+  popularity: number;
+  score: number;
+}
+
+export async function searchGazetteer(
+  q: string,
+  limit = 10,
+): Promise<GazetteerSearchResult[]> {
+  if (q.trim().length < 2) return [];
+  const url = `${API_BASE}/api/places/search?q=${encodeURIComponent(q)}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) return [];
+  return res.json();
+}
+
 export async function searchPlaces(q: string): Promise<NominatimResult[]> {
   if (!q.trim()) return [];
   const params = new URLSearchParams({

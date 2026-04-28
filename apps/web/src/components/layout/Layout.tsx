@@ -2,6 +2,7 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Header } from "./Header";
 import { Footer } from "./Footer";
+import { Spotlight } from "../Spotlight";
 import styles from "./Layout.module.css";
 
 /**
@@ -24,6 +25,7 @@ export function Layout() {
         <main className={styles.mapMain}>
           <Outlet />
         </main>
+        <Spotlight />
       </div>
     );
   }
@@ -38,6 +40,7 @@ export function Layout() {
         <main className={styles.mapMain}>
           <Outlet />
         </main>
+        <Spotlight />
       </div>
     );
   }
@@ -49,6 +52,7 @@ export function Layout() {
         <Outlet />
       </main>
       <Footer />
+      <Spotlight />
     </div>
   );
 }
