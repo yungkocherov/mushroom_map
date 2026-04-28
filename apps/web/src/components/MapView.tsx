@@ -6,9 +6,6 @@ import { MapControls } from "./MapControls";
 import { Legend } from "./Legend";
 import { SearchBar } from "./SearchBar";
 
-import { INLINE_STYLE, SATELLITE_STYLE } from "./mapView/styles/inline";
-import { buildSchemeStyle, SCHEME_STYLE_FALLBACK } from "./mapView/styles/scheme";
-import { buildHybridStyle, HYBRID_STYLE_FALLBACK } from "./mapView/styles/hybrid";
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
 import { addUserSpotsLayer } from "./mapView/layers/userSpots";
 import { useMapLayers } from "./mapView/hooks/useMapLayers";
@@ -16,6 +13,7 @@ import { useMapInstance, parseInitialView } from "./mapView/hooks/useMapInstance
 import { useMapPopup } from "./mapView/hooks/useMapPopup";
 import { useMapUrl } from "./mapView/hooks/useMapUrl";
 import { useUserSpotsSync } from "./mapView/hooks/useUserSpotsSync";
+import { useBaseMap } from "./mapView/hooks/useBaseMap";
 
 import {
   useLayerVisibility,
@@ -36,9 +34,6 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
   const userSpotsRef = useRef<UserSpot[] | null>(userSpots);
   userSpotsRef.current = userSpots;
-  // Map создаётся с INLINE_STYLE (osm). Store по умолчанию "scheme" →
-  // первый run basemap-switch effect'а сделает реальный setStyle.
-  const appliedBaseMap = useRef<BaseMapMode>("osm");
 
   // ─── Store subscriptions ──────────────────────────────────────────
   const baseMap = useLayerVisibility((s) => s.baseMap);
@@ -87,63 +82,24 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   }, []);
 
   // ─── Basemap switch ───────────────────────────────────────────────
-  // Исторически были два бага:
-  // 1) `appliedBaseMap.current = baseMap` ставилось В НАЧАЛЕ effect'а → в
-  //    React StrictMode при double-invocation второй раз ref уже совпадал
-  //    с baseMap и effect возвращался раньше, реальный setStyle не вызывался.
-  // 2) styledata + isStyleLoaded() иногда промахивается: первый styledata firing
-  //    с isStyleLoaded=false, второй не приходит (внешняя загрузка зависла) →
-  //    оверлеи не восстанавливаются.
-  // Фикс: RAF-polling вместо styledata listener'а; appliedBaseMap пишем
-  // ПОСЛЕ успешного setStyle. Re-add layers через reapplyAll() из useMapLayers.
-  useEffect(() => {
+  // После setStyle: places — только для scheme/hybrid (satellite/osm имеют
+  // свои labels или не нужны); userSpots — pересоздаём из ref'а;
+  // registry-слои — через reapplyAll().
+  const handleStyleApplied = useCallback((mode: BaseMapMode) => {
     const m = map.current;
     if (!m) return;
-    if (appliedBaseMap.current === baseMap) return;
-
-    let cancelled = false;
-
-    const apply = (style: maplibregl.StyleSpecification) => {
-      if (cancelled) return;
-      // diff: false — полная замена. С тяжёлыми стилями (Versatiles 60+ слоёв
-      // + патчи sprite/text-size) diff приводит к артефактам.
-      m.setStyle(style, { diff: false });
-      appliedBaseMap.current = baseMap;
-
-      const poll = () => {
-        if (cancelled) return;
-        if (m.isStyleLoaded()) {
-          // Places: пересоздаём только для scheme/hybrid (на satellite/osm
-          // labels уже идут из basemap'а либо нам не нужны).
-          if (m.getLayer("places-text")) m.removeLayer("places-text");
-          if (m.getSource("places")) m.removeSource("places");
-          if (baseMap === "scheme" || baseMap === "hybrid") {
-            addPlaceLabelsLayer(m);
-          }
-          // userSpots: setStyle убил layer + source — пересоздаём из ref'а.
-          if (m.getLayer("user-spots")) m.removeLayer("user-spots");
-          if (m.getSource("user-spots-src")) m.removeSource("user-spots-src");
-          const spots = userSpotsRef.current;
-          if (spots && spots.length > 0) addUserSpotsLayer(m, spots);
-          // Все registry-слои — через единый callback.
-          reapplyAll();
-        } else {
-          requestAnimationFrame(poll);
-        }
-      };
-      requestAnimationFrame(poll);
-    };
-
-    if (baseMap === "scheme") {
-      buildSchemeStyle().then(apply).catch(() => apply(SCHEME_STYLE_FALLBACK));
-    } else if (baseMap === "hybrid") {
-      buildHybridStyle().then(apply).catch(() => apply(HYBRID_STYLE_FALLBACK));
-    } else {
-      apply(baseMap === "satellite" ? SATELLITE_STYLE : INLINE_STYLE);
+    if (m.getLayer("places-text")) m.removeLayer("places-text");
+    if (m.getSource("places")) m.removeSource("places");
+    if (mode === "scheme" || mode === "hybrid") {
+      addPlaceLabelsLayer(m);
     }
-
-    return () => { cancelled = true; };
-  }, [baseMap, reapplyAll]);
+    const spots = userSpotsRef.current;
+    if (m.getLayer("user-spots")) m.removeLayer("user-spots");
+    if (m.getSource("user-spots-src")) m.removeSource("user-spots-src");
+    if (spots && spots.length > 0) addUserSpotsLayer(m, spots);
+    reapplyAll();
+  }, [reapplyAll, map]);
+  useBaseMap(map, handleStyleApplied);
 
   useUserSpotsSync(map, userSpots);
 
