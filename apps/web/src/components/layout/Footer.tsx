@@ -8,13 +8,13 @@ export function Footer() {
       <div className={styles.inner}>
         <div className={styles.col}>
           <p className={styles.note}>
-            Грибная карта Ленинградской области — открытый некоммерческий
-            проект. Данные: Рослесхоз / ФГИС ЛК, OSM, Copernicus DEM,
-            Докучаевский почвенный институт, агрегаты ВК-сообществ.
+            Geobiom — открытый некоммерческий проект про лес Ленобласти.
+            Данные: Рослесхоз / ФГИС ЛК, OSM, Copernicus DEM, Докучаевский
+            почвенный институт, агрегаты ВК-сообществ.
           </p>
         </div>
         <nav className={styles.linksCol} aria-label="Ссылки">
-          <Link to="/about" className={styles.link}>О проекте</Link>
+          <Link to="/methodology/about" className={styles.link}>О проекте</Link>
           <Link to="/methodology" className={styles.link}>Методология</Link>
           <Link to="/legal/privacy" className={styles.link}>Конфиденциальность</Link>
           <Link to="/legal/terms" className={styles.link}>Условия</Link>
