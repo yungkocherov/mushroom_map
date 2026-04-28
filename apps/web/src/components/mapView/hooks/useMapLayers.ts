@@ -106,8 +106,10 @@ export function useMapLayers(
         entry.setVisibility(m, value);
       } else {
         m.once("idle", () => {
+          // Re-read store: visible may have flipped between scheduling and idle.
+          const latest = useLayerVisibility.getState().visible[entry.id];
           if (entry.layers.every((l) => m.getLayer(l))) {
-            entry.setVisibility(m, value);
+            entry.setVisibility(m, latest);
           }
         });
       }

@@ -28,6 +28,8 @@ export interface LayerGridProps {
   className?: string;
   /** desktop: 'grid'; mobile: 'strip' (horizontal scroll). */
   layout?: "grid" | "strip";
+  /** Когда true — оборачивается в `.floating` контейнер с position:absolute. Используется в MapView. */
+  floating?: boolean;
 }
 
 interface ChipDescriptor {
@@ -40,7 +42,7 @@ interface ChipDescriptor {
   disabled?: boolean;
 }
 
-export function LayerGrid({ className, layout = "grid" }: LayerGridProps) {
+export function LayerGrid({ className, layout = "grid", floating = false }: LayerGridProps) {
   const visible = useLayerVisibility((s) => s.visible);
   const forestColorMode = useLayerVisibility((s) => s.forestColorMode);
   const setVisible = useLayerVisibility((s) => s.setVisible);
@@ -139,7 +141,7 @@ export function LayerGrid({ className, layout = "grid" }: LayerGridProps) {
   const containerClass = layout === "strip" ? styles.strip : styles.grid;
 
   return (
-    <div className={className}>
+    <div className={`${floating ? styles.floating : ""}${className ? ` ${className}` : ""}`.trim()}>
       <ul
         className={containerClass}
         role="group"

@@ -138,3 +138,32 @@
 .strip ~ .secondaryGroup {
   display: none;
 }
+
+.floating {
+  position: absolute;
+  top: 60px;
+  right: 12px;
+  z-index: 10;
+  width: 240px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(6px);
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 768px) {
+  .floating {
+    top: auto;
+    bottom: 12px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    padding: 8px;
+  }
+
+  .floating .grid {
+    display: none;
+  }
+}

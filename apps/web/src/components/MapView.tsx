@@ -87,7 +87,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
       <div ref={mapRef} className="map-root" />
 
       <BaseMapPicker />
-      <LayerGrid layout={mobile ? "strip" : "grid"} />
+      <LayerGrid layout={mobile ? "strip" : "grid"} floating />
       <ShareButton mapRef={map} />
 
       <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={setSpeciesFilter} />
