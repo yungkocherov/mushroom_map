@@ -86,9 +86,14 @@ Global UI primitives:
   3 snap (peek 18% / half 55% / full 92%), `@use-gesture/react` +
   `@react-spring/web`. Stand-alone primitive; интеграция с MapLibre popup
   на ≤768px пойдёт следующим шагом.
-- **LayerGrid** — `apps/web/src/components/mapView/LayerGrid.tsx`. 7 чипов
-  в SidebarDistrict (Прогноз/Породы/Бонитет/Возраст/Почва/Рельеф/Споты),
-  пишет в `useLayerVisibility` store, MapView controllers применяют.
+- **LayerGrid** — `apps/web/src/components/mapView/LayerGrid.tsx`. После
+  rеfactor'а 2026-04-29 расширен до primary 7 chip'ов (Прогноз/Породы/
+  Бонитет/Возраст/Почва/Рельеф/Споты) + secondary 8 chip'ов под disclosure
+  «Ещё слои» (Водотоки/Болота/Водоохранные/ООПТ/Дороги/Вырубки/Защитные/
+  Районы). `floating?` prop оборачивает в `position:absolute` для
+  использования внутри MapView как floating-панель; в Sidebar — без prop'а.
+  Рендерится в трёх местах: SidebarOverview, SidebarDistrict, MapView (top-right
+  floating). Все три синхронизированы через `useLayerVisibility` store.
 - **Per-page `<title>` / meta-description** — `useLayerTitle` hook в
   `apps/web/src/lib/usePageTitle.ts`. Подключён к /species, /species/:slug,
   /spots, /methodology, /methodology/:slug.
@@ -387,6 +392,59 @@ VM-статус и hosting-fallback живут в memory-файле
   `services/api/.env:TILES_DIR=../../data/tiles`. Browser fetches with
   HTTP Range. Do not break this.
 
+## MapView architecture (post-refactor 2026-04-29)
+
+`apps/web/src/components/MapView.tsx` — тонкий orchestrator (101 строка),
+монтирует хуки и UI-компоненты. Прежние 837 строк с 12 toggle-handler'ами,
+24 useState/useRef парами и 60-строчным `setupForestAndInteractions` —
+схлопнуты в декларативный реестр + единый controller-хук.
+
+**Single source of truth:** `apps/web/src/store/useLayerVisibility.ts`
+(Zustand). Хранит всё map-state'ом: `visible`/`loaded` × 13 LayerKey,
+`baseMap`, `forestColorMode`, `speciesFilter`, `errorMsg`, `vpnToast`,
+`forestHint`, `shareToast`, `speciesFilterLabel`. Никаких useState в
+MapView и компонентах карты — все читают из store.
+
+**Layer registry:** `apps/web/src/components/mapView/registry.ts` —
+декларативный массив 12 entries (`forest`, `water`, `waterway`, `wetland`,
+`oopt`, `roads`, `felling`, `protective`, `soil`, `hillshade`, `districts`,
+`forecastChoropleth`). `userSpots` data-driven, не в реестре. Каждый entry:
+`{id, pmtiles, missingMsg, add, setVisibility, sources, layers}`. Добавление
+13-го слоя = 1 файл + 1 запись (см. секцию «Adding a new data layer»).
+
+**Hooks** (в `apps/web/src/components/mapView/hooks/`):
+- `useMapInstance(containerRef, initialView, onReady)` — создаёт MapLibre
+  Map, монтирует controls, парсит `?lat&lon&z`. Возвращает `{map, ready}`.
+  `ready` flips true после первого `styledata + isStyleLoaded()` —
+  критично, иначе `useMapLayers` стреляет до создания карты (race fix
+  794a1ac).
+- `useMapLayers(map, ready)` — единственный controller между store и
+  MapLibre. Lazy-add с HEAD-check'ом, toggle visibility, переприменение
+  forestColorMode/speciesFilter, `reapplyAll()` callback для basemap-switch.
+- `useBaseMap(map, onAfterApply)` — setStyle + RAF-poll до `isStyleLoaded`,
+  затем дёргает onAfterApply (в MapView re-add'ит places + userSpots +
+  `reapplyAll()`).
+- `useMapPopup(map)` — click → fetch forest/soil/water/terrain → попап.
+- `useMapUrl(map)` — moveend → `?lat&lon&z` history.replaceState.
+- `useUserSpotsSync(map, spots)` — приватный data-driven layer.
+- `useMapShare(map)` — clipboard share callback.
+- `useMouseLngLat(map)` — координаты под курсором.
+- `useToastLifecycles()` — VPN/forestHint fade lifecycles.
+
+**UI components** (в `apps/web/src/components/mapView/`):
+- `LayerGrid` (primary 7 + secondary 8 disclosure, `floating?` prop)
+- `BaseMapPicker` (floating top-left)
+- `ShareButton` (floating bottom-right)
+- `MapOverlays` (4 тоста: share/error/vpn/forestHint)
+- `CursorReadout` (desktop only)
+- `SpeciesFilterBadge`
+- `Legend` (self-subscribed, без props)
+
+**`MapControls.tsx` удалён** в Phase 4. Не возвращать.
+
+Полный спек/план: `docs/superpowers/specs/2026-04-29-mapview-decomposition-design.md`,
+`docs/superpowers/plans/2026-04-29-mapview-decomposition.md`.
+
 ## Adding a new data layer (pattern)
 
 1. **Migration** `db/migrations/NNN_<name>.sql` — table + GIST index.
@@ -397,10 +455,20 @@ VM-статус и hosting-fallback живут в memory-файле
    `services/geodata/src/geodata/db.py` COPY+DELETE pattern.
 4. **Tile build** `pipelines/build_<name>_tiles.py` — PostGIS → MVT →
    `data/tiles/<name>.pmtiles`. Use `build_water_tiles.py` as template.
-5. **Frontend** — add `apps/web/src/components/mapView/layers/<name>.ts`
-   exporting `add<Name>Layer` + `set<Name>Visibility` (use existing layers
-   as template). Wire it in `MapView.tsx` via `toggleLayerWithCheck` with
-   HEAD check on `/tiles/<name>.pmtiles` for graceful "tiles not built" UX.
+5. **Frontend** — после refactor'а MapView 2026-04-29 добавление слоя =
+   1 файл + 1 запись в реестре + 1 чип:
+   - `apps/web/src/components/mapView/layers/<name>.ts` — экспортирует
+     `add<Name>Layer(map)` и `set<Name>Visibility(map, visible)` (template:
+     любой существующий layer-модуль).
+   - `apps/web/src/components/mapView/registry.ts` — новая запись в
+     `LAYER_REGISTRY` со значениями `pmtiles`, `missingMsg`, `add`,
+     `setVisibility`, `sources`, `layers`. `useMapLayers` хук подхватит
+     автоматически — HEAD-check, lazy-add, basemap-switch reapply.
+   - `apps/web/src/components/mapView/LayerGrid.tsx` — добавить чип в
+     `primaryChips` или `secondaryChips`.
+   - `apps/web/src/store/useLayerVisibility.ts` — добавить ключ в
+     `LayerKey` union + дефолты в `DEFAULT_VISIBLE`/`DEFAULT_LOADED`.
+   Никаких правок в MapView.tsx, useMapLayers, useBaseMap или прочих хуках.
 
 Python normalize must stay thin. If profiling shows shapely/wkt/area in
 the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
