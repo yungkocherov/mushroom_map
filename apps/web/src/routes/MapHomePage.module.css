@@ -57,6 +57,10 @@
   border-right: 1px solid var(--rule);
 }
 
+.sidebarHidden {
+  display: none;
+}
+
 .mapPane {
   position: relative;
   height: 100%;

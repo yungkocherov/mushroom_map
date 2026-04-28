@@ -135,7 +135,12 @@ export function MapHomePage() {
     <div
       className={`${styles.shell}${sidebarCollapsed ? ` ${styles.shellCollapsed}` : ""}`}
     >
-      {!sidebarCollapsed && <Sidebar className={styles.sidebar} />}
+      {/* Sidebar остаётся в DOM всегда, иначе при collapse mapPane попадает
+          в первую (0-width) колонку grid'а и карта схлопывается. Скрытие
+          делаем через CSS-класс. */}
+      <div className={`${styles.sidebar}${sidebarCollapsed ? ` ${styles.sidebarHidden}` : ""}`}>
+        <Sidebar />
+      </div>
 
       <div className={styles.mapPane}>
         <button

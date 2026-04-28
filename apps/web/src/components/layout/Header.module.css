@@ -7,8 +7,11 @@
 }
 
 .inner {
-  max-width: 1280px;
-  margin-inline: auto;
+  /* Раньше тут было max-width: 1280px + margin auto, и на мониторах >1280
+     бренд оказывался не у левого края экрана, а у левого края центрированного
+     блока. Юзер просил «бренд в самый угол слева, Войти в самый угол справа»
+     → растягиваем header на 100% viewport'а. */
+  width: 100%;
   padding: var(--space-3) var(--space-5);
   display: flex;
   align-items: center;
