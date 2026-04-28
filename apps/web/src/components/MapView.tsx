@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import maplibregl, { Map } from "maplibre-gl";
-import { Protocol } from "pmtiles";
-import "maplibre-gl/dist/maplibre-gl.css";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import maplibregl from "maplibre-gl";
 
 import { useIsMobile } from "../lib/useIsMobile";
 import { MapControls } from "./MapControls";
@@ -19,6 +17,7 @@ import {
   updateUserSpots,
 } from "./mapView/layers/userSpots";
 import { useMapLayers } from "./mapView/hooks/useMapLayers";
+import { useMapInstance, parseInitialView } from "./mapView/hooks/useMapInstance";
 
 import {
   fetchForestAt,
@@ -32,9 +31,6 @@ import {
 } from "../store/useLayerVisibility";
 import type { UserSpot } from "@mushroom-map/types";
 
-const _protocol = new Protocol();
-maplibregl.addProtocol("pmtiles", _protocol.tile.bind(_protocol));
-
 interface MapViewProps {
   /** Список сохранённых юзером spot'ов; null = не залогинен / ещё не
    *  загружено. При смене массива — слой обновляется in-place
@@ -45,7 +41,6 @@ interface MapViewProps {
 export function MapView({ userSpots = null }: MapViewProps = {}) {
   const mobile = useIsMobile();
   const mapRef = useRef<HTMLDivElement>(null);
-  const map = useRef<Map | null>(null);
   const [cursor, setCursor] = useState<{ lat: number; lon: number } | null>(null);
   const userSpotsRef = useRef<UserSpot[] | null>(userSpots);
   userSpotsRef.current = userSpots;
@@ -71,42 +66,25 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   const setShareToast = useLayerVisibility((s) => s.setShareToast);
   const speciesFilterLabel = useLayerVisibility((s) => s.speciesFilterLabel);
 
+  const initialView = useMemo(() => parseInitialView(), []);
+  const map = useMapInstance(mapRef, initialView, (m) => {
+    if (m.getLayer("places-text")) m.removeLayer("places-text");
+    if (m.getSource("places")) m.removeSource("places");
+    addPlaceLabelsLayer(m);
+    const spots = userSpotsRef.current;
+    if (spots && spots.length > 0) addUserSpotsLayer(m, spots);
+  });
+
   const { reapplyAll } = useMapLayers(map);
 
-  // ─── Map init ─────────────────────────────────────────────────────
+  // ─── Map handlers (mousemove cursor, moveend URL sync, click popup) ──
   useEffect(() => {
-    if (!mapRef.current || map.current) return;
-
-    const urlParams = new URLSearchParams(window.location.search);
-    const initLat = parseFloat(urlParams.get("lat") ?? "60.0");
-    const initLon = parseFloat(urlParams.get("lon") ?? "30.5");
-    const initZ = parseFloat(urlParams.get("z") ?? "8");
-
-    map.current = new maplibregl.Map({
-      container: mapRef.current,
-      style: INLINE_STYLE,
-      center: [isFinite(initLon) ? initLon : 30.5, isFinite(initLat) ? initLat : 60.0],
-      zoom: isFinite(initZ) ? initZ : 8,
-    });
-
     const m = map.current;
+    if (!m) return;
 
-    const onStyleReady = () => {
-      if (m.isStyleLoaded()) {
-        m.off("styledata", onStyleReady);
-        if (m.getLayer("places-text")) m.removeLayer("places-text");
-        if (m.getSource("places")) m.removeSource("places");
-        addPlaceLabelsLayer(m);
-        const spots = userSpotsRef.current;
-        if (spots && spots.length > 0) addUserSpotsLayer(m, spots);
-      }
-    };
-    m.on("styledata", onStyleReady);
-
-    m.addControl(new maplibregl.NavigationControl(), "top-right");
-    m.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
-
-    m.on("mousemove", (e) => setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng }));
+    const onMouseMove = (e: maplibregl.MapMouseEvent) =>
+      setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng });
+    m.on("mousemove", onMouseMove);
 
     const syncUrl = () => {
       const { lat, lng } = m.getCenter();
@@ -119,17 +97,15 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     };
     m.on("moveend", syncUrl);
 
-    m.on("click", async (e) => {
+    const clickHandler = async (e: maplibregl.MapMouseEvent) => {
       if (!e.lngLat) return;
       if ((e.originalEvent.target as HTMLElement | null)?.closest(".maplibregl-popup")) return;
       const { lng, lat } = e.lngLat;
-
       const popupMaxWidth = window.innerWidth < 600 ? `${window.innerWidth - 32}px` : "380px";
       const popup = new maplibregl.Popup({ maxWidth: popupMaxWidth })
         .setLngLat([lng, lat])
         .setHTML(`<div style="font-family:sans-serif;color:#555;padding:4px">Загружаю…</div>`)
         .addTo(m);
-
       try {
         const [forest, soil, water, terrain] = await Promise.all([
           fetchForestAt(lat, lng),
@@ -143,11 +119,13 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
       } catch {
         popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
       }
-    });
+    };
+    m.on("click", clickHandler);
 
     return () => {
-      map.current?.remove();
-      map.current = null;
+      m.off("mousemove", onMouseMove);
+      m.off("moveend", syncUrl);
+      m.off("click", clickHandler);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
