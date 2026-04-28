@@ -26,6 +26,7 @@ import {
   EDIBILITY_TONE,
   FOREST_LABEL,
 } from "../components/species/labels";
+import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./SpeciesDetailPage.module.css";
 import prose from "./Prose.module.css";
 
@@ -95,6 +96,12 @@ export function SpeciesDetailPage() {
 const KIND_LABEL = "Гриб";
 
 function SpeciesDetailView({ data }: { data: SpeciesDetail }) {
+  usePageTitle(
+    `${data.name_ru} — Geobiom`,
+    data.description ??
+      `${data.name_ru} (${data.name_lat ?? ""}): ${EDIBILITY_LABEL[data.edibility].toLowerCase()}, сезон, типы леса.`,
+  );
+
   const forestsSorted = useMemo(
     () => [...data.forests].sort((a, b) => b.affinity - a.affinity),
     [data.forests],

@@ -7,6 +7,7 @@ import {
   type MethodologyArticle,
   type MethodologyCategory,
 } from "../content/methodology";
+import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./MethodologyPage.module.css";
 
 /**
@@ -49,6 +50,11 @@ const CATEGORY_INTRO: Record<MethodologyCategory, string> = {
 };
 
 export function MethodologyPage() {
+  usePageTitle(
+    "Методология — Geobiom",
+    "Откуда берутся данные карты Geobiom: лесные выделы Рослесхоза, рельеф Copernicus, почвы Докучаевского, VK-наблюдения.",
+  );
+
   const grouped: Record<MethodologyCategory, MethodologyArticle[]> = {
     "Источники данных": [],
     "Модель прогноза": [],

@@ -23,11 +23,17 @@ import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { useAuth } from "../auth/useAuth";
 import { SPOT_COLOR_OPTIONS } from "../lib/spotColors";
+import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./CabinetSpotsPage.module.css";
 import prose from "./Prose.module.css";
 
 
 export function CabinetSpotsPage() {
+  usePageTitle(
+    "Споты — Geobiom",
+    "Приватный список грибных мест. Видишь только ты, ничего не публикуется.",
+  );
+
   const { user, getAccessToken } = useAuth();
   const [spots, setSpots] = useState<UserSpot[] | null>(null);
   const [error, setError] = useState<string | null>(null);

@@ -2,11 +2,17 @@ import { useParams, Link, Navigate } from "react-router-dom";
 import { ArrowLeft, Clock } from "lucide-react";
 import { Container } from "../components/layout/Container";
 import { findArticle } from "../content/methodology";
+import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./MethodologyArticlePage.module.css";
 
 export function MethodologyArticlePage() {
   const { slug } = useParams<{ slug: string }>();
   const article = slug ? findArticle(slug) : undefined;
+
+  usePageTitle(
+    article ? `${article.title} — Geobiom` : "Geobiom",
+    article?.abstract,
+  );
 
   if (!article) {
     return <Navigate to="/methodology" replace />;

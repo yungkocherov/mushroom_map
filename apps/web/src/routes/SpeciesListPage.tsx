@@ -13,6 +13,7 @@ import type { Edibility, SpeciesListItem } from "@mushroom-map/types";
 import { Container } from "../components/layout/Container";
 import { SpeciesCard } from "../components/species/SpeciesCard";
 import { EDIBILITY_LABEL } from "../components/species/labels";
+import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./SpeciesListPage.module.css";
 import prose from "./Prose.module.css";
 
@@ -38,6 +39,11 @@ const FILTER_ORDER: FilterValue[] = [
 
 
 export function SpeciesListPage() {
+  usePageTitle(
+    "Виды грибов и ягод — Geobiom",
+    "Справочник видов грибов и ягод Ленобласти: съедобность, сезон, тип леса. Открытая методология.",
+  );
+
   const [items, setItems] = useState<SpeciesListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterValue>("all");

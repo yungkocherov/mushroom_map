@@ -50,15 +50,40 @@ old hero+widgets HomePage parked at `/home-legacy` for phase-2.5 cleanup.
 /species/:slug           → species detail
 /spots                   → cabinet (auth-gated, renamed from /cabinet/spots)
 /cabinet/spots           → 301 → /spots
-/methodology             → hub (umbrella: data sources, model, about, authors, legal)
-/methodology/:slug       → article (forest-data, vk-pipeline, species-registry, about, …)
+/methodology             → hub (4 sections: data sources / model / project / legal)
+/methodology/:slug       → article (forest-data, vk-pipeline, species-registry,
+                           about, authors, changelog)
 /about                   → 301 → /methodology/about
 /guide                   → 301 → /methodology
 /legal/{privacy,terms}   → still live; phase 2.5 will redirect to /methodology/{privacy,terms}
 /auth/*                  → unchanged Yandex OAuth flow
-/home-legacy             → parked old HomePage (phase 2.5 delete)
-/about-legacy            → parked old AboutPage (phase 2.5 delete)
+/home-legacy             → 301 → / (component deleted 2026-04-28)
+/about-legacy            → 301 → /methodology/about (component deleted 2026-04-28)
 ```
+
+Global UI primitives:
+- **Spotlight (⌘K)** — `apps/web/src/components/Spotlight.tsx`. Mounted in
+  `Layout`. Хитит `/api/species/search` + `/api/places/search`
+  (`searchGazetteer`). Без cmdk — на Radix Dialog.
+- **BottomSheet** — `apps/web/src/components/mobile/BottomSheet.tsx`.
+  3 snap (peek 18% / half 55% / full 92%), `@use-gesture/react` +
+  `@react-spring/web`. Stand-alone primitive; интеграция с MapLibre popup
+  на ≤768px пойдёт следующим шагом.
+- **LayerGrid** — `apps/web/src/components/mapView/LayerGrid.tsx`. 7 чипов
+  в SidebarDistrict (Прогноз/Породы/Бонитет/Возраст/Почва/Рельеф/Споты),
+  пишет в `useLayerVisibility` store, MapView controllers применяют.
+- **Per-page `<title>` / meta-description** — `useLayerTitle` hook в
+  `apps/web/src/lib/usePageTitle.ts`. Подключён к /species, /species/:slug,
+  /spots, /methodology, /methodology/:slug.
+
+Methodology articles живут как MDX в `apps/web/src/content/methodology/`:
+forest-data, vk-pipeline, species-registry — рубрика «Источники данных»;
+about, authors, changelog — «О проекте». Frontmatter содержит `category`
+(см. `index.ts:METHODOLOGY_CATEGORIES`).
+
+Hero photo manifest scaffold: `apps/web/src/content/photos.json` (TODO в
+`apps/web/src/content/photos-candidates.md`). До наполнения карточки
+`/species/:slug` рисуют диагональный паттерн `birch` в hero.
 
 State for the map sub-app lives in three Zustand stores:
 - `apps/web/src/store/useLayerVisibility.ts` — 13 layer keys + forestColorMode
