@@ -16,7 +16,10 @@ const REDIRECTS: Array<[from: string, toPattern: RegExp]> = [
   ["/about-legacy", /\/methodology\/about$/],
   ["/home-legacy", /\/$/],
   ["/guide", /\/methodology$/],
-  ["/cabinet/spots", /\/spots$/],
+  // /cabinet/spots → /spots → ProtectedRoute → /auth (если не залогинен).
+  // Регекс ловит любой из этих финальных URL'ов — главное, что
+  // редирект из cabinet случился.
+  ["/cabinet/spots", /\/(spots$|auth\?)/],
 ];
 
 for (const [from, toPattern] of REDIRECTS) {

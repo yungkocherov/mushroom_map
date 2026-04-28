@@ -54,10 +54,12 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
     onOpenChange?.(v);
   };
 
-  // Глобальный hotkey ⌘K / Ctrl+K.
+  // Глобальный hotkey ⌘K / Ctrl+K. Используем `e.code === "KeyK"` —
+  // не зависит от регистра (Shift+K не сменит code, в отличие от
+  // e.key, который дал бы "K" вместо "k").
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "k" && (e.metaKey || e.ctrlKey)) {
+      if (e.code === "KeyK" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setOpen(!open);
       }
