@@ -40,9 +40,11 @@
       (function () {
         try {
           var t = localStorage.getItem("theme");
-          if (t === "light" || t === "dark") {
-            document.documentElement.setAttribute("data-theme", t);
+          if (t !== "light" && t !== "dark") {
+            t = "light";
+            localStorage.setItem("theme", "light");
           }
+          document.documentElement.setAttribute("data-theme", t);
         } catch (e) { /* private browsing / storage disabled */ }
       })();
     </script>

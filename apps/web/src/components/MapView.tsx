@@ -31,17 +31,8 @@ import { addSoilLayer, setSoilVisibility } from "./mapView/layers/soil";
 import { addWaterwayLayer, setWaterwayVisibility } from "./mapView/layers/waterway";
 import { addHillshadeLayer, setHillshadeVisibility } from "./mapView/layers/hillshade";
 import { addDistrictsLayer, setDistrictsVisibility } from "./mapView/layers/districts";
-import {
-  addForecastChoroplethLayer,
-  applyForecastIndices,
-  setForecastChoroplethVisibility,
-  FORECAST_FILL_LAYER_ID,
-} from "./mapView/layers/forecastChoropleth";
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
 import { useLayerVisibility } from "../store/useLayerVisibility";
-import { useForecastDate } from "../store/useForecastDate";
-import { useForecastDistricts } from "../store/useForecastDistricts";
-import { useMapMode } from "../store/useMapMode";
 import {
   addUserSpotsLayer,
   removeUserSpotsLayer,
@@ -212,36 +203,9 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     }
     if (districtsLoadedRef.current) {
       if (m.getLayer("districts-line")) m.removeLayer("districts-line");
-      if (m.getLayer("forecast-choropleth-fill")) m.removeLayer("forecast-choropleth-fill");
       if (m.getSource("districts")) m.removeSource("districts");
       addDistrictsLayer(m);
       setDistrictsVisibility(m, districtsVisibleRef.current);
-      // Forecast choropleth — фон-fill под линиями районов. Гэйтится
-      // через useLayerVisibility, по умолчанию скрыт. Эффект ниже
-      // следит за зустанд-стором и flip'ит visibility + feature-state.
-      addForecastChoroplethLayer(m);
-
-      // Click-into-district: тап по выкрашенному району переводит
-      // useMapMode в режим 'district', что переключает Sidebar на
-      // SidebarDistrict + (в будущем) поднимет flyTo. Используем
-      // `useMapMode.getState()` потому что MapLibre-обработчики живут
-      // вне React-tree (как и popup, см. fix C2 в спеке).
-      m.on("click", FORECAST_FILL_LAYER_ID, (e) => {
-        const feat = e.features?.[0];
-        if (!feat || feat.id == null) return;
-        const id = typeof feat.id === "number" ? feat.id : Number(feat.id);
-        if (!Number.isFinite(id)) return;
-        const props = (feat.properties ?? {}) as Record<string, unknown>;
-        const osmRelId = props.osm_rel_id;
-        const slug = osmRelId != null ? String(osmRelId) : String(id);
-        useMapMode.getState().setDistrict(id, slug);
-      });
-      m.on("mouseenter", FORECAST_FILL_LAYER_ID, () => {
-        m.getCanvas().style.cursor = "pointer";
-      });
-      m.on("mouseleave", FORECAST_FILL_LAYER_ID, () => {
-        m.getCanvas().style.cursor = "";
-      });
     }
     // User spots — приватный слой, появляется только когда юзер залогинен
     // и есть хоть одно место. После basemap switch'а нужно re-add'нуть
@@ -662,49 +626,6 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     else m.once("idle", apply);
   }, [userSpots]);
 
-  // ─── Forecast choropleth controller ───────────────────────────────
-  // Subscribes to the new zustand stores (Phase 2 path) without
-  // disturbing the existing useState-driven layer wiring. Когда юзер
-  // включает forecast в обзор-сайдбаре или попадает на overview-mode
-  // главной — layer становится виден; на смене даты — feature-state
-  // переписывается без re-fetch'а тайлов.
-  const forecastChoroplethVisible = useLayerVisibility(
-    (s) => s.visible.forecastChoropleth,
-  );
-  const forecastDate = useForecastDate((s) => s.selected);
-  const { rows: forecastRows } = useForecastDistricts(forecastDate);
-  useEffect(() => {
-    const m = map.current;
-    if (!m) return;
-    const apply = () => {
-      // Если districts ещё не «загружены» (пользователь не дёргал чип
-      // «Районы» в LayerGrid) — но forecastChoropleth просят показать
-      // (это случается на /, MapHomePage эффект включает его сам), —
-      // лениво поднимаем districts-layer. Это и добавит
-      // `forecast-choropleth-fill` (см. addForecastChoroplethLayer
-      // под basemap-switch handler'ом). Без этого вход на главную = пустая
-      // карта без раскрашенных районов.
-      if (forecastChoroplethVisible && !m.getLayer("forecast-choropleth-fill")) {
-        if (!districtsLoadedRef.current) {
-          districtsLoadedRef.current = true;
-          setDistrictsLoaded(true);
-          districtsVisibleRef.current = true;
-          setDistrictsVisible(true);
-          addDistrictsLayer(m);
-          setDistrictsVisibility(m, true);
-        }
-        addForecastChoroplethLayer(m);
-      }
-      if (!m.getLayer("forecast-choropleth-fill")) return;
-      setForecastChoroplethVisibility(m, forecastChoroplethVisible);
-      if (forecastChoroplethVisible && forecastRows) {
-        applyForecastIndices(m, forecastRows);
-      }
-    };
-    if (m.isStyleLoaded()) apply();
-    else m.once("idle", apply);
-  }, [forecastChoroplethVisible, forecastRows]);
-
   // ─── Store → map controller (LayerGrid driving) ──────────────────
   // SidebarDistrict + LayerGrid пишут желаемое состояние слоёв в
   // useLayerVisibility. Эти эффекты сводят store к существующим
@@ -762,60 +683,6 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
       storeUserSpotsVisible ? "visible" : "none",
     );
   }, [storeUserSpotsVisible]);
-
-  // ─── flyTo on district select ────────────────────────────────────
-  // Когда useMapMode переключился в 'district' — летим на bbox района.
-  // Источник bbox — features из source 'districts' (тот же GeoJSON, что
-  // питает choropleth и district lines). 1.2s easing — комфортная
-  // длительность по spec'у.
-  const selectedDistrictId = useMapMode((s) => s.districtId);
-  useEffect(() => {
-    const m = map.current;
-    if (!m || selectedDistrictId == null) return;
-    const fly = () => {
-      const src = m.getSource("districts");
-      if (!src || !("_data" in src) || !m.isSourceLoaded("districts")) {
-        // Source not yet hydrated — schedule one retry on next idle.
-        m.once("idle", fly);
-        return;
-      }
-      // querySourceFeatures requires the layer to be there; districts-line
-      // exists from addDistrictsLayer. Match feature by id.
-      const feats = m.querySourceFeatures("districts", {
-        sourceLayer: undefined,
-      });
-      const target = feats.find((f) => f.id === selectedDistrictId);
-      if (!target || target.geometry.type !== "MultiPolygon"
-          && target.geometry.type !== "Polygon") return;
-      // Compute bbox manually (lightweight, avoids @turf/bbox).
-      let minLng = Infinity, minLat = Infinity;
-      let maxLng = -Infinity, maxLat = -Infinity;
-      const visit = (rings: number[][][]) => {
-        for (const ring of rings) {
-          for (const [lng, lat] of ring) {
-            if (lng < minLng) minLng = lng;
-            if (lat < minLat) minLat = lat;
-            if (lng > maxLng) maxLng = lng;
-            if (lat > maxLat) maxLat = lat;
-          }
-        }
-      };
-      if (target.geometry.type === "Polygon") {
-        visit(target.geometry.coordinates);
-      } else {
-        for (const poly of target.geometry.coordinates) visit(poly);
-      }
-      if (!isFinite(minLng) || !isFinite(maxLng)) return;
-      m.fitBounds(
-        [
-          [minLng, minLat],
-          [maxLng, maxLat],
-        ],
-        { padding: 60, duration: 1200, maxZoom: 11 },
-      );
-    };
-    fly();
-  }, [selectedDistrictId]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

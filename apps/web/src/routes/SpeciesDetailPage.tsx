@@ -287,14 +287,6 @@ function SpeciesDetailView({ data }: { data: SpeciesDetail }) {
             </section>
           ) : null}
 
-          <div className={styles.ctaWrap}>
-            <Link
-              to={`/?species=${encodeURIComponent(data.slug)}`}
-              className={styles.cta}
-            >
-              Открыть на карте →
-            </Link>
-          </div>
         </div>
       </div>
     </Container>

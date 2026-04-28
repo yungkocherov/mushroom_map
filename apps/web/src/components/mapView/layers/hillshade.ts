@@ -20,7 +20,13 @@ export function addHillshadeLayer(m: Map): void {
   }
   // Вставляем над базовой картой, но под forest/water/oopt —
   // рельеф должен быть фоном, а не перекрывать тематические данные.
-  const beforeId = findFirstSymbolLayerId(m);
+  // Раньше использовали beforeId=findFirstSymbolLayerId, но при текущем
+  // порядке добавления (forest до hillshade) это клало рельеф ПОВЕРХ леса.
+  // Теперь явно ищем самый «нижний» из тематических слоёв и встаём перед ним.
+  const thematicBefore = ["forest-fill", "water-fill", "oopt-fill", "wetland-fill",
+    "felling-fill", "protective-fill", "soil-fill", "waterway-line"]
+    .find((id) => m.getLayer(id));
+  const beforeId = thematicBefore ?? findFirstSymbolLayerId(m);
   // RGBA PNG с dodge-and-burn: альфа уже несёт информацию о крутизне.
   // Поэтому opacity держим высоко — само PNG уже «знает», где не рисовать.
   m.addLayer({

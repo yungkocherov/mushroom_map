@@ -26,25 +26,10 @@ import { MapView } from "../components/MapView";
 import { SaveSpotModal } from "../components/SaveSpotModal";
 import { Sidebar } from "../components/sidebar/Sidebar";
 import { useAuth } from "../auth/useAuth";
-import { useLayerVisibility } from "../store/useLayerVisibility";
 import styles from "./MapHomePage.module.css";
 
 
 export function MapHomePage() {
-  // ── Forecast choropleth visible by default on the home overview ──
-  // Default in store is `false` (так договорено в useLayerVisibility);
-  // home — единственное место в Phase 2, где он включён сам собой. На
-  // /map (legacy) и /map/:district решает sidebar/layer-grid.
-  const setLayerVisible = useLayerVisibility((s) => s.setVisible);
-  useEffect(() => {
-    setLayerVisible("forecastChoropleth", true);
-    return () => {
-      // Не восстанавливаем явно — пользователь мог сам выключить через
-      // LayerGrid; покинул главную → state остаётся как был. Phase 3
-      // может добавить «session-scoped layer state» если станет нужно.
-    };
-  }, [setLayerVisible]);
-
   // ── Optional ?species=<slug> context (carried over from old /map) ──
   const [speciesName, setSpeciesName] = useState<string | null>(null);
   const speciesSlug =
@@ -116,11 +101,40 @@ export function MapHomePage() {
     return () => window.removeEventListener("mm:save-spot", onSaveSpot as EventListener);
   }, [status, navigate]);
 
+  // ── Collapsible sidebar ────────────────────────────────────────────
+  // Persisted, default expanded. Toggle висит как полоска-ручка на границе
+  // sidebar↔map; в свёрнутом состоянии пилюля «Показать панель» лежит на
+  // карте сверху-слева.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem("mm.sidebarCollapsed") === "1";
+  });
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((v) => {
+      const next = !v;
+      try {
+        window.localStorage.setItem("mm.sidebarCollapsed", next ? "1" : "0");
+      } catch { /* private mode */ }
+      return next;
+    });
+  }, []);
+
   return (
-    <div className={styles.shell}>
-      <Sidebar className={styles.sidebar} />
+    <div
+      className={`${styles.shell}${sidebarCollapsed ? ` ${styles.shellCollapsed}` : ""}`}
+    >
+      {!sidebarCollapsed && <Sidebar className={styles.sidebar} />}
 
       <div className={styles.mapPane}>
+        <button
+          type="button"
+          className={styles.sidebarToggle}
+          onClick={toggleSidebar}
+          aria-label={sidebarCollapsed ? "Показать боковую панель" : "Скрыть боковую панель"}
+          title={sidebarCollapsed ? "Показать панель" : "Скрыть панель"}
+        >
+          {sidebarCollapsed ? "›" : "‹"}
+        </button>
         <MapView userSpots={spots} />
         {speciesName && speciesSlug && (
           <div className={styles.contextChip} role="status" aria-live="polite">

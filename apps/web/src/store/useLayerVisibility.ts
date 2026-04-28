@@ -59,8 +59,8 @@ const DEFAULT_VISIBLE: Record<LayerKey, boolean> = {
   protective: true,
   soil: false, // профили почв — heavy slot, скрыт по умолчанию
   hillshade: true,
-  districts: true,
-  forecastChoropleth: false, // включается на /forecast и в district mode
+  districts: false, // отключено: район-как-логика убран (см. iter 2026-04-28)
+  forecastChoropleth: false,
   userSpots: true,
 };
 

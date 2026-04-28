@@ -28,27 +28,30 @@ export function addPlaceLabelsLayer(m: Map): void {
     type: "symbol",
     source: "places",
     minzoom: 4,
+    // Зум-фильтр расширен после регрессии 2026-04: town виден с зума 5,
+    // village/locality — с зума 7 (раньше village появлялась только с 8).
+    // На «далёком» зуме (5–7) теперь видна вся середина иерархии — города,
+    // посёлки городского типа, крупные сёла.
     filter: [
       "step", ["zoom"],
       ["in", ["get", "place"], ["literal", ["city"]]],
-      6,  ["in", ["get", "place"], ["literal", ["city", "town"]]],
-      8,  ["in", ["get", "place"], ["literal", ["city", "town", "village", "suburb", "locality"]]],
+      5,  ["in", ["get", "place"], ["literal", ["city", "town"]]],
+      7,  ["in", ["get", "place"], ["literal", ["city", "town", "village", "suburb", "locality"]]],
       10, true,
     ],
     layout: {
       "text-field": ["get", "name"],
       "text-size": [
         "interpolate", ["linear"], ["zoom"],
-        4, ["match", ["get", "place"], ["city"], 11, ["town"], 9, 7],
-        8, ["match", ["get", "place"], ["city"], 14, ["town"], 12, 10],
-        12, ["match", ["get", "place"], ["city"], 16, ["town"], 14, 12],
+        4, ["match", ["get", "place"], ["city"], 12, ["town"], 11, 9],
+        8, ["match", ["get", "place"], ["city"], 15, ["town"], 13, 11],
+        12, ["match", ["get", "place"], ["city"], 17, ["town"], 15, 13],
       ],
       "text-font": getVersatilesFonts(),
       "text-anchor": "center",
       "text-max-width": 8,
       "text-allow-overlap": false,
       "text-padding": 2,
-      // priority=0 (city) побеждает в collision detection над priority=7 (hamlet)
       "symbol-sort-key": ["get", "priority"],
     },
     paint: {
