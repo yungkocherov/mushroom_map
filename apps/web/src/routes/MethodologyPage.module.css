@@ -1,3 +1,12 @@
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--moss);
+  margin: 0 0 var(--space-2);
+}
+
 .h1 {
   margin: 0 0 var(--space-4);
   font-family: var(--font-display);
@@ -15,18 +24,46 @@
   margin: 0 0 var(--space-7);
 }
 
+.sections {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-7) var(--space-6);
+}
+
+@media (max-width: 720px) {
+  .sections {
+    grid-template-columns: 1fr;
+    gap: var(--space-6);
+  }
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
 .list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
 }
 
 .item {
-  border-bottom: 1px solid var(--rule);
-  padding-bottom: var(--space-4);
+  border-bottom: 1px dotted var(--rule);
+  padding-bottom: var(--space-3);
 }
 .item:last-child {
   border-bottom: none;
@@ -36,7 +73,7 @@
   display: block;
   text-decoration: none;
   color: inherit;
-  transition: transform 0.15s;
+  transition: color 0.15s;
 }
 .link:hover {
   color: var(--forest-deep);
@@ -51,31 +88,54 @@
 }
 
 .title {
-  margin: 0 0 var(--space-2);
-  font-family: var(--font-display);
-  font-size: var(--fs-h2);
-  font-weight: 600;
+  margin: 0 0 2px;
+  font-family: var(--font-body);
+  font-size: var(--fs-body);
+  font-weight: 500;
   color: var(--ink);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
   transition: color 0.15s;
 }
 
 .abstract {
   margin: 0 0 var(--space-2);
-  font-size: var(--fs-body);
+  font-size: var(--fs-sm);
   line-height: var(--lh-normal);
   color: var(--ink-dim);
 }
 
 .meta {
   display: flex;
-  gap: var(--space-4);
+  gap: var(--space-3);
   font-size: var(--fs-xs);
   color: var(--ink-faint);
+  font-family: var(--font-mono);
 }
 
 .metaItem {
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+}
+
+.placeholder {
+  font-size: var(--fs-sm);
+  color: var(--ink-faint);
+  font-style: italic;
+  margin: 0;
+}
+
+.workInProgress {
+  display: inline-block;
+  margin-left: var(--space-2);
+  padding: 1px 6px;
+  border: 1px solid var(--caution);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--caution);
+  background: rgba(192, 122, 44, 0.08);
+  vertical-align: middle;
 }

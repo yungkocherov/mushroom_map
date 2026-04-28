@@ -12,11 +12,26 @@
 
 import type { ComponentType } from "react";
 
+/** 4 рубрики каталога /methodology по spec'у redesign-2026-04. */
+export type MethodologyCategory =
+  | "Источники данных"
+  | "Модель прогноза"
+  | "О проекте"
+  | "Юридическое";
+
+export const METHODOLOGY_CATEGORIES: MethodologyCategory[] = [
+  "Источники данных",
+  "Модель прогноза",
+  "О проекте",
+  "Юридическое",
+];
+
 interface MdxModule {
   default: ComponentType<Record<string, unknown>>;
   frontmatter: {
     title: string;
     slug: string;
+    category?: MethodologyCategory;
     abstract?: string;
     reading_minutes?: number;
     updated?: string;
@@ -28,6 +43,7 @@ const modules = import.meta.glob<MdxModule>("./*.mdx", { eager: true });
 export interface MethodologyArticle {
   slug: string;
   title: string;
+  category: MethodologyCategory;
   abstract?: string;
   reading_minutes?: number;
   updated?: string;
@@ -37,6 +53,9 @@ export interface MethodologyArticle {
 export const articles: MethodologyArticle[] = Object.values(modules).map((m) => ({
   slug: m.frontmatter.slug,
   title: m.frontmatter.title,
+  // Без category в frontmatter article попадает в «Источники данных» —
+  // безопасный default для технических статей.
+  category: m.frontmatter.category ?? "Источники данных",
   abstract: m.frontmatter.abstract,
   reading_minutes: m.frontmatter.reading_minutes,
   updated: m.frontmatter.updated,
