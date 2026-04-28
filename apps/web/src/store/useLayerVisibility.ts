@@ -35,10 +35,14 @@ export type LayerKey =
 // правки в обоих файлах.
 export type ForestColorMode = "species" | "bonitet" | "age_group";
 
+export type BaseMapMode = "osm" | "scheme" | "satellite" | "hybrid";
+
 export interface LayerVisibilityState {
   visible: Record<LayerKey, boolean>;
   loaded: Record<LayerKey, boolean>;
   forestColorMode: ForestColorMode;
+  baseMap: BaseMapMode;
+  setBaseMap: (mode: BaseMapMode) => void;
   /** Текст ошибки, отображаемый красным toast'ом ~5 сек. null = тоста нет. */
   errorMsg: string | null;
   /** Тост «спутник может не загружаться при VPN». 'visible' → 'fading' (800ms) → 'hidden'. */
@@ -90,6 +94,8 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
   visible: DEFAULT_VISIBLE,
   loaded: DEFAULT_LOADED,
   forestColorMode: "species",
+  baseMap: "scheme",
+  setBaseMap: (mode) => set({ baseMap: mode }),
   errorMsg: null,
   vpnToast: "hidden",
   forestHint: "hidden",
