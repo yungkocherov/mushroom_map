@@ -18,6 +18,7 @@ import {
 import { useMapLayers } from "./mapView/hooks/useMapLayers";
 import { useMapInstance, parseInitialView } from "./mapView/hooks/useMapInstance";
 import { useMapPopup } from "./mapView/hooks/useMapPopup";
+import { useMapUrl } from "./mapView/hooks/useMapUrl";
 
 import {
   useLayerVisibility,
@@ -71,8 +72,9 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
 
   const { reapplyAll } = useMapLayers(map);
   useMapPopup(map);
+  useMapUrl(map);
 
-  // ─── Map handlers (mousemove cursor, moveend URL sync) ───────────────
+  // ─── Cursor tracking ─────────────────────────────────────────────────
   useEffect(() => {
     const m = map.current;
     if (!m) return;
@@ -81,20 +83,8 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
       setCursor({ lat: e.lngLat.lat, lon: e.lngLat.lng });
     m.on("mousemove", onMouseMove);
 
-    const syncUrl = () => {
-      const { lat, lng } = m.getCenter();
-      const z = Math.round(m.getZoom() * 10) / 10;
-      const url = new URL(window.location.href);
-      url.searchParams.set("lat", lat.toFixed(5));
-      url.searchParams.set("lon", lng.toFixed(5));
-      url.searchParams.set("z", String(z));
-      history.replaceState(null, "", url.toString());
-    };
-    m.on("moveend", syncUrl);
-
     return () => {
       m.off("mousemove", onMouseMove);
-      m.off("moveend", syncUrl);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
