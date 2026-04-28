@@ -49,6 +49,9 @@ export interface LayerVisibilityState {
   shareToast: boolean;
   /** Бейдж активного species-фильтра. null = бейджа нет. */
   speciesFilterLabel: string | null;
+  /** Активный species-фильтр для forest-fill: список slug'ов или null = без фильтра. */
+  speciesFilter: string[] | null;
+  setSpeciesFilter: (slugs: string[] | null, label: string | null) => void;
 
   setVisible: (key: LayerKey, value: boolean) => void;
   toggleVisible: (key: LayerKey) => void;
@@ -110,4 +113,11 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
   setForestHint: (state) => set({ forestHint: state }),
   setShareToast: (value) => set({ shareToast: value }),
   setSpeciesFilterLabel: (label) => set({ speciesFilterLabel: label }),
+
+  speciesFilter: null,
+  setSpeciesFilter: (slugs, label) =>
+    set({
+      speciesFilter: slugs && slugs.length > 0 ? slugs : null,
+      speciesFilterLabel: label,
+    }),
 }));
