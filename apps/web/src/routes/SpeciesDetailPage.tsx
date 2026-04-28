@@ -234,10 +234,7 @@ function SpeciesDetailView({ data }: { data: SpeciesDetail }) {
                     <span className={styles.forestName}>
                       {FOREST_LABEL[f.forest_type] ?? f.forest_type}
                     </span>
-                    <span
-                      className={styles.affinityBar}
-                      aria-label={`affinity ${Math.round(f.affinity * 100)}%`}
-                    >
+                    <span className={styles.affinityBar} aria-hidden="true">
                       <span
                         className={styles.affinityFill}
                         style={{ width: `${Math.round(f.affinity * 100)}%` }}

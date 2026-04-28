@@ -672,15 +672,15 @@ Verification: `npx tsc --noEmit` clean; `npm run build` green (362 KB gzip, unde
 - [x] 3.j — `authors.mdx` motivation rewrite + pre-prod-deploy checklist (commit `d0b6e82`)
 - [x] 3.k — CF Pages CI: override commit-message с SHA (избегаем 8000111 на не-ASCII), commit `f22eeb5`
 - [x] 3.l — `/spots` two-pane: SpotsMiniMap + 5-color filter + hover/click sync (commit `ca1188d`)
+- [x] 3.m — a11y suite (`@axe-core/playwright`): 5 кейсов (species/list, species/detail, methodology/hub, methodology/article, /spots auth-redirect) — 0 serious/critical violations. Подняли контраст токенов: `--ink-dim` `#6b6a5e → #4f4e45` (7.5:1), `--ink-faint` `#a5a295 → #5e5d52` (5.8:1), `--moss` `#7a9b64 → #4d6b40` (5.4:1 paper / 6.1:1 white), `--caution` `#c07a2c → #855410` (5.7:1 paper / 6.4:1 white). `<span aria-label>` на affinity-bar заменён на `aria-hidden="true"` (значение видно как соседний `<span>{f.affinity.toFixed(2)}</span>`).
+- [x] 3.n — broken-link check (`tests/links.spec.ts`): 13 канонических URL отдают <400 + рендерят не-NotFound; SPA-fallback подтверждён; динамический crawl ключевых страниц (`/`, `/species`, `/species/:slug`, `/methodology`, `/methodology/:slug`) → собранные `<a href>` валидируются `request.get()`. Linkinator оказался бесполезен на client-rendered SPA (vite отдаёт пустой index.html); удалён из deps.
+- [x] 3.o — visual regression (`tests/visual.spec.ts`): 8 snapshot'ов (4 страницы × desktop/mobile) с `maxDiffPixelRatio: 0.02`. Baseline в `tests/visual.spec.ts-snapshots/*-chromium-win32.png` — пока только Windows; `PLAYWRIGHT_SKIP_VISUAL=1` гасит на CI, пока не соберём Linux baseline.
 
 **Still outstanding from Phase 3 spec (deferred):**
 - Hero photos: `apps/web/public/photos/` пусто, `content/photos.json` — scaffold; пользователь подберёт изображения с CC-лицензией из категорий в `apps/web/src/content/photos-candidates.md` отдельной итерацией.
-- `axe-playwright` a11y suite на /species, /species/:slug, /spots, /methodology, /methodology/:slug — спека требует 0 violations, можно добавить в фазу polish.
-- `linkinator` broken-link check на staging.
-- Visual regression snapshots (Playwright `toHaveScreenshot`) для desktop+mobile.
 - MapView decomposition + BottomSheet wire-in (см. Phase 2 outstanding выше — переносится в phase 2.5 cleanup).
 
-Verification: tsc clean; full Playwright 29 passed; prod build 379 KB gzip (под бюджетом); CF Pages deploy зелёный.
+Verification: tsc clean; full Playwright 57 passed (was 29 — +5 a11y, +15 links, +8 visual); CF Pages deploy зелёный.
 
 ---
 

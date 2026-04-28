@@ -17,14 +17,14 @@
   --paper:        #f5f1e6;  /* page background, warm ivory */
   --paper-rise:   #fcf9f0;  /* cards, raised surfaces */
   --ink:          #20241e;  /* body text, warm near-black */
-  --ink-dim:      #6b6a5e;  /* captions, secondary text */
-  --ink-faint:    #a5a295;  /* placeholders, tertiary */
+  --ink-dim:      #4f4e45;  /* captions, secondary text — AA 7.50:1 vs paper */
+  --ink-faint:    #5e5d52;  /* tertiary — AA 5.81:1 vs paper, 5.09:1 on birch */
   --rule:         #d8d2c0;  /* hairlines, card borders */
 
   /* ─── Palette — forest primary ──────────────────────────────────── */
   --forest:       #2d5a3a;  /* primary accent, buttons, links */
   --forest-deep:  #1a3a24;  /* hover state */
-  --moss:         #7a9b64;  /* edible badge, soft secondary */
+  --moss:         #4d6b40;  /* edible badge — AA 5.38:1 paper / 6.07:1 white */
   --birch:        #e8e2d1;  /* hover bg for cards on paper */
 
   /* ─── Palette — chanterelle CTA (use sparingly — ONE per viewport) ─ */
@@ -33,7 +33,7 @@
 
   /* ─── Palette — status ──────────────────────────────────────────── */
   --danger:       #8b2a2a;  /* toxic species, safety */
-  --caution:      #c07a2c;  /* conditional-edible warnings */
+  --caution:      #855410;  /* conditional-edible — AA 5.71:1 paper / 6.44:1 white */
 
   /* ─── Forecast index scale (0–5, 5 buckets) ─────────────────────── */
   /* Semantic, not viridis. Cool dark green = forest is here, mushrooms
@@ -97,8 +97,8 @@
   --paper:        #171913;
   --paper-rise:   #1f221b;
   --ink:          #e4dfd0;
-  --ink-dim:      #93907f;
-  --ink-faint:    #5f5d52;
+  --ink-dim:      #b0ad99;  /* AA 7.99:1 vs paper-dark */
+  --ink-faint:    #969381;  /* AA 5.66:1 vs paper-dark */
   --rule:         #2b2e23;
 
   --forest:       #72b07e;  /* lightened for WCAG AA on dark */
@@ -136,8 +136,8 @@
     --paper:        #171913;
     --paper-rise:   #1f221b;
     --ink:          #e4dfd0;
-    --ink-dim:      #93907f;
-    --ink-faint:    #5f5d52;
+    --ink-dim:      #b0ad99;
+    --ink-faint:    #969381;
     --rule:         #2b2e23;
 
     --forest:       #72b07e;
