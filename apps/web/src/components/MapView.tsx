@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 
 import { useIsMobile } from "../lib/useIsMobile";
-import { MapControls } from "./MapControls";
 import { Legend } from "./Legend";
 import { SearchBar } from "./SearchBar";
 
@@ -14,6 +13,9 @@ import { useMapPopup } from "./mapView/hooks/useMapPopup";
 import { useMapUrl } from "./mapView/hooks/useMapUrl";
 import { useUserSpotsSync } from "./mapView/hooks/useUserSpotsSync";
 import { useBaseMap } from "./mapView/hooks/useBaseMap";
+import { BaseMapPicker } from "./mapView/BaseMapPicker";
+import { LayerGrid } from "./mapView/LayerGrid";
+import { ShareButton } from "./mapView/ShareButton";
 
 import {
   useLayerVisibility,
@@ -37,12 +39,9 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
 
   // ─── Store subscriptions ──────────────────────────────────────────
   const baseMap = useLayerVisibility((s) => s.baseMap);
-  const setBaseMap = useLayerVisibility((s) => s.setBaseMap);
   const visible = useLayerVisibility((s) => s.visible);
   const loaded = useLayerVisibility((s) => s.loaded);
-  const toggleVisible = useLayerVisibility((s) => s.toggleVisible);
   const forestColorMode = useLayerVisibility((s) => s.forestColorMode);
-  const setForestColorMode = useLayerVisibility((s) => s.setForestColorMode);
   const setSpeciesFilter = useLayerVisibility((s) => s.setSpeciesFilter);
   const errorMsg = useLayerVisibility((s) => s.errorMsg);
   const vpnToast = useLayerVisibility((s) => s.vpnToast);
@@ -50,7 +49,6 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   const forestHint = useLayerVisibility((s) => s.forestHint);
   const setForestHint = useLayerVisibility((s) => s.setForestHint);
   const shareToast = useLayerVisibility((s) => s.shareToast);
-  const setShareToast = useLayerVisibility((s) => s.setShareToast);
   const speciesFilterLabel = useLayerVisibility((s) => s.speciesFilterLabel);
 
   const initialView = useMemo(() => parseInitialView(), []);
@@ -138,22 +136,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     }
   }, [loaded.forest, setForestHint]);
 
-  // ─── Share + species filter callbacks ─────────────────────────────
-  const handleShare = useCallback(() => {
-    const m = map.current;
-    if (!m) return;
-    const { lat, lng } = m.getCenter();
-    const z = Math.round(m.getZoom() * 10) / 10;
-    const url = new URL(window.location.href);
-    url.searchParams.set("lat", lat.toFixed(5));
-    url.searchParams.set("lon", lng.toFixed(5));
-    url.searchParams.set("z", String(z));
-    void navigator.clipboard.writeText(url.toString()).then(() => {
-      setShareToast(true);
-      setTimeout(() => setShareToast(false), 2000);
-    });
-  }, [setShareToast]);
-
+  // ─── Species filter callback ──────────────────────────────────────
   const handleFlyTo = useCallback((lat: number, lon: number, zoom = 13) => {
     map.current?.flyTo({ center: [lon, lat], zoom, speed: 1.5 });
   }, []);
@@ -169,46 +152,9 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} className="map-root" />
 
-      <MapControls
-        baseMap={baseMap}
-        onBaseMapChange={setBaseMap}
-        forestVisible={visible.forest}
-        forestLoaded={loaded.forest}
-        onForestToggle={() => toggleVisible("forest")}
-        forestColorMode={forestColorMode}
-        onForestColorMode={setForestColorMode}
-        waterVisible={visible.water}
-        waterLoaded={loaded.water}
-        onWaterToggle={() => toggleVisible("water")}
-        ooptVisible={visible.oopt}
-        ooptLoaded={loaded.oopt}
-        onOoptToggle={() => toggleVisible("oopt")}
-        roadsVisible={visible.roads}
-        roadsLoaded={loaded.roads}
-        onRoadsToggle={() => toggleVisible("roads")}
-        wetlandVisible={visible.wetland}
-        wetlandLoaded={loaded.wetland}
-        onWetlandToggle={() => toggleVisible("wetland")}
-        fellingVisible={visible.felling}
-        fellingLoaded={loaded.felling}
-        onFellingToggle={() => toggleVisible("felling")}
-        protectiveVisible={visible.protective}
-        protectiveLoaded={loaded.protective}
-        onProtectiveToggle={() => toggleVisible("protective")}
-        soilVisible={visible.soil}
-        soilLoaded={loaded.soil}
-        onSoilToggle={() => toggleVisible("soil")}
-        waterwayVisible={visible.waterway}
-        waterwayLoaded={loaded.waterway}
-        onWaterwayToggle={() => toggleVisible("waterway")}
-        hillshadeVisible={visible.hillshade}
-        hillshadeLoaded={loaded.hillshade}
-        onHillshadeToggle={() => toggleVisible("hillshade")}
-        districtsVisible={visible.districts}
-        districtsLoaded={loaded.districts}
-        onDistrictsToggle={() => toggleVisible("districts")}
-        onShare={handleShare}
-      />
+      <BaseMapPicker />
+      <LayerGrid layout={mobile ? "strip" : "grid"} />
+      <ShareButton mapRef={map} />
 
       <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={handleSpeciesFilter} />
 
