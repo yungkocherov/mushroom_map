@@ -10,8 +10,8 @@
  * следующий шаг (требует MapView surgery, не делаем сейчас).
  */
 
-import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   createSpot,
   deleteSpot,
@@ -21,6 +21,7 @@ import type { SpotColor, UserSpot } from "@mushroom-map/types";
 import { Container } from "../components/layout/Container";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
+import { SpotsMiniMap } from "../components/SpotsMiniMap";
 import { useAuth } from "../auth/useAuth";
 import { SPOT_COLOR_OPTIONS } from "../lib/spotColors";
 import { usePageTitle } from "../lib/usePageTitle";
@@ -34,6 +35,7 @@ export function CabinetSpotsPage() {
     "Приватный список грибных мест. Видишь только ты, ничего не публикуется.",
   );
 
+  const navigate = useNavigate();
   const { user, getAccessToken } = useAuth();
   const [spots, setSpots] = useState<UserSpot[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +47,26 @@ export function CabinetSpotsPage() {
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Фильтр по цвету маркера. Пустой Set = все цвета (значение «всё включено»).
+  const [colorFilter, setColorFilter] = useState<Set<SpotColor>>(new Set());
+  // Подсветка точки на мини-карте при hover'е по строке списка.
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
+
+  const visibleSpots = useMemo<UserSpot[]>(() => {
+    if (!spots) return [];
+    if (colorFilter.size === 0) return spots;
+    return spots.filter((s) => colorFilter.has(s.color));
+  }, [spots, colorFilter]);
+
+  const toggleColorFilter = (c: SpotColor) => {
+    setColorFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(c)) next.delete(c);
+      else next.add(c);
+      return next;
+    });
+  };
 
   const refresh = async () => {
     const tok = getAccessToken();
@@ -237,6 +259,38 @@ export function CabinetSpotsPage() {
         <p className={prose.p} style={{ color: "var(--ink-dim)" }}>Загрузка…</p>
       )}
 
+      {spots && spots.length > 0 && (
+        <div className={styles.filterRow} role="group" aria-label="Фильтр по цвету">
+          <span className={styles.filterLabel}>Цвет:</span>
+          {SPOT_COLOR_OPTIONS.map((c) => {
+            const active = colorFilter.size === 0 || colorFilter.has(c.value);
+            return (
+              <button
+                key={c.value}
+                type="button"
+                className={styles.filterChip}
+                data-active={active}
+                onClick={() => toggleColorFilter(c.value)}
+                aria-pressed={colorFilter.has(c.value)}
+                title={c.label}
+              >
+                <span className={styles.filterDot} style={{ background: c.cssVar }} />
+                <span>{c.label}</span>
+              </button>
+            );
+          })}
+          {colorFilter.size > 0 && (
+            <button
+              type="button"
+              className={styles.filterReset}
+              onClick={() => setColorFilter(new Set())}
+            >
+              Сбросить
+            </button>
+          )}
+        </div>
+      )}
+
       {spots && spots.length === 0 && (
         <p className={prose.p} style={{ color: "var(--ink-dim)" }}>
           Пока пусто. Добавьте первое место сверху.
@@ -244,43 +298,64 @@ export function CabinetSpotsPage() {
       )}
 
       {spots && spots.length > 0 && (
-        <ul className={styles.list}>
-          {spots.map((s) => {
-            const colorCss = SPOT_COLOR_OPTIONS.find((c) => c.value === s.color)?.cssVar ?? "var(--forest)";
-            return (
-              <li key={s.id} className={styles.row}>
-                <span className={styles.markerDot} style={{ background: colorCss }} aria-hidden="true" />
-                <div className={styles.rowBody}>
-                  <div className={styles.rowTitle}>
-                    <Link to={`/spots/${s.id}`} className={styles.rowTitleLink}>
-                      {s.name}
-                    </Link>
-                  </div>
-                  {s.note && <div className={styles.rowNote}>{s.note}</div>}
-                  <div className={styles.rowMeta}>
-                    <Link
-                      to={`/?lat=${s.lat}&lon=${s.lon}&z=14`}
-                      title="Открыть на карте"
-                    >
-                      {s.lat.toFixed(5)}, {s.lon.toFixed(5)}
-                    </Link>
-                    {" · "}
-                    <span>{new Date(s.created_at).toLocaleDateString("ru-RU")}</span>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  className={styles.deleteBtn}
-                  onClick={() => void handleDelete(s.id)}
-                  aria-label="Удалить"
-                  title="Удалить"
-                >
-                  ×
-                </button>
+        <div className={styles.pane}>
+          <ul className={styles.list}>
+            {visibleSpots.length === 0 && (
+              <li className={styles.emptyHint}>
+                Под этот фильтр ничего не подходит.
               </li>
-            );
-          })}
-        </ul>
+            )}
+            {visibleSpots.map((s) => {
+              const colorCss = SPOT_COLOR_OPTIONS.find((c) => c.value === s.color)?.cssVar ?? "var(--forest)";
+              return (
+                <li
+                  key={s.id}
+                  className={styles.row}
+                  data-highlighted={highlightedId === s.id}
+                  onMouseEnter={() => setHighlightedId(s.id)}
+                  onMouseLeave={() => setHighlightedId((h) => (h === s.id ? null : h))}
+                >
+                  <span className={styles.markerDot} style={{ background: colorCss }} aria-hidden="true" />
+                  <div className={styles.rowBody}>
+                    <div className={styles.rowTitle}>
+                      <Link to={`/spots/${s.id}`} className={styles.rowTitleLink}>
+                        {s.name}
+                      </Link>
+                    </div>
+                    {s.note && <div className={styles.rowNote}>{s.note}</div>}
+                    <div className={styles.rowMeta}>
+                      <Link
+                        to={`/?lat=${s.lat}&lon=${s.lon}&z=14`}
+                        title="Открыть на большой карте"
+                      >
+                        {s.lat.toFixed(5)}, {s.lon.toFixed(5)}
+                      </Link>
+                      {" · "}
+                      <span>{new Date(s.created_at).toLocaleDateString("ru-RU")}</span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={styles.deleteBtn}
+                    onClick={() => void handleDelete(s.id)}
+                    aria-label="Удалить"
+                    title="Удалить"
+                  >
+                    ×
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <aside className={styles.mapPane} aria-label="Превью на карте">
+            <SpotsMiniMap
+              spots={visibleSpots}
+              highlightedId={highlightedId}
+              onSelect={(id) => navigate(`/spots/${id}`)}
+            />
+          </aside>
+        </div>
       )}
     </Container>
   );
