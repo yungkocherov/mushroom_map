@@ -116,14 +116,17 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      // Каноничный URL — /spots (по spec'у redesign-2026-04). Старые
+      // /cabinet/spots оставлены 301'ом для внешних ссылок и кэша.
       {
-        path: "cabinet/spots",
+        path: "spots",
         element: (
           <ProtectedRoute>
             <CabinetSpotsPage />
           </ProtectedRoute>
         ),
       },
+      { path: "cabinet/spots", element: <Navigate to="/spots" replace /> },
 
       // Legal drafts — линкуется footer, AuthPage, MDX-методология.
       // /legal/privacy и /legal/terms → новые URL под /methodology/{privacy,terms}.

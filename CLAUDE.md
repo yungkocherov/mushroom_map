@@ -48,7 +48,8 @@ old hero+widgets HomePage parked at `/home-legacy` for phase-2.5 cleanup.
 /forecast                → 301 → /
 /species                 → catalog
 /species/:slug           → species detail
-/spots, /spots/:id       → cabinet (auth-gated; will rename from /cabinet/spots)
+/spots                   → cabinet (auth-gated, renamed from /cabinet/spots)
+/cabinet/spots           → 301 → /spots
 /methodology             → hub (umbrella: data sources, model, about, authors, legal)
 /methodology/:slug       → article (forest-data, vk-pipeline, species-registry, about, …)
 /about                   → 301 → /methodology/about

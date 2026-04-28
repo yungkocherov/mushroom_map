@@ -1,5 +1,8 @@
 /**
- * /cabinet/spots — список сохранённых юзером мест с CRUD'ом.
+ * /spots — список сохранённых юзером мест с CRUD'ом. Раньше жил на
+ * /cabinet/spots; redesign-2026-04 переехал в верхний нав-уровень
+ * («Споты» — один из четырёх IA-разделов). /cabinet/spots остался
+ * 301'ом, см. router.tsx.
  *
  * Создание места: форма с name + note + color + lat/lon. Lat/lon можно
  * вписать руками или нажать «Использовать моё положение» — браузерный
@@ -120,14 +123,28 @@ export function CabinetSpotsPage() {
       <nav className={styles.breadcrumbs} aria-label="Хлебные крошки">
         <Link to="/cabinet">Кабинет</Link>
         <span aria-hidden="true">/</span>
-        <span>Сохранённые места</span>
+        <span>Споты</span>
       </nav>
 
-      <h1 className={prose.h1}>Сохранённые места</h1>
+      <p
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--fs-xs)",
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          color: "var(--moss)",
+          margin: "0 0 var(--space-2)",
+        }}
+      >
+        Мои споты
+      </p>
+      <h1 className={prose.h1}>
+        {spots && spots.length > 0
+          ? `${spots.length} сохранённых мест`
+          : "Сохранённые места"}
+      </h1>
       <p className={prose.lead}>
-        Это ваш приватный список — никто кроме вас его не видит и не
-        агрегируется. Можно добавлять прямо здесь по координатам;
-        добавление кликом на карте появится в одной из следующих фаз.
+        Видишь только ты. Никаких агрегаций, ничего не публикуется.
       </p>
 
       <Card>

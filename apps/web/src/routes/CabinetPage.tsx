@@ -59,7 +59,7 @@ export function CabinetPage() {
       <h2 className={styles.h2}>Разделы</h2>
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: "var(--space-3)" }}>
         <li>
-          <Link to="/cabinet/spots" style={{ color: "var(--forest)", textDecoration: "none" }}>
+          <Link to="/spots" style={{ color: "var(--forest)", textDecoration: "none" }}>
             Сохранённые места
           </Link>
           <span style={{ color: "var(--ink-dim)", marginLeft: "var(--space-2)" }}>

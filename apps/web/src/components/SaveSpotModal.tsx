@@ -134,10 +134,10 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
                 Закрыть
               </button>
               <Link
-                to="/cabinet/spots"
+                to="/spots"
                 style={{ ...modalBtnStyle("primary"), textDecoration: "none" }}
               >
-                Открыть кабинет
+                Открыть споты
               </Link>
             </div>
           </>
