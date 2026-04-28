@@ -38,6 +38,7 @@ fi
 echo "Заливаем $TILES_DIR -> r2:$BUCKET"
 rclone sync "$TILES_DIR" "r2:$BUCKET" \
     --include "*.pmtiles" \
+    --include "*.geojson" \
     --progress \
     --transfers 4 \
     --s3-no-check-bucket

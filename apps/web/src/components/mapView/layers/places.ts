@@ -1,13 +1,17 @@
 import type maplibregl from "maplibre-gl";
 import type { Map } from "maplibre-gl";
-import { API_ORIGIN } from "../utils/api";
+import { TILES_BASE } from "../utils/api";
 import { getVersatilesFonts } from "../utils/fonts";
 
 // GeoJSON с населёнными пунктами ЛО из OSM. Маленький файл (~300 KB),
 // загружается один раз. Нужен потому что Versatiles тайлы не содержат
 // place=village/hamlet ниже zoom 12 — layer.minzoom не помогает,
 // если в самих .pbf тайлах данных нет.
-const PLACES_URL = `${API_ORIGIN}/tiles/places.geojson`;
+//
+// Лежит рядом с pmtiles (тот же R2 bucket / VM mount), TILES_BASE его и
+// найдёт. До 2026-04-28 хардкодилось `${API_ORIGIN}/tiles/...`, что в
+// проде давало 404 — API не раздаёт static, тайлы живут на R2.
+const PLACES_URL = `${TILES_BASE}/places.geojson`;
 
 // Зум-фильтр: на далёком зуме видны только города/посёлки, деревни появляются
 // по мере приближения. Без фильтра все 7k точек конкурируют за пространство и
