@@ -65,6 +65,10 @@
   position: relative;
   height: 100%;
   overflow: hidden;
+  /* Жёстко прибиваем к второй колонке: если sidebar схлопнут (display:none),
+     auto-placement иначе утащит mapPane в первую (0px) колонку и карта
+     схлопнется до нуля по ширине. */
+  grid-column: 2;
 }
 
 .contextChip {
@@ -115,5 +119,9 @@
 
   .mapPane {
     min-height: 50vh;
+    /* На мобильном grid-template-rows: auto 1fr (или 0 1fr) — карта всегда
+       во второй строке. */
+    grid-column: 1;
+    grid-row: 2;
   }
 }
