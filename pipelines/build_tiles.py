@@ -120,27 +120,47 @@ def prepare_low_zoom_mask(conn: psycopg.Connection) -> None:
     """Прегенерит forest_3857_low — единую маску леса с buffered ST_Union.
 
     Без этого build_tile_bytes_lowzoom делал бы ST_Union 2M полигонов с
-    1500м буфером per tile (z=5 — 2 тайла на всю ЛО, каждый покрывает
-    весь регион → 2× full-region ST_Union, тайм-аут на 300с).
+    большим буфером per tile (z=5 — 2 тайла на всю ЛО, каждый покрывает
+    весь регион → 2× full-region ST_Union, тайм-аут).
 
     После prepare маска содержит несколько MultiPolygon-частей; per-tile
     запрос на z<=8 — лёгкий ST_Intersection с GIST-индексом.
     """
     conn.execute("DROP TABLE IF EXISTS forest_3857_low")
-    # ST_Buffer перед ST_Union закрывает гэпы (просеки, дренажи).
-    # ST_Dump разбивает MultiPolygon на отдельные части — иначе одна гигантская
-    # геометрия попадает в каждую запись и не индексируется эффективно.
+    # Уникальная одноразовая операция — глобальный statement_timeout (300с)
+    # на ST_Union 2M полигонов недостаточен. Снимаем на время prep,
+    # восстанавливаем после.
+    conn.execute("SET statement_timeout = 0")
+    # ST_Subdivide бьёт полигоны на части ≤256 вершин — после неё ST_Union
+    # работает на меньших частях параллельно и сильно быстрее, чем над
+    # цельными MultiPolygon'ами Рослесхоза.
+    # ST_SnapToGrid(50) скругляет точки до 50м-сетки → схлопывает дубли
+    # вершин и упрощает геометрию (теряет ≪ MVT-пикселя на z<=8).
+    # ST_Buffer закрывает гэпы между выделами (просеки, дренажи).
+    # ST_Dump разбивает финальный MultiPolygon на отдельные строки — иначе
+    # одна гигантская геометрия попадает в каждую запись и не индексируется.
     conn.execute(
         f"""
         CREATE TEMP TABLE forest_3857_low AS
-        SELECT (ST_Dump(
-            ST_Union(ST_Buffer(ST_MakeValid(geom), {LOW_ZOOM_MASK_BUFFER_M}))
-        )).geom AS geom
-        FROM forest_3857
+        WITH simplified AS (
+            SELECT ST_Subdivide(
+                ST_Buffer(
+                    ST_SnapToGrid(ST_MakeValid(geom), 50),
+                    {LOW_ZOOM_MASK_BUFFER_M}
+                ),
+                256
+            ) AS geom
+            FROM forest_3857
+        ),
+        unioned AS (
+            SELECT ST_Union(geom) AS geom FROM simplified
+        )
+        SELECT (ST_Dump(geom)).geom AS geom FROM unioned
         """
     )
     conn.execute("CREATE INDEX idx_forest_3857_low_gix ON forest_3857_low USING GIST (geom)")
     conn.execute("ANALYZE forest_3857_low")
+    conn.execute("SET statement_timeout = '300s'")
 
 
 def build_tile_bytes_lowzoom(
