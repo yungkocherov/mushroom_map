@@ -15,12 +15,22 @@ const OPTIONS: Array<{ id: BaseMapMode; label: string }> = [
   { id: "osm", label: "OSM" },
 ];
 
-export function BaseMapPicker() {
+interface Props {
+  /**
+   * 'floating' (default) — самостоятельный позиционированный блок (legacy).
+   * 'inline' — встраивается внутрь LayerGrid'а, без position/border/shadow.
+   */
+  variant?: "floating" | "inline";
+}
+
+export function BaseMapPicker({ variant = "floating" }: Props = {}) {
   const baseMap = useLayerVisibility((s) => s.baseMap);
   const setBaseMap = useLayerVisibility((s) => s.setBaseMap);
 
+  const wrapClass = variant === "inline" ? styles.inline : styles.wrap;
+
   return (
-    <div className={styles.wrap}>
+    <div className={wrapClass}>
       <div className={styles.label}>Подложка</div>
       <div className={styles.pillWrap} role="group" aria-label="Базовая карта">
         {OPTIONS.map((o) => (

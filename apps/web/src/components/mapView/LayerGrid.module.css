@@ -38,6 +38,15 @@
   margin: 0;
 }
 
+/*
+ * itemFull — `<li>`-обёртка вокруг ForestCard. Чтобы карта леса
+ * растягивалась на обе колонки grid'а, span должен быть на самом
+ * grid item'е, не на вложенном div'е.
+ */
+.grid > .itemFull {
+  grid-column: 1 / -1;
+}
+
 .chip {
   display: flex;
   flex-direction: column;
@@ -150,7 +159,7 @@
   top: 60px;
   left: 12px;
   z-index: 10;
-  width: 240px;
+  width: 300px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(6px);
   border-radius: 8px;
@@ -225,7 +234,7 @@
   background: transparent;
   border: 1px solid var(--rule);
   border-radius: var(--radius-md);
-  padding: 6px 4px;
+  padding: 6px 8px;
   font-size: 11px;
   color: var(--ink-dim);
   cursor: pointer;

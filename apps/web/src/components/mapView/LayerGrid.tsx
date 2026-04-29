@@ -24,6 +24,7 @@ import {
   type ForestColorMode,
 } from "../../store/useLayerVisibility";
 import { useMapShare } from "./hooks/useMapShare";
+import { BaseMapPicker } from "./BaseMapPicker";
 import styles from "./LayerGrid.module.css";
 
 export interface LayerGridProps {
@@ -34,6 +35,8 @@ export interface LayerGridProps {
   floating?: boolean;
   /** Когда true (вместе с floating) — рисует футер с кнопками «Сбросить» / «Поделиться». */
   showFooter?: boolean;
+  /** Когда true — рендерит BaseMapPicker (variant=inline) сверху перед чипами слоёв. */
+  showBasemap?: boolean;
   /** Нужен для useMapShare: «Поделиться» читает center/zoom. */
   mapRef?: React.MutableRefObject<Map | null>;
 }
@@ -53,6 +56,7 @@ export function LayerGrid({
   layout = "grid",
   floating = false,
   showFooter = false,
+  showBasemap = false,
   mapRef,
 }: LayerGridProps) {
   const visible = useLayerVisibility((s) => s.visible);
@@ -129,12 +133,13 @@ export function LayerGrid({
 
   return (
     <div className={`${floating ? styles.floating : ""}${className ? ` ${className}` : ""}`.trim()}>
+      {showBasemap && <BaseMapPicker variant="inline" />}
       <ul
         className={containerClass}
         role="group"
         aria-label="Слои карты"
       >
-        <li className={styles.item}>
+        <li className={`${styles.item} ${styles.itemFull}`}>
           <ForestCard
             forestVisible={visible.forest}
             forestColorMode={forestColorMode}

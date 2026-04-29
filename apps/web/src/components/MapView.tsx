@@ -13,7 +13,6 @@ import { useMapUrl } from "./mapView/hooks/useMapUrl";
 import { useUserSpotsSync } from "./mapView/hooks/useUserSpotsSync";
 import { useBaseMap } from "./mapView/hooks/useBaseMap";
 import { useToastLifecycles } from "./mapView/hooks/useToastLifecycles";
-import { BaseMapPicker } from "./mapView/BaseMapPicker";
 import { LayerGrid } from "./mapView/LayerGrid";
 import { MapOverlays } from "./mapView/MapOverlays";
 import { CursorReadout } from "./mapView/CursorReadout";
@@ -85,8 +84,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} className="map-root" />
 
-      <BaseMapPicker />
-      <LayerGrid layout={mobile ? "strip" : "grid"} floating showFooter mapRef={map} />
+      <LayerGrid layout={mobile ? "strip" : "grid"} floating showFooter showBasemap mapRef={map} />
 
       <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={setSpeciesFilter} />
 

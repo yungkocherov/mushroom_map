@@ -64,3 +64,66 @@
     min-height: 36px;
   }
 }
+
+/*
+ * Inline variant — встраивается в LayerGrid'е (см. LayerGrid.tsx,
+ * showBasemap prop). Без position/border/shadow — родитель уже
+ * floating-блок.
+ */
+.inline {
+  background: transparent;
+  padding: 0;
+  border: none;
+  box-shadow: none;
+  font-family: var(--font-body);
+  font-size: 12px;
+  margin-bottom: var(--space-3);
+}
+
+.inline .label {
+  font-size: var(--fs-xs);
+  color: var(--ink-dim);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.inline .pillWrap {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2px;
+  background: var(--paper-rise);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  width: 100%;
+}
+
+.inline .pill {
+  padding: 6px 4px;
+  font-size: 11px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: transparent;
+  border: none;
+  color: var(--ink-dim);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-body);
+  font-weight: 500;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.inline .pill:hover {
+  color: var(--ink);
+}
+
+.inline .pillActive {
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
