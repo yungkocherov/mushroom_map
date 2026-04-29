@@ -82,33 +82,12 @@ export function LayerGrid({
     }
   };
 
-  const isForestActive = (mode: ForestColorMode) =>
-    visible.forest && forestColorMode === mode;
-
   const primaryChips: ChipDescriptor[] = [
     {
       key: "forecastChoropleth",
       label: "Прогноз",
       active: visible.forecastChoropleth,
       onClick: () => toggleVisible("forecastChoropleth"),
-    },
-    {
-      key: "forest-species",
-      label: "Породы",
-      active: isForestActive("species"),
-      onClick: () => toggleForestMode("species"),
-    },
-    {
-      key: "forest-bonitet",
-      label: "Бонитет",
-      active: isForestActive("bonitet"),
-      onClick: () => toggleForestMode("bonitet"),
-    },
-    {
-      key: "forest-age",
-      label: "Возраст",
-      active: isForestActive("age_group"),
-      onClick: () => toggleForestMode("age_group"),
     },
     {
       key: "soil",
@@ -155,6 +134,13 @@ export function LayerGrid({
         role="group"
         aria-label="Слои карты"
       >
+        <li className={styles.item}>
+          <ForestCard
+            forestVisible={visible.forest}
+            forestColorMode={forestColorMode}
+            onToggleMode={toggleForestMode}
+          />
+        </li>
         {primaryChips.map((c) => (
           <li key={c.key} className={styles.item}>
             <ChipButton chip={c} />
@@ -244,5 +230,46 @@ function ChipButton({ chip }: { chip: ChipDescriptor }) {
     >
       {inner}
     </button>
+  );
+}
+
+interface ForestCardProps {
+  forestVisible: boolean;
+  forestColorMode: ForestColorMode;
+  onToggleMode: (mode: ForestColorMode) => void;
+}
+
+function ForestCard({ forestVisible, forestColorMode, onToggleMode }: ForestCardProps) {
+  const isActive = (mode: ForestColorMode) => forestVisible && forestColorMode === mode;
+  return (
+    <div className={`${styles.forestCard}${forestVisible ? ` ${styles.forestCardActive}` : ""}`}>
+      <span className={styles.forestLabel}>Лес</span>
+      <div className={styles.forestPills} role="group" aria-label="Режим раскраски леса">
+        <button
+          type="button"
+          className={`${styles.forestPill}${isActive("species") ? ` ${styles.forestPillActive}` : ""}`}
+          onClick={() => onToggleMode("species")}
+          aria-pressed={isActive("species")}
+        >
+          Породы
+        </button>
+        <button
+          type="button"
+          className={`${styles.forestPill}${isActive("bonitet") ? ` ${styles.forestPillActive}` : ""}`}
+          onClick={() => onToggleMode("bonitet")}
+          aria-pressed={isActive("bonitet")}
+        >
+          Бонитет
+        </button>
+        <button
+          type="button"
+          className={`${styles.forestPill}${isActive("age_group") ? ` ${styles.forestPillActive}` : ""}`}
+          onClick={() => onToggleMode("age_group")}
+          aria-pressed={isActive("age_group")}
+        >
+          Возраст
+        </button>
+      </div>
+    </div>
   );
 }

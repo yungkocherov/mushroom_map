@@ -40,6 +40,13 @@ export function useUserSpotsSync(
       } else {
         addUserSpotsLayer(m, spots);
       }
+      // Re-apply current visibility — the layer may have just been added
+      // via deferred m.once("idle", ...), in which case effect 2 already
+      // ran and bailed out (no layer). Read latest store state.
+      const wantVisible = useLayerVisibility.getState().visible.userSpots;
+      if (m.getLayer("user-spots")) {
+        m.setLayoutProperty("user-spots", "visibility", wantVisible ? "visible" : "none");
+      }
     };
     if (m.isStyleLoaded()) apply();
     else m.once("idle", apply);

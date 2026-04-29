@@ -189,6 +189,77 @@
   box-shadow: var(--shadow-focus);
 }
 
+.forestCard {
+  grid-column: 1 / -1; /* span both columns of the grid */
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  background: var(--paper);
+  transition: border-color 120ms ease;
+}
+
+.forestCardActive {
+  border-color: var(--ink);
+}
+
+.forestLabel {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: var(--font-display);
+}
+
+.forestPills {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-1);
+}
+
+.forestPill {
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: var(--space-2);
+  font-size: var(--fs-xs);
+  color: var(--ink-dim);
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.forestPill:hover {
+  border-color: var(--ink-faint);
+  color: var(--ink);
+}
+
+.forestPill:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+}
+
+.forestPillActive {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+
+.forestPillActive:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Mobile strip — forest card stays full-width even in strip mode */
+.strip .forestCard {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  min-width: 240px;
+}
+
 @media (max-width: 768px) {
   .floating {
     top: auto;

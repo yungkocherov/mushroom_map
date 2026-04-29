@@ -91,7 +91,7 @@ const DEFAULT_VISIBLE: Record<LayerKey, boolean> = {
   hillshade: false,
   districts: false,
   forecastChoropleth: false,
-  userSpots: false,
+  userSpots: true,
 };
 
 const DEFAULT_LOADED: Record<LayerKey, boolean> = Object.fromEntries(

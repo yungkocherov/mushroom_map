@@ -27,16 +27,6 @@ export function SidebarOverview({ className }: SidebarOverviewProps) {
       </p>
 
       <section className={styles.section}>
-        <p className={styles.sectionLabel}>Прогноз плодоношения</p>
-        <p className={styles.sources}>
-          Раскраску по районам убрали — она бы повторяла географию VK-постов
-          (там, где больше людей пишет, модель «видит» больше грибов).
-          Возвращаемся к этому, когда появится точечная модель на тип
-          леса × погода × почва.
-        </p>
-      </section>
-
-      <section className={styles.section}>
         <p className={styles.sectionLabel}>Источники</p>
         <p className={styles.sources}>
           Лесхозданные — Рослесхоз / ФГИС ЛК. Гидрография — OpenStreetMap.

@@ -9,10 +9,10 @@ import {
 import styles from "./BaseMapPicker.module.css";
 
 const OPTIONS: Array<{ id: BaseMapMode; label: string }> = [
-  { id: "osm", label: "OSM" },
   { id: "scheme", label: "Схема" },
   { id: "satellite", label: "Спутник" },
   { id: "hybrid", label: "Гибрид" },
+  { id: "osm", label: "OSM" },
 ];
 
 export function BaseMapPicker() {
