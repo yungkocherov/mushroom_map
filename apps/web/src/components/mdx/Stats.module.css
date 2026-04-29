@@ -35,13 +35,14 @@
 }
 
 .number {
-  font-family: var(--font-display);
+  font-family: var(--font-body);
   font-size: 2.25rem;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1;
   color: var(--ink);
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 .label {

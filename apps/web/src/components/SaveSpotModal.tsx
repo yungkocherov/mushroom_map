@@ -180,20 +180,46 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
 
             <fieldset style={fieldsetStyle}>
               <legend style={legendStyle}>Цвет маркера</legend>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "var(--space-3)" }}>
-                {SPOT_COLOR_OPTIONS.map((c) => (
-                  <label key={c.value} style={{ display: "inline-flex", alignItems: "center", gap: "var(--space-1)", fontSize: "var(--fs-sm)", cursor: "pointer" }}>
-                    <input
-                      type="radio"
-                      name="spot-color"
-                      value={c.value}
-                      checked={color === c.value}
-                      onChange={() => setColor(c.value)}
-                    />
-                    <span style={{ display: "inline-block", width: 12, height: 12, borderRadius: "50%", border: "1px solid var(--rule)", background: c.cssVar }} />
-                    <span>{c.label}</span>
-                  </label>
-                ))}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(76px, 1fr))", gap: "var(--space-2)" }}>
+                {SPOT_COLOR_OPTIONS.map((c) => {
+                  const isSelected = color === c.value;
+                  return (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => setColor(c.value)}
+                      aria-pressed={isSelected}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "var(--space-2)",
+                        background: isSelected ? "var(--paper-rise)" : "var(--paper)",
+                        border: isSelected ? "2px solid var(--ink)" : "1px solid var(--rule)",
+                        borderRadius: "var(--radius-md)",
+                        cursor: "pointer",
+                        transition: "border-color 120ms ease, background 120ms ease",
+                        fontFamily: "var(--font-body)",
+                        fontSize: "var(--fs-xs)",
+                        color: "var(--ink)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          display: "inline-block",
+                          width: 32,
+                          height: 32,
+                          borderRadius: "50%",
+                          background: c.cssVar,
+                          border: "1px solid rgba(0,0,0,0.15)",
+                        }}
+                        aria-hidden
+                      />
+                      <span style={{ fontSize: 11 }}>{c.label}</span>
+                    </button>
+                  );
+                })}
               </div>
             </fieldset>
 

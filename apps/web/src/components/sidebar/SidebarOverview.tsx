@@ -19,14 +19,16 @@ export interface SidebarOverviewProps {
 export function SidebarOverview({ className }: SidebarOverviewProps) {
   return (
     <aside className={`${styles.root}${className ? ` ${className}` : ""}`}>
-      <p className={styles.eyebrow}>Грибная погода · ЛО</p>
-      <h1 className={styles.title}>Где сегодня грибы</h1>
-      <p className={styles.lead}>
-        Кликните в любую точку карты — попап покажет тип леса, почву и
-        близость воды. Слои переключаются панелью справа на карте.
-      </p>
+      <div className={styles.top}>
+        <p className={styles.eyebrow}>Грибная погода · ЛО</p>
+        <h1 className={styles.title}>Где сегодня грибы</h1>
+        <p className={styles.lead}>
+          Кликните в любую точку карты — попап покажет тип леса, почву и
+          близость воды. Слои переключаются панелью справа на карте.
+        </p>
+      </div>
 
-      <section className={styles.section}>
+      <section className={styles.sourcesSection}>
         <p className={styles.sectionLabel}>Источники</p>
         <p className={styles.sources}>
           Лесхозданные — Рослесхоз / ФГИС ЛК. Гидрография — OpenStreetMap.

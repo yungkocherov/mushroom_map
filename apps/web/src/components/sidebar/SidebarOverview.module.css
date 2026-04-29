@@ -42,6 +42,20 @@
   gap: var(--space-3);
 }
 
+.top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.sourcesSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: auto;
+  padding-top: var(--space-6);
+}
+
 .sectionLabel {
   font-family: var(--font-mono);
   font-size: var(--fs-xs);

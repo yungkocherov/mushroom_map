@@ -22,6 +22,7 @@ export function Header() {
             <span className={styles.brandSub}>лес ленобласти</span>
           </span>
         </Link>
+        <div className={styles.spacer} />
         <nav className={styles.nav} aria-label="Основная навигация">
           {NAV_ITEMS.map(({ to, label, end }) => (
             <NavLink

@@ -51,14 +51,11 @@ export function useMapInstance(
       style: INLINE_STYLE,
       center: [initialView.lon, initialView.lat],
       zoom: initialView.zoom,
+      attributionControl: false,
     });
     mapRef.current = m;
 
     m.addControl(new maplibregl.NavigationControl(), "top-right");
-    m.addControl(
-      new maplibregl.AttributionControl({ compact: true }),
-      "bottom-right",
-    );
 
     const onStyleReady = () => {
       if (m.isStyleLoaded()) {
