@@ -194,8 +194,10 @@ def main() -> None:
 
     with psycopg.connect(dsn, autocommit=True) as conn:
         # Safety: один тайл с крайне сложной геометрией не должен повесить
-        # всю сборку. На замерах ST_Union худшего тайла ~1.5с, 60s — 40x запас.
-        conn.execute("SET statement_timeout = '60s'")
+        # всю сборку. 2026-04-29: bump 60s → 300s — увеличенный буфер 8м
+        # делает ST_Union на сложных z=11-12 тайлах дольше, ловили GEOS
+        # InterruptedException от 60s timeout.
+        conn.execute("SET statement_timeout = '300s'")
         bbox = region_bbox(conn, args.region)
         min_lon, min_lat, max_lon, max_lat = bbox
         print(f"bbox: {bbox}")
@@ -245,11 +247,14 @@ def main() -> None:
                                 buffer=args.buffer,
                                 min_area=min_area_z,
                             )
-                        except psycopg.errors.QueryCanceled:
-                            # statement_timeout — пропускаем тайл, не роняем сборку.
+                        except (psycopg.errors.QueryCanceled, psycopg.errors.InternalError_) as e:
+                            # statement_timeout ИЛИ GEOS interruption — пропускаем тайл, не роняем
+                            # сборку. GEOS поднимает InternalError_ когда signal приходит во время
+                            # ST_Union'а буферизованных геометрий (см. lwgeom_unaryunion_prec).
                             z_errors += 1
                             done_in_z += 1
-                            print(f"     [timeout] z={z} x={x} y={y}", flush=True)
+                            err_kind = "timeout" if isinstance(e, psycopg.errors.QueryCanceled) else "geos"
+                            print(f"     [{err_kind}] z={z} x={x} y={y}", flush=True)
                             continue
                         done_in_z += 1
                         if data is None:
