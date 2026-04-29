@@ -1,5 +1,4 @@
 import { NavLink, Link } from "react-router-dom";
-import { ThemeToggle } from "../ui/ThemeToggle";
 import { HeaderAuth } from "./HeaderAuth";
 import styles from "./Header.module.css";
 
@@ -39,7 +38,6 @@ export function Header() {
         </nav>
         <div className={styles.spacer} />
         <div className={styles.right}>
-          <ThemeToggle />
           <HeaderAuth />
         </div>
       </div>

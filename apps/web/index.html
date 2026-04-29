@@ -33,19 +33,12 @@
     <meta name="twitter:description" content="Грибная погода на завтра по 18 районам ЛО — индекс, типы леса, личные споты." />
     <meta name="twitter:image" content="https://geobiom.ru/og-image.svg" />
     <script>
-      // Pre-hydrate theme: before React mounts, read the user's choice
-      // from localStorage and set data-theme on <html>. Without this
-      // the page flashes the system-scheme colours for one frame
-      // before React re-applies the stored preference.
+      // Dark theme отключён 2026-04-28 (UI dark + map light = mismatch).
+      // Принудительно ставим light и чистим cached "dark" preference,
+      // чтобы старые посетители не залипли на сломанной теме.
       (function () {
-        try {
-          var t = localStorage.getItem("theme");
-          if (t !== "light" && t !== "dark") {
-            t = "light";
-            localStorage.setItem("theme", "light");
-          }
-          document.documentElement.setAttribute("data-theme", t);
-        } catch (e) { /* private browsing / storage disabled */ }
+        try { localStorage.removeItem("theme"); } catch (e) { /* noop */ }
+        document.documentElement.setAttribute("data-theme", "light");
       })();
     </script>
   </head>
