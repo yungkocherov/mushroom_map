@@ -247,39 +247,55 @@ docker build -f services/api/Dockerfile.prod -t mushroom-api:prod .
 # pg_dump из локали в прод:
 #   REMOTE=root@<vm-ip> bash scripts/deploy/sync_db_to_remote.sh
 #
-# PMTiles + places.geojson -> Cloudflare R2 bucket `geobiom-tiles`:
-#   bash scripts/deploy/sync_tiles_to_r2.sh
+# Forest tile build (5 мин с tippecanoe в Docker):
+#   bash pipelines/build_forest_tiles.sh
+#
+# PMTiles -> TimeWeb VM (rsync/scp на /srv/mushroom-map/tiles/):
+#   bash scripts/deploy/sync_tiles_to_vm.sh           # все
+#   bash scripts/deploy/sync_tiles_to_vm.sh forest    # один слой
 ```
 
-## Production стек (live с 2026-04-28)
+## Production стек (live с 2026-04-29, VPN-free)
 
-- **Фронт** — Cloudflare Pages, `geobiom.ru`. Деплой авто через
-  `.github/workflows/deploy-web.yml` (push на main).
-- **API** — Yandex Cloud VM `178.253.43.136`, alias `geobiom-prod` в
+CF Pages + R2 выпилены 2026-04-29 — TSPU режет CF SNI из РФ, сайт не
+открывался без VPN. Всё переехало на одну TimeWeb VM (временно, до
+поимки Oracle ARM, см. memory `project_website_migration.md`).
+
+- **Фронт** — Caddy на VM раздаёт `/srv/web/` (Vite SPA). Деплой через
+  `.github/workflows/deploy-web.yml` (push на main → vite build → rsync
+  apps/web/dist/ → root@VM:/srv/web/). Хост `geobiom.ru`.
+- **API** — TimeWeb VM `178.253.43.136`, alias `geobiom-prod` в
   локальном `~/.ssh/config`. Деплой через `.github/workflows/deploy-api.yml`:
   build → push в GHCR → ssh на VM → `docker compose pull && up -d` →
   `db/migrate.py`. Хост `api.geobiom.ru`.
-- **PMTiles** — Cloudflare R2 bucket `geobiom-tiles`, custom domain
-  `tiles.geobiom.ru`. Vite-env `VITE_TILES_URL=https://tiles.geobiom.ru`
-  (CF Pages prod env). CORS policy на bucket allowед `https://geobiom.ru`
-  + Range/If-Match/If-None-Match headers. Заливка:
-  `bash scripts/deploy/sync_tiles_to_r2.sh` (rclone remote `r2`,
-  скрипт грузит `*.pmtiles` + `*.geojson`).
-- **CF Pages env vars** (Production):
-  - `VITE_API_URL` = `https://api.geobiom.ru`
-  - `VITE_TILES_URL` = `https://tiles.geobiom.ru`
-- **GitHub secrets** (для deploy-api):
+- **PMTiles** — раздаёт Caddy → API:8000 → bind-mount
+  `/srv/mushroom-map/tiles/`. URL `api.geobiom.ru/tiles/*.pmtiles`.
+  `VITE_TILES_URL` НЕ задаётся — фронт fallback'ит на `${API_ORIGIN}/tiles`
+  (см. `apps/web/src/components/mapView/utils/api.ts`).
+- **Build forest.pmtiles** через `pipelines/build_forest_tiles.sh`
+  (tippecanoe v1.24 в `klokantech/tippecanoe` Docker + go-pmtiles
+  convert). 5 мин total на 2.17M полигонов, output 209 MB.
+- **DNS на CF (grey-cloud / DNS only)**: A `geobiom.ru → 178.253.43.136`,
+  A `www.geobiom.ru → 178.253.43.136`, A `api.geobiom.ru → 178.253.43.136`.
+  **Никаких proxied (orange-cloud) записей** — иначе CF SNI режется TSPU.
+- **CF Pages**, **R2 bucket**, **Cloudflare wrangler-action**, repo var
+  `VITE_TILES_URL` — **удалены**.
+- **GitHub secrets** (для deploy-api/deploy-web):
   - `PROD_HOST` = IP VM
-  - `PROD_SSH_USER` = `root` (YC образ; не `ubuntu` как было на Oracle)
+  - `PROD_SSH_USER` = `root`
   - `PROD_SSH_KEY` = приватная часть `~/.ssh/geobiom_yc`
+- **GitHub vars**: `VITE_API_URL=https://api.geobiom.ru`,
+  `PROD_DEPLOY_ENABLED=true`. **НЕ задавать `VITE_TILES_URL`** — фронт
+  возьмёт правильное значение через fallback.
+- **`.env.prod` на VM** должен содержать: `CADDY_API_HOST=api.geobiom.ru`,
+  `CADDY_WEB_HOST=geobiom.ru`, `CADDY_ACME_EMAIL=...`, `WEB_HOST_PATH=/srv/web`.
+  Без `CADDY_WEB_HOST` Caddyfile парсится, но site-block geobiom.ru пустой
+  → no TLS cert → site не работает.
 - **Известные грабли:**
   - Vite env-vars **запекаются во время build'а** — менять переменную в
-    CF Pages → редеплой обязателен, иначе старый bundle подхватит старое.
-  - `api.geobiom.ru/tiles/*` отдаёт 404 (API не раздаёт static в prod).
-    Все ссылки на тайлы должны идти через `TILES_BASE` (см.
-    `apps/web/src/components/mapView/utils/api.ts`), не через `API_ORIGIN`.
+    GH vars → редеплой обязателен, иначе старый bundle подхватит старое.
   - Каждый `git push` обязательно проверять `gh run list` — `deploy-web`
-    обычно ~1 мин, `deploy-api` ~5 мин.
+    ~1 мин, `deploy-api` ~5 мин.
 
 ## Pre-prod-deploy checklist (для будущих environments / staging)
 
