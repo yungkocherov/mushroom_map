@@ -48,17 +48,13 @@ DEFAULT_BUFFER = 128     # 128/4096 ≈ 3.1% перекрытие — увели
                          # видимые «просветы» между выделами на низких зумах (юзерфидбэк).
 DEFAULT_REGION = "lenoblast"
 
-# Размер ST_Buffer'а вокруг полигонов при сборке тайла, в метрах.
-# 2026-04-29 ev: на z=5..8 MVT-пиксель огромный (на z=5 ≈ 5км, на z=7 ≈ 600м),
-# поэтому 8м буфер незаметен — соседние выделы не склеиваются и видны
-# просветы. Увеличиваем буфер до ≈ 1/4 ширины MVT-пикселя на каждом зуме.
-# На z>=11 оставляем 8м (как было) — гэпы между выделами там физически меньше
-# чем визуальное разрешение.
+# Размер ST_Buffer'а вокруг полигонов при per-tile dissolve (только z>=9).
+# 2026-04-29 ev: на z=9..10 MVT-пиксель ещё крупный (z=9 ≈ 150м), 8м буфера
+# не хватает чтобы соседние выделы склеились → видны просветы. Увеличиваем
+# до ~1/4 ширины MVT-пикселя. На z>=11 оставляем 8м — гэпы там физически
+# меньше визуального разрешения.
+# Для z<=8 используется prepared mask (forest_3857_low), см. prepare_low_zoom_mask.
 BUFFER_BY_ZOOM: dict[int, float] = {
-    5:  1500.0,
-    6:   800.0,
-    7:   400.0,
-    8:   150.0,
     9:    50.0,
     10:   20.0,
     11:    8.0,
@@ -79,6 +75,13 @@ MIN_AREA_BY_ZOOM: dict[int, float] = {
 }
 
 
+
+
+LOW_ZOOM_MASK_BUFFER_M = 200.0
+"""Буфер при подготовке forest_3857_low. 200м достаточно чтобы соседние
+выделы (типичные просеки 10-50м) склеились в массивы, без избыточного
+раздувания над водоёмами/полями. На z=5..8 MVT-пиксель >>200м, разница
+между 200м и 1500м буфером в маске визуально не видна."""
 
 
 def prepare_projected_source(conn: psycopg.Connection) -> None:
@@ -113,40 +116,64 @@ def prepare_projected_source(conn: psycopg.Connection) -> None:
     conn.execute("ANALYZE forest_3857")
 
 
+def prepare_low_zoom_mask(conn: psycopg.Connection) -> None:
+    """Прегенерит forest_3857_low — единую маску леса с buffered ST_Union.
+
+    Без этого build_tile_bytes_lowzoom делал бы ST_Union 2M полигонов с
+    1500м буфером per tile (z=5 — 2 тайла на всю ЛО, каждый покрывает
+    весь регион → 2× full-region ST_Union, тайм-аут на 300с).
+
+    После prepare маска содержит несколько MultiPolygon-частей; per-tile
+    запрос на z<=8 — лёгкий ST_Intersection с GIST-индексом.
+    """
+    conn.execute("DROP TABLE IF EXISTS forest_3857_low")
+    # ST_Buffer перед ST_Union закрывает гэпы (просеки, дренажи).
+    # ST_Dump разбивает MultiPolygon на отдельные части — иначе одна гигантская
+    # геометрия попадает в каждую запись и не индексируется эффективно.
+    conn.execute(
+        f"""
+        CREATE TEMP TABLE forest_3857_low AS
+        SELECT (ST_Dump(
+            ST_Union(ST_Buffer(ST_MakeValid(geom), {LOW_ZOOM_MASK_BUFFER_M}))
+        )).geom AS geom
+        FROM forest_3857
+        """
+    )
+    conn.execute("CREATE INDEX idx_forest_3857_low_gix ON forest_3857_low USING GIST (geom)")
+    conn.execute("ANALYZE forest_3857_low")
+
+
 def build_tile_bytes_lowzoom(
     conn: psycopg.Connection,
     z: int, x: int, y: int,
     layer: str,
     extent: int,
     buffer: int,
-    buffer_m: float,
 ) -> bytes | None:
-    """z<=8: всё мерджится в один полигон с dominant_species='mixed'.
+    """z<=8: читаем prepared mask `forest_3857_low`, эмитим как 'mixed'.
 
     На низких зумах MVT-пиксель огромный (z=5 ≈ 5км, z=7 ≈ 600м), а
     индивидуальные выделы Рослесхоза по 1-10 га. Per-species группировка
-    даёт пёструю мозаику с дырками между выделами. Здесь дисолвим всё
-    подряд с большим буфером (BUFFER_BY_ZOOM[z]) → сплошной зелёный
+    даёт пёструю мозаику с дырками между выделами. Здесь читаем заранее
+    дисолвленную маску (см. prepare_low_zoom_mask) → сплошной зелёный
     лесной массив, который и нужен пользователю при отдалении.
 
     Frontend мапит slug 'mixed' на FOREST_COLORS.mixed (#607244, лесной
     зелёный) — отдельной правки не требует.
+
+    Per-tile делается лёгкий ST_Intersection с tile_env (с GIST-индексом
+    по forest_3857_low). Без этой prepared-маски full-region ST_Union на
+    z=5..6 уходил в timeout 300с (2M полигонов × 1500м буфер).
     """
-    # ST_Expand расширяет tile_env буфером, чтобы зацепить соседние полигоны,
-    # которые после ST_Buffer войдут в текущий тайл.
     row = conn.execute(
         """
         WITH tile_env AS (
             SELECT ST_TileEnvelope(%s, %s, %s) AS env
         ),
-        candidates AS (
-            SELECT f.geom
-            FROM forest_3857 f, tile_env
-            WHERE f.geom && ST_Expand(tile_env.env, %s)
-        ),
-        dissolved AS (
-            SELECT ST_Union(ST_Buffer(ST_MakeValid(geom), %s)) AS geom
-            FROM candidates
+        clipped AS (
+            SELECT ST_Intersection(f.geom, tile_env.env) AS geom
+            FROM forest_3857_low f, tile_env
+            WHERE f.geom && tile_env.env
         ),
         mvt_src AS (
             SELECT
@@ -157,8 +184,8 @@ def build_tile_bytes_lowzoom(
                 NULL::real                       AS area_m2,
                 NULL::real                       AS timber_stock,
                 ST_AsMVTGeom(geom, tile_env.env, %s, %s, true) AS geom
-            FROM dissolved, tile_env
-            WHERE geom IS NOT NULL
+            FROM clipped, tile_env
+            WHERE NOT ST_IsEmpty(geom)
         )
         SELECT ST_AsMVT(mvt_src, %s, %s, 'geom')
         FROM mvt_src
@@ -166,8 +193,6 @@ def build_tile_bytes_lowzoom(
         """,
         (
             z, x, y,                    # ST_TileEnvelope
-            buffer_m,                   # ST_Expand
-            buffer_m,                   # ST_Buffer
             extent, buffer,             # ST_AsMVTGeom
             layer, extent,              # ST_AsMVT
         ),
@@ -291,6 +316,12 @@ def main() -> None:
         prepare_projected_source(conn)
         print(f"  done in {time.monotonic() - t_prep:.1f}s")
 
+        if args.minzoom <= 8:
+            print(f"prepare_low_zoom_mask: ST_Union with {LOW_ZOOM_MASK_BUFFER_M:.0f}m buffer...")
+            t_prep = time.monotonic()
+            prepare_low_zoom_mask(conn)
+            print(f"  done in {time.monotonic() - t_prep:.1f}s")
+
         t0 = time.monotonic()
         written = 0
         total_size = 0
@@ -328,7 +359,6 @@ def main() -> None:
                                     layer=args.layer,
                                     extent=args.extent,
                                     buffer=args.buffer,
-                                    buffer_m=buffer_m,
                                 )
                             else:
                                 data = build_tile_bytes(
