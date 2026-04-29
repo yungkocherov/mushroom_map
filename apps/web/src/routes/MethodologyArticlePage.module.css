@@ -122,3 +122,41 @@
   background: var(--birch);
   color: var(--ink-dim);
 }
+
+.body :global(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: var(--space-5) 0;
+  font-size: var(--fs-sm);
+  background: var(--paper-rise);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.body :global(table th),
+.body :global(table td) {
+  text-align: left;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--rule);
+  line-height: var(--lh-normal);
+  vertical-align: top;
+}
+
+.body :global(table th) {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--birch);
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.body :global(table tr:last-child td) {
+  border-bottom: none;
+}
+
+.body :global(table td) {
+  color: var(--ink-dim);
+}

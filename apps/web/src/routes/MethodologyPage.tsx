@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { Clock } from "lucide-react";
 import { Container } from "../components/layout/Container";
+import { Stats } from "../components/mdx";
 import {
   articles,
   METHODOLOGY_CATEGORIES,
@@ -73,6 +74,15 @@ export function MethodologyPage() {
         обновления. Ниже — четыре рубрики: источники данных, модель прогноза,
         о проекте, юридическое.
       </p>
+
+      <Stats
+        stats={[
+          { number: "4", label: "источника данных", hint: "ФГИС ЛК · OSM · Copernicus · Докучаевский" },
+          { number: "2,17M", label: "лесных полигонов", hint: "вся ЛО" },
+          { number: "18", label: "видов в реестре", hint: "+ 3 ягоды" },
+          { number: "69k", label: "VK-постов", hint: "проанализировано" },
+        ]}
+      />
 
       <div className={styles.sections}>
         {METHODOLOGY_CATEGORIES.map((cat) => (

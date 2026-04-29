@@ -1,0 +1,72 @@
+.list {
+  list-style: none;
+  margin: var(--space-5) 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: var(--space-3);
+  position: relative;
+}
+
+.item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 14px;
+  top: 32px;
+  bottom: calc(-1 * var(--space-4));
+  width: 1px;
+  background: var(--rule);
+}
+
+.num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  font-family: var(--font-display);
+  line-height: 1;
+  z-index: 1;
+}
+
+.title {
+  margin: 0 0 var(--space-1);
+  font-weight: 600;
+  font-family: var(--font-display);
+  color: var(--ink);
+  font-size: var(--fs-body);
+  line-height: var(--lh-tight);
+  padding-top: 4px;
+}
+
+.text {
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  line-height: var(--lh-long);
+}
+
+.text > :first-child {
+  margin-top: 0;
+}
+
+.text > :last-child {
+  margin-bottom: 0;
+}
+
+.text code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--birch);
+  padding: 1px 4px;
+  border-radius: var(--radius-xs);
+}

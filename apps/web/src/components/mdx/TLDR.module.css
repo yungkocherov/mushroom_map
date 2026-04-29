@@ -1,0 +1,34 @@
+.box {
+  border-left: 3px solid var(--ink);
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-6);
+  background: var(--paper);
+}
+
+.label {
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  color: var(--ink);
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-long);
+  color: var(--ink-dim);
+}
+
+.body > :first-child {
+  margin-top: 0;
+}
+
+.body > :last-child {
+  margin-bottom: 0;
+}
+
+.body strong {
+  color: var(--ink);
+}
