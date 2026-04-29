@@ -35,15 +35,16 @@
 }
 
 .title {
-  font-family: var(--font-body);
-  font-size: var(--fs-sm);
-  font-weight: 600;
+  font-family: var(--font-display);
+  font-size: var(--fs-body);
+  line-height: var(--lh-tight);
+  font-weight: 500;
   color: var(--ink);
 }
 
 .body {
   font-family: var(--font-body);
-  font-size: var(--fs-xs);
+  font-size: var(--fs-sm);
   line-height: var(--lh-normal);
   color: var(--ink-dim);
   margin: 0;
