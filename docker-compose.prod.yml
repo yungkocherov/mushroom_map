@@ -80,19 +80,23 @@ services:
     restart: unless-stopped
     depends_on:
       - api
-    # Caddyfile использует {$CADDY_ACME_EMAIL} и {$CADDY_API_HOST} —
-    # подстановка происходит ВНУТРИ контейнера при парсинге config'а,
-    # поэтому envvars нужно пробросить в сам контейнер, не только в
-    # compose-process. Без этого Caddy крашится с "wrong argument count
-    # ... 'email'".
+    # Caddyfile использует {$CADDY_ACME_EMAIL}, {$CADDY_API_HOST},
+    # {$CADDY_WEB_HOST} — подстановка происходит ВНУТРИ контейнера при
+    # парсинге config'а, поэтому envvars нужно пробросить в сам контейнер,
+    # не только в compose-process. Без этого Caddy крашится с "wrong
+    # argument count ... 'email'" / пустой site-block.
     environment:
       CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL}
       CADDY_API_HOST:   ${CADDY_API_HOST}
+      CADDY_WEB_HOST:   ${CADDY_WEB_HOST}
     ports:
       - "80:80"
       - "443:443"
     volumes:
       - ./infra/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Статический фронт. Раздаётся блоком {$CADDY_WEB_HOST} в Caddyfile.
+      # Заливается через .github/workflows/deploy-web.yml (rsync на VM).
+      - ${WEB_HOST_PATH:-/srv/web}:/srv/web:ro
       - caddy_data:/data
       - caddy_config:/config
 

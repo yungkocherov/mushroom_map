@@ -1,15 +1,19 @@
 # Caddy reverse-proxy для прод-VM.
 #
 # Архитектура:
-#   Cloudflare Pages    → mushroom-map.pages.dev (статический фронт)
-#   Caddy на VM         → api.<домен>            (этот файл)
+#   Caddy на VM         → geobiom.ru     (статический фронт из /srv/web)
+#                       → api.geobiom.ru (api + tiles)
 #   - /api/*            → api:8000
 #   - /tiles/*          → api:8000 (PMTiles range-requests)
 #   - /health           → api:8000
-#   - всё остальное     → 404 (на api-домене веб-фронту делать нечего)
+#
+# Cloudflare Pages удалён 2026-04-29: TSPU режет CF SNI, сайт не открывался
+# из РФ без VPN. Фронт переехал на ту же VM, DNS geobiom.ru — grey-cloud
+# (DNS only) → 178.253.43.136. R2 bucket тоже отключён, тайлы раздаёт
+# api.geobiom.ru/tiles/* (см. блок ниже).
 #
 # Caddy сам управляет TLS через ACME — нужно только корректное A-запись
-# api.<домен> → IP VM до старта контейнера.
+# {api,}geobiom.ru → IP VM до первого запроса.
 #
 # Email для ACME: подставится из CADDY_ACME_EMAIL env-переменной (см.
 # /etc/default/caddy на VM или env_file в compose).
@@ -92,4 +96,47 @@
 		output stdout
 		format json
 	}
+}
+
+# Web-фронт. Раздаёт собранный Vite SPA из /srv/web. CADDY_WEB_HOST
+# подставляется из env (geobiom.ru в проде). www-вариант редиректит
+# на канон — Vite build один.
+{$CADDY_WEB_HOST} {
+	root * /srv/web
+
+	# Сжатие для html/js/css/json. SVG тоже выигрывает.
+	encode gzip
+
+	# Long-cache для immutable-ассетов из Vite (имя содержит content-hash).
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+
+	# index.html и всё остальное — короткий кэш, чтобы новые релизы
+	# подхватывались быстро.
+	header Cache-Control "public, max-age=300, must-revalidate"
+
+	# Security headers. CSP не ставим тут — у фронта есть inline-стили
+	# Vite/MapLibre, рискованно сломать без аудита; сделаем отдельным шагом.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		X-Frame-Options           "DENY"
+		Referrer-Policy           "strict-origin-when-cross-origin"
+		Permissions-Policy        "interest-cohort=()"
+		-Server
+	}
+
+	# SPA fallback — любой роут, который не файл, отдаёт index.html.
+	# try_files перед file_server обязательно: иначе 404 на /spots, /species.
+	try_files {path} /index.html
+	file_server
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+www.{$CADDY_WEB_HOST} {
+	redir https://{$CADDY_WEB_HOST}{uri} 308
 }

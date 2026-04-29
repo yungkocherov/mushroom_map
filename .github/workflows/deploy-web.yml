@@ -1,23 +1,24 @@
-# Production-деплой web на Cloudflare Pages.
+# Production-деплой web на TimeWeb VM (Caddy раздаёт /srv/web).
 #
 # Тригер: push в main с изменениями в apps/web/** или packages/**.
-# Cloudflare Pages умеет подтягивать сборки из GitHub автоматически
-# (через подключение репозитория в их UI), но мы используем явный
-# wrangler-step — он быстрее, не зависит от auto-detection и
-# контролируется в этом репозитории.
+# Cloudflare Pages выпилен 2026-04-29 (TSPU режет CF SNI из РФ → сайт
+# не открывался без VPN). Теперь фронт живёт на той же VM, что и API.
+#
+# Что делает:
+#   1. npm ci + vite build
+#   2. rsync apps/web/dist/ → root@$PROD_HOST:/srv/web/  (с --delete)
+#
+# Caddy (на VM) автоматически подхватывает новые файлы — Vite кладёт
+# хеши в имена ассетов, index.html короткоживущий (см. infra/Caddyfile).
 #
 # Требуемые secrets (Settings → Secrets → Actions):
-#   CF_API_TOKEN     — Cloudflare API token с Pages:Edit scope
-#                       (создать на dash.cloudflare.com → My Profile →
-#                       API Tokens → Pages: Edit template)
-#   CF_ACCOUNT_ID    — Cloudflare account ID (правый сайдбар на dash)
+#   PROD_HOST           — IP или hostname VM (как у deploy-api)
+#   PROD_SSH_USER       — root для текущей TimeWeb VM
+#   PROD_SSH_KEY        — приватный ключ (содержимое id_ed25519)
 #
 # Vars (Settings → Variables → Actions):
-#   CF_PAGES_PROJECT    — имя проекта (создать в Pages → Create project)
-#   VITE_API_URL        — например, https://api.geobiom.ru
-#   VITE_TILES_URL      — например, https://tiles.geobiom.ru (R2 CDN);
-#                         если не задана, фронт читает PMTiles из API
-#   PROD_DEPLOY_ENABLED — 'true' чтобы включить SSH-job в deploy-api.yml
+#   VITE_API_URL        — https://api.geobiom.ru
+#   PROD_DEPLOY_ENABLED — 'true' чтобы реально пушить на VM
 
 name: deploy-web
 
@@ -35,7 +36,7 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    if: ${{ vars.CF_PAGES_PROJECT != '' }}
+    if: ${{ vars.PROD_DEPLOY_ENABLED == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -49,15 +50,22 @@ jobs:
 
       - name: Build web
         env:
+          # VITE_TILES_URL не задаём — фронт fallback'ит на ${API_ORIGIN}/tiles
+          # (см. apps/web/src/components/mapView/utils/api.ts). Тайлы раздаёт
+          # Caddy на api-домене из /srv/mushroom-map/tiles.
           VITE_API_URL: ${{ vars.VITE_API_URL }}
-          VITE_TILES_URL: ${{ vars.VITE_TILES_URL }}
         run: npm -w @mushroom-map/web run build
 
-      - name: Publish to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
+      - name: Rsync dist to VM
+        uses: easingthemes/ssh-deploy@v5.0.3
         with:
-          apiToken:  ${{ secrets.CF_API_TOKEN }}
-          accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          # --commit-message overrides the git subject so Cloudflare never
-          # sees non-ASCII chars (→ — « » ⌘) that it rejects with 8000111.
-          command: pages deploy apps/web/dist --project-name=${{ vars.CF_PAGES_PROJECT }} --branch=main --commit-message=${{ github.sha }}
+          SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_KEY }}
+          REMOTE_HOST:     ${{ secrets.PROD_HOST }}
+          REMOTE_USER:     ${{ secrets.PROD_SSH_USER }}
+          SOURCE:          "apps/web/dist/"
+          TARGET:          "/srv/web/"
+          # -a archive, -z compress, --delete вычищает удалённые файлы
+          # (старые hash-ассеты, удалённые роуты). --chmod нормализует
+          # права на 0644/0755 — иначе rsync переносит права с runner'а
+          # (могут быть 0664 group-writable).
+          ARGS: "-rlgoDz --delete --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
