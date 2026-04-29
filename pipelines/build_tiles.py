@@ -117,14 +117,18 @@ def prepare_projected_source(conn: psycopg.Connection) -> None:
 
 
 def prepare_low_zoom_mask(conn: psycopg.Connection) -> None:
-    """Прегенерит forest_3857_low — единую маску леса с buffered ST_Union.
+    """Прегенерит forest_3857_low — маску леса по породам с buffered ST_Union.
 
-    Без этого build_tile_bytes_lowzoom делал бы ST_Union 2M полигонов с
+    Группировка по dominant_species: на z<=8 пользователь видит варьирующиеся
+    цвета пород (сосна-коричневый, ель-зелёно-коричневый и т.д.), а не один
+    однотонный «зелёный массив», как было в первой версии маски.
+
+    Без prepare build_tile_bytes_lowzoom делал бы ST_Union 2M полигонов с
     большим буфером per tile (z=5 — 2 тайла на всю ЛО, каждый покрывает
-    весь регион → 2× full-region ST_Union, тайм-аут).
+    весь регион → full-region ST_Union, тайм-аут).
 
-    После prepare маска содержит несколько MultiPolygon-частей; per-tile
-    запрос на z<=8 — лёгкий ST_Intersection с GIST-индексом.
+    После prepare маска содержит несколько MultiPolygon-частей по каждой
+    породе; per-tile запрос на z<=8 — лёгкий ST_Intersection с GIST-индексом.
     """
     conn.execute("DROP TABLE IF EXISTS forest_3857_low")
     # Уникальная одноразовая операция — глобальный statement_timeout (300с)
@@ -137,25 +141,32 @@ def prepare_low_zoom_mask(conn: psycopg.Connection) -> None:
     # ST_SnapToGrid(50) скругляет точки до 50м-сетки → схлопывает дубли
     # вершин и упрощает геометрию (теряет ≪ MVT-пикселя на z<=8).
     # ST_Buffer закрывает гэпы между выделами (просеки, дренажи).
+    # GROUP BY dominant_species раздельно дисолвит каждую породу — фронт
+    # подкрашивает в FOREST_LAYER_PAINT_COLOR.
     # ST_Dump разбивает финальный MultiPolygon на отдельные строки — иначе
     # одна гигантская геометрия попадает в каждую запись и не индексируется.
     conn.execute(
         f"""
         CREATE TEMP TABLE forest_3857_low AS
         WITH simplified AS (
-            SELECT ST_Subdivide(
-                ST_Buffer(
-                    ST_SnapToGrid(ST_MakeValid(geom), 50),
-                    {LOW_ZOOM_MASK_BUFFER_M}
-                ),
-                256
-            ) AS geom
+            SELECT
+                dominant_species,
+                ST_Subdivide(
+                    ST_Buffer(
+                        ST_SnapToGrid(ST_MakeValid(geom), 50),
+                        {LOW_ZOOM_MASK_BUFFER_M}
+                    ),
+                    256
+                ) AS geom
             FROM forest_3857
         ),
         unioned AS (
-            SELECT ST_Union(geom) AS geom FROM simplified
+            SELECT dominant_species, ST_Union(geom) AS geom
+            FROM simplified
+            GROUP BY dominant_species
         )
-        SELECT (ST_Dump(geom)).geom AS geom FROM unioned
+        SELECT dominant_species, (ST_Dump(geom)).geom AS geom
+        FROM unioned
         """
     )
     conn.execute("CREATE INDEX idx_forest_3857_low_gix ON forest_3857_low USING GIST (geom)")
@@ -170,20 +181,20 @@ def build_tile_bytes_lowzoom(
     extent: int,
     buffer: int,
 ) -> bytes | None:
-    """z<=8: читаем prepared mask `forest_3857_low`, эмитим как 'mixed'.
+    """z<=8: читаем prepared mask `forest_3857_low`, эмитим per-species.
 
     На низких зумах MVT-пиксель огромный (z=5 ≈ 5км, z=7 ≈ 600м), а
-    индивидуальные выделы Рослесхоза по 1-10 га. Per-species группировка
-    даёт пёструю мозаику с дырками между выделами. Здесь читаем заранее
-    дисолвленную маску (см. prepare_low_zoom_mask) → сплошной зелёный
-    лесной массив, который и нужен пользователю при отдалении.
+    индивидуальные выделы Рослесхоза по 1-10 га — per-tile dissolve дал
+    бы тайм-аут. Здесь читаем заранее дисолвленную по dominant_species
+    маску (см. prepare_low_zoom_mask): пользователь видит цвета пород
+    (сосна, ель, берёза…) даже при сильном отдалении.
 
-    Frontend мапит slug 'mixed' на FOREST_COLORS.mixed (#607244, лесной
-    зелёный) — отдельной правки не требует.
+    bonitet/age_group/area_m2 на z<=8 теряются — на этих масштабах они
+    нечитаемы; режим переключения цветов на бонитет/возраст работает
+    только с z>=9 в detail-пути.
 
     Per-tile делается лёгкий ST_Intersection с tile_env (с GIST-индексом
-    по forest_3857_low). Без этой prepared-маски full-region ST_Union на
-    z=5..6 уходил в timeout 300с (2M полигонов × 1500м буфер).
+    по forest_3857_low).
     """
     row = conn.execute(
         """
@@ -191,14 +202,16 @@ def build_tile_bytes_lowzoom(
             SELECT ST_TileEnvelope(%s, %s, %s) AS env
         ),
         clipped AS (
-            SELECT ST_Intersection(f.geom, tile_env.env) AS geom
+            SELECT
+                f.dominant_species,
+                ST_Intersection(f.geom, tile_env.env) AS geom
             FROM forest_3857_low f, tile_env
             WHERE f.geom && tile_env.env
         ),
         mvt_src AS (
             SELECT
-                1                                AS id,
-                'mixed'                          AS dominant_species,
+                ROW_NUMBER() OVER ()             AS id,
+                dominant_species,
                 NULL::int                        AS bonitet,
                 NULL::text                       AS age_group,
                 NULL::real                       AS area_m2,
