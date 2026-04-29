@@ -188,7 +188,11 @@ npm run dev                        # репо-root: workspace @mushroom-map/web
   --rosleshoz-version fgislk-karelian-2026 \
   --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
 
-# Rebuild forest.pmtiles after ingest (needs DATABASE_URL env var, NOT --dsn)
+# Rebuild forest.pmtiles after ingest (needs DATABASE_URL env var, NOT --dsn).
+# minzoom=5, maxzoom=13. На z<=8 идёт coarse-путь (build_tile_bytes_lowzoom):
+# все полигоны мерджатся через ST_Union с большим буфером (BUFFER_BY_ZOOM)
+# в один полигон 'mixed' → сплошной зелёный массив без дырок при отдалении.
+# На z>=9 — детальная per-species раскраска (BUFFER_BY_ZOOM[z] на лету).
 DATABASE_URL="postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map" \
   .venv/Scripts/python.exe -u pipelines/build_tiles.py --region lenoblast
 
@@ -475,6 +479,10 @@ MapView и компонентах карты — все читают из store.
      `primaryChips` или `secondaryChips`.
    - `apps/web/src/store/useLayerVisibility.ts` — добавить ключ в
      `LayerKey` union + дефолты в `DEFAULT_VISIBLE`/`DEFAULT_LOADED`.
+   - `apps/web/src/components/mapView/layerDescriptions.ts` — текст
+     `{title, body}` для нового ключа. Тот же блок «На карте сейчас» в
+     левом сайдбаре подхватит автоматически (`LayerInfoPanel`). TS не
+     даст забыть — `Record<LayerKey, ...>`.
    Никаких правок в MapView.tsx, useMapLayers, useBaseMap или прочих хуках.
 
 Python normalize must stay thin. If profiling shows shapely/wkt/area in

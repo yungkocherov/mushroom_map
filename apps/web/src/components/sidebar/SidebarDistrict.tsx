@@ -26,6 +26,7 @@ import { useForecastDistricts } from "../../store/useForecastDistricts";
 import { useMapMode } from "../../store/useMapMode";
 
 import { DateScrubber } from "./DateScrubber";
+import { LayerInfoPanel } from "./LayerInfoPanel";
 import styles from "./SidebarOverview.module.css";
 
 export interface SidebarDistrictProps {
@@ -126,6 +127,8 @@ export function SidebarDistrict({ className }: SidebarDistrictProps) {
         <p className={styles.sectionLabel}>Слой</p>
         <LayerGrid />
       </section>
+
+      <LayerInfoPanel />
 
       <section className={styles.section} aria-label="Что можно собирать в районе">
         <p className={styles.sectionLabel}>В районе сейчас</p>

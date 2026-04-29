@@ -16,8 +16,10 @@ build_tiles: генерация PMTiles с лесным слоем из forest_u
     - Используется стандартный Google/XYZ web mercator, НЕ custom grid.
       PostGIS даёт `ST_TileEnvelope(z, x, y)` — нативный helper.
     - source-layer в MVT = "forest" (фронт уже ищет это имя).
-    - По умолчанию зумы 7..14. Выше 14 полигоны не добавляют информации,
-      ниже 6 полигоны слишком мелкие чтобы их рендерить.
+    - По умолчанию зумы 5..13. На z<=8 идёт coarse-путь (build_tile_bytes_lowzoom):
+      все полигоны мерджатся с большим буфером (BUFFER_BY_ZOOM) в один
+      полигон 'mixed', чтобы пользователь видел сплошной зелёный массив
+      на отдалении. На z>=9 — детальная per-species раскраска.
 
 Использование:
     python pipelines/build_tiles.py --region lenoblast
@@ -39,25 +41,41 @@ from pmtiles.writer import Writer
 from tile_utils import build_dsn, lonlat_to_tile, region_bbox
 
 DEFAULT_LAYER = "forest"
-DEFAULT_MINZOOM = 7
-DEFAULT_MAXZOOM = 13  # z=14 в 4 раза больше тайлов, MapLibre отлично overzoom-ит с z=13
+DEFAULT_MINZOOM = 5      # 2026-04-29 ev: было 7, ниже z=7 пользователь не видел леса вообще
+DEFAULT_MAXZOOM = 13     # z=14 в 4 раза больше тайлов, MapLibre отлично overzoom-ит с z=13
 DEFAULT_EXTENT = 4096
 DEFAULT_BUFFER = 128     # 128/4096 ≈ 3.1% перекрытие — увеличено 2026-04-29 чтобы убрать
                          # видимые «просветы» между выделами на низких зумах (юзерфидбэк).
 DEFAULT_REGION = "lenoblast"
 
-# Порог area_m2 по зумам — на мелких масштабах выкидываем мелочь,
-# которую всё равно не видно. Это кратно уменьшает размер PMTiles и
-# ускоряет парсинг тайлов в MapLibre.
-# 2026-04-29 — пороги уменьшены ×5: при старых на z=7-9 покрытие выглядело
-# фрагментарно, юзер видел «дыры» и решал что forest сломан.
+# Размер ST_Buffer'а вокруг полигонов при сборке тайла, в метрах.
+# 2026-04-29 ev: на z=5..8 MVT-пиксель огромный (на z=5 ≈ 5км, на z=7 ≈ 600м),
+# поэтому 8м буфер незаметен — соседние выделы не склеиваются и видны
+# просветы. Увеличиваем буфер до ≈ 1/4 ширины MVT-пикселя на каждом зуме.
+# На z>=11 оставляем 8м (как было) — гэпы между выделами там физически меньше
+# чем визуальное разрешение.
+BUFFER_BY_ZOOM: dict[int, float] = {
+    5:  1500.0,
+    6:   800.0,
+    7:   400.0,
+    8:   150.0,
+    9:    50.0,
+    10:   20.0,
+    11:    8.0,
+    12:    8.0,
+    13:    8.0,
+}
+
+# Порог area_m2 по зумам — на мелких масштабах фильтруем мелочь.
+# 2026-04-29 ev: на z<=8 фильтр отключаем — в build_tile_bytes_lowzoom
+# делается полный ST_Union без группировки, мелочь склеивается в массивы
+# и фильтр только мешает. На z=9..11 пороги как раньше (после ÷5).
 MIN_AREA_BY_ZOOM: dict[int, float] = {
-    7:  100_000.0,    # 10 га (было 50 га)
-    8:   50_000.0,    # 5 га  (было 25 га)
-    9:   10_000.0,    # 1 га  (было 5 га)
-    10:   2_000.0,    # 0.2 га (было 1 га)
-    11:     500.0,    # 0.05 га (было 0.3 га)
-    # z=12+ — всё что есть в forest_unified
+    9:   10_000.0,    # 1 га
+    10:   2_000.0,    # 0.2 га
+    11:     500.0,    # 0.05 га
+    # z=5..8: фильтра нет, см. build_tile_bytes_lowzoom
+    # z=12+: фильтра нет
 }
 
 
@@ -68,6 +86,9 @@ def prepare_projected_source(conn: psycopg.Connection) -> None:
 
     Без этого каждый тайл делал бы ST_Transform заново для всех
     пересекающих полигонов. Temp-таблица + GIST-индекс — 5-10x быстрее.
+
+    2026-04-29 ev: буфер вынесен из подготовки в per-tile-запрос, потому что
+    он теперь зависит от зума (BUFFER_BY_ZOOM). Здесь только сырая проекция.
     """
     conn.execute("DROP TABLE IF EXISTS forest_3857")
     conn.execute(
@@ -80,12 +101,7 @@ def prepare_projected_source(conn: psycopg.Connection) -> None:
             fu.confidence,
             fu.area_m2,
             fp.meta,
-            -- Буфер 8м закрывает зазоры между полигонами из соседних MVT-тайлов.
-            -- 2026-04-29 — увеличен с 3м до 8м: на zoom 7-9 квантование сильнее,
-            -- 3м не хватало → юзер видел просветы. 8м даёт overlap, dissolve в
-            -- build_tile_bytes склеивает соседей одного species/bonitet/age,
-            -- так что overlap не вызывает «двойную заливку» и не темнит цвет.
-            ST_Buffer(ST_Transform(fu.geometry, 3857), 8.0) AS geom
+            ST_Transform(fu.geometry, 3857) AS geom
         FROM forest_unified fu
         JOIN forest_polygon fp ON fp.id = fu.id
         """
@@ -97,6 +113,70 @@ def prepare_projected_source(conn: psycopg.Connection) -> None:
     conn.execute("ANALYZE forest_3857")
 
 
+def build_tile_bytes_lowzoom(
+    conn: psycopg.Connection,
+    z: int, x: int, y: int,
+    layer: str,
+    extent: int,
+    buffer: int,
+    buffer_m: float,
+) -> bytes | None:
+    """z<=8: всё мерджится в один полигон с dominant_species='mixed'.
+
+    На низких зумах MVT-пиксель огромный (z=5 ≈ 5км, z=7 ≈ 600м), а
+    индивидуальные выделы Рослесхоза по 1-10 га. Per-species группировка
+    даёт пёструю мозаику с дырками между выделами. Здесь дисолвим всё
+    подряд с большим буфером (BUFFER_BY_ZOOM[z]) → сплошной зелёный
+    лесной массив, который и нужен пользователю при отдалении.
+
+    Frontend мапит slug 'mixed' на FOREST_COLORS.mixed (#607244, лесной
+    зелёный) — отдельной правки не требует.
+    """
+    # ST_Expand расширяет tile_env буфером, чтобы зацепить соседние полигоны,
+    # которые после ST_Buffer войдут в текущий тайл.
+    row = conn.execute(
+        """
+        WITH tile_env AS (
+            SELECT ST_TileEnvelope(%s, %s, %s) AS env
+        ),
+        candidates AS (
+            SELECT f.geom
+            FROM forest_3857 f, tile_env
+            WHERE f.geom && ST_Expand(tile_env.env, %s)
+        ),
+        dissolved AS (
+            SELECT ST_Union(ST_Buffer(ST_MakeValid(geom), %s)) AS geom
+            FROM candidates
+        ),
+        mvt_src AS (
+            SELECT
+                1                                AS id,
+                'mixed'                          AS dominant_species,
+                NULL::int                        AS bonitet,
+                NULL::text                       AS age_group,
+                NULL::real                       AS area_m2,
+                NULL::real                       AS timber_stock,
+                ST_AsMVTGeom(geom, tile_env.env, %s, %s, true) AS geom
+            FROM dissolved, tile_env
+            WHERE geom IS NOT NULL
+        )
+        SELECT ST_AsMVT(mvt_src, %s, %s, 'geom')
+        FROM mvt_src
+        WHERE geom IS NOT NULL
+        """,
+        (
+            z, x, y,                    # ST_TileEnvelope
+            buffer_m,                   # ST_Expand
+            buffer_m,                   # ST_Buffer
+            extent, buffer,             # ST_AsMVTGeom
+            layer, extent,              # ST_AsMVT
+        ),
+    ).fetchone()
+    if row is None or row[0] is None or len(row[0]) == 0:
+        return None
+    return gzip.compress(bytes(row[0]))
+
+
 def build_tile_bytes(
     conn: psycopg.Connection,
     z: int, x: int, y: int,
@@ -104,18 +184,17 @@ def build_tile_bytes(
     extent: int,
     buffer: int,
     min_area: float,
+    buffer_m: float,
 ) -> bytes | None:
-    """Возвращает gzip-сжатые MVT-байты тайла или None если пусто.
+    """z>=9: per-species dissolve. ST_Buffer применяется на лету по BUFFER_BY_ZOOM.
 
+    Возвращает gzip-сжатые MVT-байты тайла или None если пусто.
     Требует предварительно вызванного prepare_projected_source(conn).
     `min_area` — нижний порог area_m2 (для уменьшения файла на низких зумах).
     """
     # Dissolve: ST_Union группой по (species, bonitet, age_group) объединяет
     # смежные/перекрывающиеся выделы одинаковых атрибутов в один полигон.
-    # Убирает два артефакта сразу:
-    #   1) микрощели между соседними выделами при MVT-квантовании (hairlines);
-    #   2) тёмные полосы на общих рёбрах из-за 3м-overlap от ST_Buffer в
-    #      forest_3857 (две полупрозрачные заливки наложены → темнее).
+    # Убирает микрощели между соседними выделами при MVT-квантовании.
     # Атрибуты полигон-специфичные (id, timber_stock) теряются; кликабельность
     # через /api/forest/at не ломается — она лезет в БД по координате, не в тайл.
     row = conn.execute(
@@ -130,10 +209,10 @@ def build_tile_bytes(
                 f.meta->>'age_group'            AS age_group,
                 f.area_m2,
                 (f.meta->>'timber_stock')::real AS timber_stock,
-                f.geom
+                ST_Buffer(ST_MakeValid(f.geom), %s) AS geom
             FROM forest_3857 f, tile_env
             WHERE f.area_m2 >= %s
-              AND f.geom && tile_env.env
+              AND f.geom && ST_Expand(tile_env.env, %s)
         ),
         dissolved AS (
             SELECT
@@ -142,7 +221,7 @@ def build_tile_bytes(
                 age_group,
                 SUM(area_m2)                    AS area_m2,
                 AVG(timber_stock)               AS timber_stock,
-                ST_Union(ST_MakeValid(geom))    AS geom
+                ST_Union(geom)                  AS geom
             FROM candidates
             GROUP BY dominant_species, bonitet, age_group
         ),
@@ -163,7 +242,9 @@ def build_tile_bytes(
         """,
         (
             z, x, y,                    # ST_TileEnvelope
+            buffer_m,                   # ST_Buffer in candidates
             min_area,                   # area filter
+            buffer_m,                   # ST_Expand for tile_env
             extent, buffer,             # ST_AsMVTGeom
             layer, extent,              # ST_AsMVT
         ),
@@ -237,16 +318,27 @@ def main() -> None:
                 done_in_z = 0
 
                 z_errors = 0
+                buffer_m = BUFFER_BY_ZOOM.get(z, 8.0)
                 for x in range(x_min, x_max + 1):
                     for y in range(y_min, y_max + 1):
                         try:
-                            data = build_tile_bytes(
-                                conn, z, x, y,
-                                layer=args.layer,
-                                extent=args.extent,
-                                buffer=args.buffer,
-                                min_area=min_area_z,
-                            )
+                            if z <= 8:
+                                data = build_tile_bytes_lowzoom(
+                                    conn, z, x, y,
+                                    layer=args.layer,
+                                    extent=args.extent,
+                                    buffer=args.buffer,
+                                    buffer_m=buffer_m,
+                                )
+                            else:
+                                data = build_tile_bytes(
+                                    conn, z, x, y,
+                                    layer=args.layer,
+                                    extent=args.extent,
+                                    buffer=args.buffer,
+                                    min_area=min_area_z,
+                                    buffer_m=buffer_m,
+                                )
                         except (psycopg.errors.QueryCanceled, psycopg.errors.InternalError_) as e:
                             # statement_timeout ИЛИ GEOS interruption — пропускаем тайл, не роняем
                             # сборку. GEOS поднимает InternalError_ когда signal приходит во время

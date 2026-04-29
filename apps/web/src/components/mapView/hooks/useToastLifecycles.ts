@@ -1,53 +1,45 @@
 /**
  * useToastLifecycles — управляет жизненным циклом fading-тостов:
- * - vpnToast: показывается при переключении на satellite/hybrid, fade через 3.5с,
- *   полное скрытие через ещё 0.8с
- * - forestHint: показывается при первом успешном loaded.forest=true, тот же lifecycle
+ * - vpnToast: показывается при переключении на satellite/hybrid, 2с visible + 0.8с fade
+ * - forestHint: показывается при первом успешном loaded.forest=true, 4с visible + 0.8с fade
+ *
+ * Каждый тост — один useEffect с двумя setTimeout. Не делим lifecycle между
+ * эффектами через store (раньше fade-эффект мог сбиться от посторонних
+ * обновлений стора и тост висел вечно — см. user feedback 2026-04-29).
  */
 import { useEffect, useRef } from "react";
 import { useLayerVisibility } from "../../../store/useLayerVisibility";
 
 export function useToastLifecycles() {
   const baseMap = useLayerVisibility((s) => s.baseMap);
-  const vpnToast = useLayerVisibility((s) => s.vpnToast);
-  const forestHint = useLayerVisibility((s) => s.forestHint);
   const forestLoaded = useLayerVisibility((s) => s.loaded.forest);
   const setVpnToast = useLayerVisibility((s) => s.setVpnToast);
   const setForestHint = useLayerVisibility((s) => s.setForestHint);
 
-  // Trigger VPN toast when switching to satellite/hybrid
+  // VPN toast: 2с visible → 0.8с fade → hidden. Все таймеры в одном эффекте,
+  // чтобы перезапуск basemap'а атомарно сбрасывал старые таймеры.
   useEffect(() => {
-    if (baseMap === "satellite" || baseMap === "hybrid") {
-      setVpnToast("visible");
-      const t = setTimeout(() => setVpnToast("fading"), 3500);
-      return () => clearTimeout(t);
-    }
+    if (baseMap !== "satellite" && baseMap !== "hybrid") return;
+    setVpnToast("visible");
+    const tFade = setTimeout(() => setVpnToast("fading"), 2000);
+    const tHide = setTimeout(() => setVpnToast("hidden"), 2800);
+    return () => {
+      clearTimeout(tFade);
+      clearTimeout(tHide);
+    };
   }, [baseMap, setVpnToast]);
 
-  // VPN toast fade-out
-  useEffect(() => {
-    if (vpnToast === "fading") {
-      const t = setTimeout(() => setVpnToast("hidden"), 800);
-      return () => clearTimeout(t);
-    }
-  }, [vpnToast, setVpnToast]);
-
-  // Trigger forest hint on first successful load (rising-edge of loaded.forest)
+  // Forest hint на rising-edge loaded.forest. 4с visible → 0.8с fade → hidden.
   const forestPrevLoadedRef = useRef(false);
   useEffect(() => {
-    if (forestLoaded && !forestPrevLoadedRef.current) {
-      forestPrevLoadedRef.current = true;
-      setForestHint("visible");
-      const t = setTimeout(() => setForestHint("fading"), 4000);
-      return () => clearTimeout(t);
-    }
+    if (!forestLoaded || forestPrevLoadedRef.current) return;
+    forestPrevLoadedRef.current = true;
+    setForestHint("visible");
+    const tFade = setTimeout(() => setForestHint("fading"), 4000);
+    const tHide = setTimeout(() => setForestHint("hidden"), 4800);
+    return () => {
+      clearTimeout(tFade);
+      clearTimeout(tHide);
+    };
   }, [forestLoaded, setForestHint]);
-
-  // Forest hint fade-out
-  useEffect(() => {
-    if (forestHint === "fading") {
-      const t = setTimeout(() => setForestHint("hidden"), 800);
-      return () => clearTimeout(t);
-    }
-  }, [forestHint, setForestHint]);
 }

@@ -10,6 +10,7 @@
  * (тот сам делает свой fetch для feature-state). Кешировать через
  * shared хук — Phase 2.5 при wiring'е MapView.
  */
+import { LayerInfoPanel } from "./LayerInfoPanel";
 import styles from "./SidebarOverview.module.css";
 
 export interface SidebarOverviewProps {
@@ -27,6 +28,8 @@ export function SidebarOverview({ className }: SidebarOverviewProps) {
           близость воды. Слои переключаются панелью справа на карте.
         </p>
       </div>
+
+      <LayerInfoPanel />
 
       <section className={styles.sourcesSection}>
         <p className={styles.sectionLabel}>Источники</p>
