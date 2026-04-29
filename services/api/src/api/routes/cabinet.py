@@ -2,7 +2,7 @@
 
     GET    /api/cabinet/spots          -> список своих spots
     POST   /api/cabinet/spots          -> создать spot
-    PATCH  /api/cabinet/spots/{id}     -> переименовать / поправить заметку / цвет
+    PATCH  /api/cabinet/spots/{id}     -> переименовать / поправить заметку / rating
     DELETE /api/cabinet/spots/{id}     -> удалить spot
 
 Все эндпоинты требуют CurrentUser; spot всегда привязан к user_id из
@@ -12,6 +12,10 @@ JWT'а — клиент не может ни прочитать, ни трону
 Координаты валидируются: lat ∈ [-90, 90], lon ∈ [-180, 180]. Дальше —
 не имеет смысла резать по bbox ЛО: юзеры могут сохранять что угодно
 (съездил в Карелию — пометил), серверу всё равно.
+
+`rating` — 1..5 оценка качества места. Цвет маркера на карте — производная
+от rating (см. apps/web/src/lib/spotRating.ts). Pydantic Field(ge=1, le=5)
+дублирует CHECK constraint в db/migrations/030_user_spot_rating.sql.
 """
 
 from __future__ import annotations
@@ -33,13 +37,11 @@ router = APIRouter()
 # Schemas
 # ──────────────────────────────────────────────────────────────────────
 
-ALLOWED_COLORS = {"forest", "chanterelle", "birch", "moss", "danger"}
-
 
 class SpotCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     note: str = Field(default="", max_length=4000)
-    color: str = Field(default="forest")
+    rating: int = Field(default=3, ge=1, le=5)
     tags: list[str] = Field(default_factory=list, max_length=64)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
@@ -48,17 +50,17 @@ class SpotCreate(BaseModel):
 class SpotPatch(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     note: Optional[str] = Field(default=None, max_length=4000)
-    color: Optional[str] = Field(default=None)
+    rating: Optional[int] = Field(default=None, ge=1, le=5)
     tags: Optional[list[str]] = Field(default=None, max_length=64)
 
 
 def _row_to_spot(row: tuple) -> dict:
-    sid, name, note, color, tags, lon, lat, created_at, updated_at = row
+    sid, name, note, rating, tags, lon, lat, created_at, updated_at = row
     return {
         "id":         str(sid),
         "name":       name,
         "note":       note,
-        "color":      color,
+        "rating":     int(rating),
         "tags":       list(tags) if tags else [],
         "lat":        float(lat),
         "lon":        float(lon),
@@ -68,7 +70,7 @@ def _row_to_spot(row: tuple) -> dict:
 
 
 _SELECT_COLUMNS = """
-    id, name, note, color, tags,
+    id, name, note, rating, tags,
     ST_X(geom) AS lon, ST_Y(geom) AS lat,
     created_at, updated_at
 """
@@ -113,21 +115,16 @@ def list_spots(user: CurrentUser) -> list[dict]:
 
 @router.post("/spots", status_code=status.HTTP_201_CREATED)
 def create_spot(payload: SpotCreate, user: CurrentUser) -> dict:
-    if payload.color not in ALLOWED_COLORS:
-        raise HTTPException(
-            status_code=400,
-            detail=f"color must be one of: {sorted(ALLOWED_COLORS)}",
-        )
     tags = _normalize_tags(payload.tags)
     with get_conn() as conn:
         row = conn.execute(
             f"""
-            INSERT INTO user_spot (user_id, name, note, color, tags, geom)
+            INSERT INTO user_spot (user_id, name, note, rating, tags, geom)
             VALUES (%s, %s, %s, %s, %s,
                     ST_SetSRID(ST_MakePoint(%s, %s), 4326))
             RETURNING {_SELECT_COLUMNS}
             """,
-            (user.id, payload.name, payload.note, payload.color, tags,
+            (user.id, payload.name, payload.note, payload.rating, tags,
              payload.lon, payload.lat),
         ).fetchone()
         conn.commit()
@@ -148,14 +145,9 @@ def patch_spot(spot_id: UUID, payload: SpotPatch, user: CurrentUser) -> dict:
     if payload.note is not None:
         fields.append("note = %s")
         values.append(payload.note)
-    if payload.color is not None:
-        if payload.color not in ALLOWED_COLORS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"color must be one of: {sorted(ALLOWED_COLORS)}",
-            )
-        fields.append("color = %s")
-        values.append(payload.color)
+    if payload.rating is not None:
+        fields.append("rating = %s")
+        values.append(payload.rating)
     if payload.tags is not None:
         fields.append("tags = %s")
         values.append(_normalize_tags(payload.tags))

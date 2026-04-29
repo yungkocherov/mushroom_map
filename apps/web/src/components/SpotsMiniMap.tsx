@@ -15,7 +15,7 @@ import maplibregl, { Map as MaplibreMap } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { UserSpot } from "@mushroom-map/types";
 import { INLINE_STYLE } from "./mapView/styles/inline";
-import { SPOT_COLOR_HEX } from "../lib/spotColors";
+import { RATING_HEX } from "../lib/spotRating";
 
 interface Props {
   spots: UserSpot[];
@@ -33,9 +33,9 @@ function spotsToGeoJson(spots: UserSpot[]): GeoJSON.FeatureCollection {
       type: "Feature",
       geometry: { type: "Point", coordinates: [s.lon, s.lat] },
       properties: {
-        id:    s.id,
-        name:  s.name,
-        color: SPOT_COLOR_HEX[s.color] ?? SPOT_COLOR_HEX.forest,
+        id:     s.id,
+        name:   s.name,
+        rating: s.rating,
       },
     })),
   };
@@ -70,7 +70,16 @@ export function SpotsMiniMap({ spots, highlightedId, onSelect }: Props) {
         source: "spots-src",
         paint: {
           "circle-radius":       ["interpolate", ["linear"], ["zoom"], 5, 5, 12, 9, 16, 13],
-          "circle-color":        ["get", "color"],
+          "circle-color": [
+            "match",
+            ["get", "rating"],
+            1, RATING_HEX[1],
+            2, RATING_HEX[2],
+            3, RATING_HEX[3],
+            4, RATING_HEX[4],
+            5, RATING_HEX[5],
+            RATING_HEX[3],
+          ],
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 2,
           "circle-opacity":      0.95,

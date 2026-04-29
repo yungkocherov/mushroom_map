@@ -17,13 +17,13 @@ import {
   deleteSpot,
   listSpots,
 } from "@mushroom-map/api-client";
-import type { SpotColor, UserSpot } from "@mushroom-map/types";
+import type { SpotRating, UserSpot } from "@mushroom-map/types";
 import { Container } from "../components/layout/Container";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { SpotsMiniMap } from "../components/SpotsMiniMap";
 import { useAuth } from "../auth/useAuth";
-import { SPOT_COLOR_OPTIONS } from "../lib/spotColors";
+import { RATING_OPTIONS, RATING_HEX, RATING_LABEL } from "../lib/spotRating";
 import { tagLabel } from "../lib/spotTags";
 import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./CabinetSpotsPage.module.css";
@@ -44,27 +44,27 @@ export function CabinetSpotsPage() {
   // Состояние формы.
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [color, setColor] = useState<SpotColor>("forest");
+  const [rating, setRating] = useState<SpotRating>(3);
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // Фильтр по цвету маркера. Пустой Set = все цвета (значение «всё включено»).
-  const [colorFilter, setColorFilter] = useState<Set<SpotColor>>(new Set());
+  // Фильтр по rating. Пустой Set = все оценки (значение «всё включено»).
+  const [ratingFilter, setRatingFilter] = useState<Set<SpotRating>>(new Set());
   // Подсветка точки на мини-карте при hover'е по строке списка.
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   const visibleSpots = useMemo<UserSpot[]>(() => {
     if (!spots) return [];
-    if (colorFilter.size === 0) return spots;
-    return spots.filter((s) => colorFilter.has(s.color));
-  }, [spots, colorFilter]);
+    if (ratingFilter.size === 0) return spots;
+    return spots.filter((s) => ratingFilter.has(s.rating));
+  }, [spots, ratingFilter]);
 
-  const toggleColorFilter = (c: SpotColor) => {
-    setColorFilter((prev) => {
+  const toggleRatingFilter = (r: SpotRating) => {
+    setRatingFilter((prev) => {
       const next = new Set(prev);
-      if (next.has(c)) next.delete(c);
-      else next.add(c);
+      if (next.has(r)) next.delete(r);
+      else next.add(r);
       return next;
     });
   };
@@ -118,7 +118,7 @@ export function CabinetSpotsPage() {
       await createSpot(tok, {
         name: name.trim(),
         note: note.trim(),
-        color,
+        rating,
         lat: latNum,
         lon: lonNum,
       });
@@ -230,18 +230,18 @@ export function CabinetSpotsPage() {
           </div>
 
           <fieldset className={styles.colorRow}>
-            <legend className={styles.colorLegend}>Маркер</legend>
-            {SPOT_COLOR_OPTIONS.map((c) => (
-              <label key={c.value} className={styles.colorOpt}>
+            <legend className={styles.colorLegend}>Оценка (1=плохое, 5=отличное)</legend>
+            {RATING_OPTIONS.map((r) => (
+              <label key={r.value} className={styles.colorOpt}>
                 <input
                   type="radio"
-                  name="color"
-                  value={c.value}
-                  checked={color === c.value}
-                  onChange={() => setColor(c.value)}
+                  name="rating"
+                  value={r.value}
+                  checked={rating === r.value}
+                  onChange={() => setRating(r.value)}
                 />
-                <span className={styles.colorDot} style={{ background: c.cssVar }} />
-                <span>{c.label}</span>
+                <span className={styles.colorDot} style={{ background: r.hex }} />
+                <span>{r.value} · {r.label}</span>
               </label>
             ))}
           </fieldset>
@@ -261,30 +261,30 @@ export function CabinetSpotsPage() {
       )}
 
       {spots && spots.length > 0 && (
-        <div className={styles.filterRow} role="group" aria-label="Фильтр по цвету">
-          <span className={styles.filterLabel}>Цвет:</span>
-          {SPOT_COLOR_OPTIONS.map((c) => {
-            const active = colorFilter.size === 0 || colorFilter.has(c.value);
+        <div className={styles.filterRow} role="group" aria-label="Фильтр по оценке">
+          <span className={styles.filterLabel}>Оценка:</span>
+          {RATING_OPTIONS.map((r) => {
+            const active = ratingFilter.size === 0 || ratingFilter.has(r.value);
             return (
               <button
-                key={c.value}
+                key={r.value}
                 type="button"
                 className={styles.filterChip}
                 data-active={active}
-                onClick={() => toggleColorFilter(c.value)}
-                aria-pressed={colorFilter.has(c.value)}
-                title={c.label}
+                onClick={() => toggleRatingFilter(r.value)}
+                aria-pressed={ratingFilter.has(r.value)}
+                title={r.label}
               >
-                <span className={styles.filterDot} style={{ background: c.cssVar }} />
-                <span>{c.label}</span>
+                <span className={styles.filterDot} style={{ background: r.hex }} />
+                <span>{r.value} · {r.label}</span>
               </button>
             );
           })}
-          {colorFilter.size > 0 && (
+          {ratingFilter.size > 0 && (
             <button
               type="button"
               className={styles.filterReset}
-              onClick={() => setColorFilter(new Set())}
+              onClick={() => setRatingFilter(new Set())}
             >
               Сбросить
             </button>
@@ -307,7 +307,7 @@ export function CabinetSpotsPage() {
               </li>
             )}
             {visibleSpots.map((s) => {
-              const colorCss = SPOT_COLOR_OPTIONS.find((c) => c.value === s.color)?.cssVar ?? "var(--forest)";
+              const dotColor = RATING_HEX[s.rating] ?? RATING_HEX[3];
               return (
                 <li
                   key={s.id}
@@ -316,7 +316,12 @@ export function CabinetSpotsPage() {
                   onMouseEnter={() => setHighlightedId(s.id)}
                   onMouseLeave={() => setHighlightedId((h) => (h === s.id ? null : h))}
                 >
-                  <span className={styles.markerDot} style={{ background: colorCss }} aria-hidden="true" />
+                  <span
+                    className={styles.markerDot}
+                    style={{ background: dotColor }}
+                    aria-label={`Оценка ${s.rating} (${RATING_LABEL[s.rating]})`}
+                    title={`${s.rating} — ${RATING_LABEL[s.rating]}`}
+                  />
                   <div className={styles.rowBody}>
                     <div className={styles.rowTitle}>
                       <Link to={`/spots/${s.id}`} className={styles.rowTitleLink}>

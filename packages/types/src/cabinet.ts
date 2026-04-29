@@ -3,19 +3,15 @@
  * services/api/src/api/routes/cabinet.py.
  */
 
-export type SpotColor =
-  | "forest"
-  | "chanterelle"
-  | "birch"
-  | "moss"
-  | "danger";
+/** 1-5 оценка качества места. 1=плохое, 5=отличное. */
+export type SpotRating = 1 | 2 | 3 | 4 | 5;
 
 
 export interface UserSpot {
   id: string;
   name: string;
   note: string;
-  color: SpotColor;
+  rating: SpotRating;
   /** Slug'и из apps/web/src/lib/spotTags.ts (деревья + грибы + ягоды). */
   tags: string[];
   lat: number;
@@ -28,7 +24,7 @@ export interface UserSpot {
 export interface SpotCreatePayload {
   name: string;
   note?: string;
-  color?: SpotColor;
+  rating?: SpotRating;
   tags?: string[];
   lat: number;
   lon: number;
@@ -38,6 +34,6 @@ export interface SpotCreatePayload {
 export interface SpotPatchPayload {
   name?: string;
   note?: string;
-  color?: SpotColor;
+  rating?: SpotRating;
   tags?: string[];
 }

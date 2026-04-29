@@ -1,6 +1,7 @@
 /**
  * Слой «мои сохранённые места» — точки из /api/cabinet/spots с
- * цветом-маркером (spot.color), кликом → попап с name/note.
+ * маркером, цвет которого производный от spot.rating (1=красное → 5=зелёное),
+ * кликом → попап с name/note.
  *
  * Источник — GeoJSON в памяти, не pmtiles (данные приватные и
  * меняются часто). Обновление через `updateUserSpots(map, spots)`
@@ -13,7 +14,7 @@ import maplibregl, { type Map } from "maplibre-gl";
 import type { UserSpot } from "@mushroom-map/types";
 import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
 import { escapeHtml } from "../../../lib/escapeHtml";
-import { SPOT_COLOR_HEX } from "../../../lib/spotColors";
+import { RATING_HEX } from "../../../lib/spotRating";
 
 
 function spotsToGeoJson(spots: UserSpot[]): GeoJSON.FeatureCollection {
@@ -23,10 +24,10 @@ function spotsToGeoJson(spots: UserSpot[]): GeoJSON.FeatureCollection {
       type: "Feature",
       geometry: { type: "Point", coordinates: [s.lon, s.lat] },
       properties: {
-        id:    s.id,
-        name:  s.name,
-        note:  s.note,
-        color: SPOT_COLOR_HEX[s.color] ?? SPOT_COLOR_HEX.forest,
+        id:     s.id,
+        name:   s.name,
+        note:   s.note,
+        rating: s.rating,
       },
     })),
   };
@@ -57,7 +58,16 @@ export function addUserSpotsLayer(m: Map, spots: UserSpot[]): void {
           12, 6,
           16, 9,
         ],
-        "circle-color":         ["get", "color"],
+        "circle-color": [
+          "match",
+          ["get", "rating"],
+          1, RATING_HEX[1],
+          2, RATING_HEX[2],
+          3, RATING_HEX[3],
+          4, RATING_HEX[4],
+          5, RATING_HEX[5],
+          RATING_HEX[3],
+        ],
         "circle-stroke-color":  "#ffffff",
         "circle-stroke-width":  2,
         "circle-opacity":       0.95,

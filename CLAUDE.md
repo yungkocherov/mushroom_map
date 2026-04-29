@@ -70,13 +70,20 @@ choropleth-controller useEffect в MapView. `forecastChoropleth.ts`
 файл и ключ в `useLayerVisibility` оставлены (выключен) на случай
 возврата при появлении точечной forecast-модели.
 
-**user_spot.tags TEXT[]** (миграция 029, 2026-04-28). Multi-select из
-словаря `apps/web/src/lib/spotTags.ts`: 11 пород деревьев + 13 видов
-грибов + 5 ягод. Slug'и совпадают с `species_forest_affinity` где
-возможно (boletus-edulis...) — задел на матчинг с моделью прогноза.
-SaveSpotModal + SpotDetailPage edit рисуют чип-блоки «Деревья / Грибы /
-Ягоды»; цвет маркера остался отдельным fieldset. Сервер только
-дедуп+trim, без word-list валидации — словарь во фронте.
+**user_spot.tags TEXT[]** (миграция 029, 2026-04-28) + **user_spot.rating
+SMALLINT 1-5** (миграция 030, 2026-04-29 — заменила старый `color` enum).
+Tags: multi-select из словаря `apps/web/src/lib/spotTags.ts` — 11 пород
+деревьев + 13 видов грибов + 5 ягод. Slug'и совпадают с
+`species_forest_affinity` где возможно (boletus-edulis...) — задел на
+матчинг с моделью прогноза. SaveSpotModal + SpotDetailPage edit рисуют
+чип-блоки «Деревья / Грибы / Ягоды». Сервер только дедуп+trim, без
+word-list валидации — словарь во фронте.
+
+Rating: оценка качества места 1..5 (1=плохое → 5=отличное). Цвет маркера
+производный от rating через `apps/web/src/lib/spotRating.ts`
+(red→orange→grey→green→dark-green). Pydantic Field(ge=1, le=5) +
+CHECK constraint синхронизированы. Старые color-значения backfill'ятся
+в миграции (forest/chanterelle→4, moss/birch→3, danger→1).
 
 Global UI primitives:
 - **Spotlight (⌘K)** — `apps/web/src/components/Spotlight.tsx`. Mounted in

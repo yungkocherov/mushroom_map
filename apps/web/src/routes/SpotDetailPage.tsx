@@ -21,12 +21,12 @@ import {
   listSpots,
   patchSpot,
 } from "@mushroom-map/api-client";
-import type { SpotColor, UserSpot } from "@mushroom-map/types";
+import type { SpotRating, UserSpot } from "@mushroom-map/types";
 import { Container } from "../components/layout/Container";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
 import { useAuth } from "../auth/useAuth";
-import { SPOT_COLOR_OPTIONS, SPOT_COLOR_HEX } from "../lib/spotColors";
+import { RATING_OPTIONS, RATING_HEX, RATING_LABEL } from "../lib/spotRating";
 import {
   TREE_TAGS,
   MUSHROOM_TAGS,
@@ -53,7 +53,7 @@ export function SpotDetailPage() {
   // edit-form state — заполняется при включении edit-режима
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [color, setColor] = useState<SpotColor>("forest");
+  const [rating, setRating] = useState<SpotRating>(3);
   const [tags, setTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -86,7 +86,7 @@ export function SpotDetailPage() {
           setSpot(found);
           setName(found.name);
           setNote(found.note);
-          setColor(found.color);
+          setRating(found.rating);
           setTags(found.tags ?? []);
           setState("ready");
         }
@@ -131,9 +131,8 @@ export function SpotDetailPage() {
     );
   }
 
-  const colorHex = SPOT_COLOR_HEX[spot.color] ?? SPOT_COLOR_HEX.forest;
-  const colorLabel =
-    SPOT_COLOR_OPTIONS.find((c) => c.value === spot.color)?.label ?? spot.color;
+  const ratingHex = RATING_HEX[spot.rating] ?? RATING_HEX[3];
+  const ratingLabel = RATING_LABEL[spot.rating] ?? String(spot.rating);
 
   const handleSave = async (e: FormEvent) => {
     e.preventDefault();
@@ -144,7 +143,7 @@ export function SpotDetailPage() {
       const updated = await patchSpot(tok, spot.id, {
         name: name.trim(),
         note: note.trim(),
-        color,
+        rating,
         tags,
       });
       setSpot(updated);
@@ -178,8 +177,9 @@ export function SpotDetailPage() {
       <header className={styles.header}>
         <span
           className={styles.markerDot}
-          style={{ background: colorHex }}
-          aria-hidden="true"
+          style={{ background: ratingHex }}
+          aria-label={`Оценка ${spot.rating} (${ratingLabel})`}
+          title={`${spot.rating} — ${ratingLabel}`}
         />
         <h1 className={styles.title}>{spot.name}</h1>
       </header>
@@ -218,8 +218,8 @@ export function SpotDetailPage() {
           </Link>
         </dd>
 
-        <dt>цвет</dt>
-        <dd>{colorLabel}</dd>
+        <dt>оценка</dt>
+        <dd>{spot.rating} — {ratingLabel}</dd>
 
         <dt>создан</dt>
         <dd>{new Date(spot.created_at).toLocaleDateString("ru-RU")}</dd>
@@ -245,7 +245,7 @@ export function SpotDetailPage() {
             onClick={() => {
               setName(spot.name);
               setNote(spot.note);
-              setColor(spot.color);
+              setRating(spot.rating);
               setTags(spot.tags ?? []);
               setEditing(true);
             }}
@@ -287,18 +287,18 @@ export function SpotDetailPage() {
             </label>
 
             <fieldset className={styles.colorRow}>
-              <legend className={styles.colorLegend}>Цвет маркера</legend>
-              {SPOT_COLOR_OPTIONS.map((c) => (
-                <label key={c.value} className={styles.colorOpt}>
+              <legend className={styles.colorLegend}>Оценка (1=плохое, 5=отличное)</legend>
+              {RATING_OPTIONS.map((r) => (
+                <label key={r.value} className={styles.colorOpt}>
                   <input
                     type="radio"
-                    name="color"
-                    value={c.value}
-                    checked={color === c.value}
-                    onChange={() => setColor(c.value)}
+                    name="rating"
+                    value={r.value}
+                    checked={rating === r.value}
+                    onChange={() => setRating(r.value)}
                   />
-                  <span className={styles.colorDot} style={{ background: c.cssVar }} />
-                  <span>{c.label}</span>
+                  <span className={styles.colorDot} style={{ background: r.hex }} />
+                  <span>{r.value} · {r.label}</span>
                 </label>
               ))}
             </fieldset>

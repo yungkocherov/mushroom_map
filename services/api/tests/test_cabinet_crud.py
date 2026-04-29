@@ -15,7 +15,7 @@ def _spot_payload(name: str = "Поляна за Лемболово", **kwargs) 
     return {
         "name": name,
         "note": "Белые в августе",
-        "color": "forest",
+        "rating": 4,
         "lat": 60.31,
         "lon": 30.21,
         **kwargs,
@@ -34,8 +34,9 @@ def test_create_then_list(cabinet_client: httpx.Client) -> None:
     r1 = cabinet_client.post("/api/cabinet/spots", json=_spot_payload())
     assert r1.status_code == 201
     body = r1.json()
-    for k in ("id", "name", "note", "color", "lat", "lon", "created_at"):
+    for k in ("id", "name", "note", "rating", "lat", "lon", "created_at"):
         assert k in body
+    assert body["rating"] == 4
     assert body["lat"] == 60.31 and body["lon"] == 30.21
 
     r2 = cabinet_client.get("/api/cabinet/spots")
@@ -55,10 +56,13 @@ def test_patch_renames_spot(cabinet_client: httpx.Client) -> None:
     assert r.json()["lat"] == created["lat"]  # не трогалась
 
 
-def test_patch_rejects_unknown_color(cabinet_client: httpx.Client) -> None:
+def test_patch_rejects_invalid_rating(cabinet_client: httpx.Client) -> None:
     sid = cabinet_client.post("/api/cabinet/spots", json=_spot_payload()).json()["id"]
-    r = cabinet_client.patch(f"/api/cabinet/spots/{sid}", json={"color": "rainbow"})
-    assert r.status_code == 400
+    # 0, 6, 99 — все вне диапазона 1..5; Pydantic Field(ge=1, le=5) → 422
+    r = cabinet_client.patch(f"/api/cabinet/spots/{sid}", json={"rating": 6})
+    assert r.status_code == 422
+    r = cabinet_client.patch(f"/api/cabinet/spots/{sid}", json={"rating": 0})
+    assert r.status_code == 422
 
 
 def test_patch_empty_payload_rejected(cabinet_client: httpx.Client) -> None:
@@ -88,9 +92,12 @@ def test_create_rejects_empty_name(cabinet_client: httpx.Client) -> None:
     assert r.status_code == 422
 
 
-def test_create_rejects_invalid_color(cabinet_client: httpx.Client) -> None:
-    r = cabinet_client.post("/api/cabinet/spots", json=_spot_payload(color="rainbow"))
-    assert r.status_code == 400
+def test_create_rejects_invalid_rating(cabinet_client: httpx.Client) -> None:
+    # Out of range — Pydantic ge/le даёт 422.
+    r = cabinet_client.post("/api/cabinet/spots", json=_spot_payload(rating=6))
+    assert r.status_code == 422
+    r = cabinet_client.post("/api/cabinet/spots", json=_spot_payload(rating=0))
+    assert r.status_code == 422
 
 
 # ── изоляция между юзерами ───────────────────────────────────────────────

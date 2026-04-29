@@ -10,9 +10,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { createSpot } from "@mushroom-map/api-client";
-import type { SpotColor } from "@mushroom-map/types";
+import type { SpotRating } from "@mushroom-map/types";
 import { useAuth } from "../auth/useAuth";
-import { SPOT_COLOR_OPTIONS } from "../lib/spotColors";
+import { RATING_OPTIONS } from "../lib/spotRating";
 import { TREE_TAGS, MUSHROOM_TAGS, BERRY_TAGS, type SpotTag } from "../lib/spotTags";
 
 
@@ -30,7 +30,7 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
   const { getAccessToken } = useAuth();
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
-  const [color, setColor] = useState<SpotColor>("forest");
+  const [rating, setRating] = useState<SpotRating>(3);
   const [tags, setTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
@@ -58,7 +58,7 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
       await createSpot(tok, {
         name: name.trim(),
         note: note.trim(),
-        color,
+        rating,
         tags,
         lat,
         lon,
@@ -179,44 +179,38 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
             </label>
 
             <fieldset style={fieldsetStyle}>
-              <legend style={legendStyle}>Цвет маркера</legend>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(76px, 1fr))", gap: "var(--space-2)" }}>
-                {SPOT_COLOR_OPTIONS.map((c) => {
-                  const isSelected = color === c.value;
+              <legend style={legendStyle}>Оценка места</legend>
+              <p style={{ fontSize: "var(--fs-xs)", color: "var(--ink-faint)", margin: "0 0 var(--space-2)" }}>
+                Насколько хорошее место для сбора (1 = плохое, 5 = отличное).
+              </p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "var(--space-1)" }}>
+                {RATING_OPTIONS.map((r) => {
+                  const isSelected = rating === r.value;
                   return (
                     <button
-                      key={c.value}
+                      key={r.value}
                       type="button"
-                      onClick={() => setColor(c.value)}
+                      onClick={() => setRating(r.value)}
                       aria-pressed={isSelected}
                       style={{
                         display: "flex",
                         flexDirection: "column",
                         alignItems: "center",
                         gap: 4,
-                        padding: "var(--space-2)",
-                        background: isSelected ? "var(--paper-rise)" : "var(--paper)",
+                        padding: "var(--space-2) 0",
+                        background: isSelected ? r.hex : "var(--paper)",
+                        color: isSelected ? "white" : "var(--ink)",
                         border: isSelected ? "2px solid var(--ink)" : "1px solid var(--rule)",
                         borderRadius: "var(--radius-md)",
                         cursor: "pointer",
-                        transition: "border-color 120ms ease, background 120ms ease",
+                        transition: "background 120ms ease, border-color 120ms ease, color 120ms ease",
                         fontFamily: "var(--font-body)",
-                        fontSize: "var(--fs-xs)",
-                        color: "var(--ink)",
+                        fontSize: "var(--fs-sm)",
+                        fontWeight: 600,
                       }}
                     >
-                      <span
-                        style={{
-                          display: "inline-block",
-                          width: 32,
-                          height: 32,
-                          borderRadius: "50%",
-                          background: c.cssVar,
-                          border: "1px solid rgba(0,0,0,0.15)",
-                        }}
-                        aria-hidden
-                      />
-                      <span style={{ fontSize: 11 }}>{c.label}</span>
+                      <span style={{ fontSize: 18, lineHeight: 1 }}>{r.value}</span>
+                      <span style={{ fontSize: 10, fontWeight: 500, opacity: 0.85 }}>{r.label}</span>
                     </button>
                   );
                 })}
