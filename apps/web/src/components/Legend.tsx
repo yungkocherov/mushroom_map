@@ -59,16 +59,20 @@ const SWATCH = (color: string): React.CSSProperties => ({
 export function Legend() {
   const colorMode = useLayerVisibility((s) => s.forestColorMode);
   const forestLoaded = useLayerVisibility((s) => s.loaded.forest);
+  const forestVisible = useLayerVisibility((s) => s.visible.forest);
   const soilLoaded = useLayerVisibility((s) => s.loaded.soil);
   const soilVisible = useLayerVisibility((s) => s.visible.soil);
   const mobile = useIsMobile();
   // На мобильном легенда сворачивается в иконку, чтобы не закрывать карту.
   const [open, setOpen] = useState(!mobile);
 
-  // Show only when forest is loaded OR soil is loaded+visible
-  // (matching old behavior when MapView decided whether to render Legend).
-  if (!forestLoaded && !(soilLoaded && soilVisible)) return null;
-  const mode: LegendMode = soilLoaded && soilVisible ? "soil" : "forest";
+  // Легенда рисуется только когда соответствующий слой и загружен, и
+  // видим. Раньше gate был только на `loaded` — после toggle off forest
+  // легенда оставалась висеть (см. user feedback fix 8).
+  const forestActive = forestLoaded && forestVisible;
+  const soilActive = soilLoaded && soilVisible;
+  if (!forestActive && !soilActive) return null;
+  const mode: LegendMode = soilActive ? "soil" : "forest";
 
   let title = "";
   let items: Array<{ label: string; color: string }> = [];

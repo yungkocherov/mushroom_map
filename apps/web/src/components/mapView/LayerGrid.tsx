@@ -15,13 +15,15 @@
  *
  * Single source of truth — useLayerVisibility store.
  */
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import type { Map } from "maplibre-gl";
 import { useAuth } from "../../auth/useAuth";
 import {
   useLayerVisibility,
   type ForestColorMode,
 } from "../../store/useLayerVisibility";
+import { useMapShare } from "./hooks/useMapShare";
 import styles from "./LayerGrid.module.css";
 
 export interface LayerGridProps {
@@ -30,6 +32,10 @@ export interface LayerGridProps {
   layout?: "grid" | "strip";
   /** Когда true — оборачивается в `.floating` контейнер с position:absolute. Используется в MapView. */
   floating?: boolean;
+  /** Когда true (вместе с floating) — рисует футер с кнопками «Сбросить» / «Поделиться». */
+  showFooter?: boolean;
+  /** Нужен для useMapShare: «Поделиться» читает center/zoom. */
+  mapRef?: React.MutableRefObject<Map | null>;
 }
 
 interface ChipDescriptor {
@@ -42,12 +48,25 @@ interface ChipDescriptor {
   disabled?: boolean;
 }
 
-export function LayerGrid({ className, layout = "grid", floating = false }: LayerGridProps) {
+export function LayerGrid({
+  className,
+  layout = "grid",
+  floating = false,
+  showFooter = false,
+  mapRef,
+}: LayerGridProps) {
   const visible = useLayerVisibility((s) => s.visible);
   const forestColorMode = useLayerVisibility((s) => s.forestColorMode);
   const setVisible = useLayerVisibility((s) => s.setVisible);
   const toggleVisible = useLayerVisibility((s) => s.toggleVisible);
   const selectForestMode = useLayerVisibility((s) => s.selectForestMode);
+  const resetAllVisibility = useLayerVisibility((s) => s.resetAllVisibility);
+
+  // useMapShare нужен только когда показываем footer и есть mapRef.
+  // Хук безопасно вызывать всегда (он просто возвращает no-op callback,
+  // когда ref'у нечего читать), это удобнее чем условный вызов.
+  const noopRef = useRef<Map | null>(null);
+  const onShare = useMapShare(mapRef ?? noopRef);
 
   const auth = useAuth();
   const authStatus = auth.status;
@@ -65,27 +84,6 @@ export function LayerGrid({ className, layout = "grid", floating = false }: Laye
 
   const isForestActive = (mode: ForestColorMode) =>
     visible.forest && forestColorMode === mode;
-
-  const spotsChip: ChipDescriptor =
-    authStatus === "authenticated"
-      ? {
-          key: "userSpots",
-          label: "Сохранённые",
-          active: visible.userSpots,
-          onClick: () => toggleVisible("userSpots"),
-        }
-      : {
-          key: "userSpots",
-          label: "Войти",
-          active: false,
-          href: `/auth?next=${encodeURIComponent(
-            typeof window !== "undefined"
-              ? window.location.pathname + window.location.search
-              : "/",
-          )}`,
-          hint: "Сохранённые",
-          disabled: authStatus === "loading",
-        };
 
   const primaryChips: ChipDescriptor[] = [
     {
@@ -124,8 +122,18 @@ export function LayerGrid({ className, layout = "grid", floating = false }: Laye
       active: visible.hillshade,
       onClick: () => toggleVisible("hillshade"),
     },
-    spotsChip,
   ];
+
+  // 2026-04-29: «Сохранённые» только для залогиненных. Когда unauth — chip
+  // не рендерим вообще, чтобы не дублировать «Войти» из header'а.
+  if (authStatus === "authenticated") {
+    primaryChips.push({
+      key: "userSpots",
+      label: "Сохранённые",
+      active: visible.userSpots,
+      onClick: () => toggleVisible("userSpots"),
+    });
+  }
 
   const secondaryChips: ChipDescriptor[] = [
     { key: "waterway", label: "Водотоки", active: visible.waterway, onClick: () => toggleVisible("waterway") },
@@ -175,6 +183,27 @@ export function LayerGrid({ className, layout = "grid", floating = false }: Laye
             </ul>
           )}
         </>
+      )}
+
+      {showFooter && floating && (
+        <div className={styles.footer}>
+          <button
+            type="button"
+            className={styles.footerBtn}
+            onClick={resetAllVisibility}
+            title="Выключить все слои"
+          >
+            Сбросить
+          </button>
+          <button
+            type="button"
+            className={styles.footerBtn}
+            onClick={onShare}
+            title="Скопировать ссылку на текущий вид карты"
+          >
+            Поделиться
+          </button>
+        </div>
       )}
     </div>
   );

@@ -15,7 +15,6 @@ import { useBaseMap } from "./mapView/hooks/useBaseMap";
 import { useToastLifecycles } from "./mapView/hooks/useToastLifecycles";
 import { BaseMapPicker } from "./mapView/BaseMapPicker";
 import { LayerGrid } from "./mapView/LayerGrid";
-import { ShareButton } from "./mapView/ShareButton";
 import { MapOverlays } from "./mapView/MapOverlays";
 import { CursorReadout } from "./mapView/CursorReadout";
 import { SpeciesFilterBadge } from "./mapView/SpeciesFilterBadge";
@@ -87,8 +86,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
       <div ref={mapRef} className="map-root" />
 
       <BaseMapPicker />
-      <LayerGrid layout={mobile ? "strip" : "grid"} floating />
-      <ShareButton mapRef={map} />
+      <LayerGrid layout={mobile ? "strip" : "grid"} floating showFooter mapRef={map} />
 
       <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={setSpeciesFilter} />
 

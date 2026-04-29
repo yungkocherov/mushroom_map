@@ -66,6 +66,8 @@ export interface LayerVisibilityState {
   setForestColorMode: (mode: ForestColorMode) => void;
   /** Включить forest и переключить mode одним действием — для LayerGrid. */
   selectForestMode: (mode: ForestColorMode) => void;
+  /** Выключить все слои (visible: false по всем ключам). loaded не трогаем — слои уже закешированы в карте, повторный toggle on не будет re-load'ить. */
+  resetAllVisibility: () => void;
   setErrorMsg: (msg: string | null) => void;
   setVpnToast: (state: ToastFadeState) => void;
   setForestHint: (state: ToastFadeState) => void;
@@ -73,20 +75,23 @@ export interface LayerVisibilityState {
   setSpeciesFilterLabel: (label: string | null) => void;
 }
 
+// 2026-04-29: все слои выключены по умолчанию. На первой загрузке карты
+// пользователь видит только basemap и сам включает нужные слои через
+// LayerGrid — см. user feedback batch.
 const DEFAULT_VISIBLE: Record<LayerKey, boolean> = {
-  forest: true,
-  water: true,
-  waterway: true,
-  wetland: true,
-  oopt: true,
-  roads: true,
-  felling: true,
-  protective: true,
-  soil: false, // профили почв — heavy slot, скрыт по умолчанию
-  hillshade: true,
-  districts: false, // отключено: район-как-логика убран (см. iter 2026-04-28)
+  forest: false,
+  water: false,
+  waterway: false,
+  wetland: false,
+  oopt: false,
+  roads: false,
+  felling: false,
+  protective: false,
+  soil: false,
+  hillshade: false,
+  districts: false,
   forecastChoropleth: false,
-  userSpots: true,
+  userSpots: false,
 };
 
 const DEFAULT_LOADED: Record<LayerKey, boolean> = Object.fromEntries(
@@ -117,6 +122,12 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
     set((s) => ({
       visible: { ...s.visible, forest: true },
       forestColorMode: mode,
+    })),
+  resetAllVisibility: () =>
+    set((s) => ({
+      visible: Object.fromEntries(
+        Object.keys(s.visible).map((k) => [k, false]),
+      ) as Record<LayerKey, boolean>,
     })),
   setErrorMsg: (msg) => set({ errorMsg: msg }),
   setVpnToast: (state) => set({ vpnToast: state }),

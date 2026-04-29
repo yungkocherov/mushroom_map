@@ -107,13 +107,16 @@ export function MapHomePage() {
   // карте сверху-слева.
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
-    return window.localStorage.getItem("mm.sidebarCollapsed") === "1";
+    // 2026-04-29: bumped key to v2 to reset users who had it collapsed
+    // from previous sessions. Default = expanded.
+    try { window.localStorage.removeItem("mm.sidebarCollapsed"); } catch { /* */ }
+    return window.localStorage.getItem("mm.sidebarCollapsed.v2") === "1";
   });
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((v) => {
       const next = !v;
       try {
-        window.localStorage.setItem("mm.sidebarCollapsed", next ? "1" : "0");
+        window.localStorage.setItem("mm.sidebarCollapsed.v2", next ? "1" : "0");
       } catch { /* private mode */ }
       return next;
     });
