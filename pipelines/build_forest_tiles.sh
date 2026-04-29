@@ -1,0 +1,130 @@
+#!/usr/bin/env bash
+# build_forest_tiles.sh — генерация forest.pmtiles через tippecanoe.
+#
+# Заменяет старый pipelines/build_tiles.py (47 мин) на цепочку:
+#   1. psql → стримим forest_unified в линейный GeoJSON (~1 мин)
+#   2. docker tippecanoe → MBTiles (~3-5 мин)
+#   3. docker pmtiles convert → PMTiles (~30 сек)
+#
+# Tippecanoe сам делает coalesce-densest-as-needed на низких зумах: смежные
+# полигоны одной породы склеиваются в массивы, мелочь дроп'ается, пока
+# тайл не уложится в лимит 500КБ. Per-zoom буфер и prepared mask больше
+# не нужны.
+#
+# Использование:
+#   bash pipelines/build_forest_tiles.sh
+#
+# Env (опционально):
+#   DATABASE_URL  (default: postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map)
+#   OUT_DIR       (default: data/tiles)
+#   MIN_ZOOM      (default: 5)
+#   MAX_ZOOM      (default: 13)
+
+set -euo pipefail
+
+# DB-контейнер из docker-compose (см. CLAUDE.md). psql на Windows-хосте
+# обычно отсутствует, поэтому дампим через docker exec — быстрее чем
+# python psycopg + не требует zависимостей.
+DB_CONTAINER="${DB_CONTAINER:-mushroom_db}"
+DB_USER="${DB_USER:-mushroom}"
+DB_NAME="${DB_NAME:-mushroom_map}"
+OUT_DIR="${OUT_DIR:-data/tiles}"
+MIN_ZOOM="${MIN_ZOOM:-5}"
+MAX_ZOOM="${MAX_ZOOM:-13}"
+
+GEOJSON_FILE="$OUT_DIR/forest.geojsonl"
+MBTILES_FILE="$OUT_DIR/forest.mbtiles"
+PMTILES_FILE="$OUT_DIR/forest.pmtiles"
+
+mkdir -p "$OUT_DIR"
+
+if ! command -v docker >/dev/null 2>&1; then
+    echo "docker не установлен (нужен для tippecanoe + pmtiles)" >&2
+    exit 1
+fi
+
+if ! docker ps --filter name="^${DB_CONTAINER}$" --format '{{.Names}}' | grep -q "$DB_CONTAINER"; then
+    echo "контейнер $DB_CONTAINER не запущен (docker compose up -d db)" >&2
+    exit 1
+fi
+
+t0=$(date +%s)
+echo "[1/3] docker exec psql → $GEOJSON_FILE"
+# row_to_json + ST_AsGeoJSON: строим Feature с минимально нужными properties.
+# bonitet/age_group для frontend paint expressions; area_m2 для tippecanoe
+# coalesce приоритета (-as сохраняет крупнейшие при drop).
+docker exec -i "$DB_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -At -c "
+COPY (
+    SELECT row_to_json(f.*)
+    FROM (
+        SELECT
+            'Feature'::text                                    AS type,
+            ST_AsGeoJSON(fu.geometry, 6)::json                 AS geometry,
+            json_build_object(
+                'dominant_species', fu.dominant_species,
+                'bonitet',          (fp.meta->>'bonitet')::int,
+                'age_group',        fp.meta->>'age_group',
+                'area_m2',          fu.area_m2
+            )                                                  AS properties
+        FROM forest_unified fu
+        JOIN forest_polygon fp ON fp.id = fu.id
+    ) f
+) TO STDOUT
+" > "$GEOJSON_FILE"
+
+n_features=$(wc -l < "$GEOJSON_FILE")
+echo "      $n_features features → $(du -h "$GEOJSON_FILE" | cut -f1)"
+
+t1=$(date +%s)
+echo "[2/3] tippecanoe → $MBTILES_FILE  (z=$MIN_ZOOM..$MAX_ZOOM)"
+# Tippecanoe v1.24.1 (klokantech/tippecanoe). Флаги:
+#   -l forest           — layer name (matches frontend forestStyle.ts source-layer)
+#   --read-parallel     — параллельное чтение line-delimited GeoJSON
+#   --coalesce          — склеивает смежные features с одинаковыми
+#                         properties (dominant_species + bonitet + age_group),
+#                         сильно уменьшает кол-во features на низких зумах
+#                         → пользователь видит сплошные массивы пород без дырок
+#   --detect-shared-borders — чистые рёбра полигонов (без двойных линий)
+#   --drop-densest-as-needed — если тайл >500KB, дропает densest features
+#                              пока не влезет (предохранитель от gigant-тайлов)
+#   --extend-zooms-if-still-dropping — поднимает MAX_ZOOM если все ещё
+#                                       дропаем на нём (нам не нужно, но
+#                                       безопасно)
+#   --simplification=10 --simplify-only-low-zooms — Дугласа-Пеккера на
+#                       промежуточных зумах, maxzoom оставляем pristine
+#   --gamma=2           — выкидывает overlapping features при дропе
+#                         (предпочитает сохранить большой полигон)
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/$OUT_DIR:/data" klokantech/tippecanoe \
+    tippecanoe \
+        -o "/data/forest.mbtiles" \
+        -l forest \
+        --minimum-zoom="$MIN_ZOOM" \
+        --maximum-zoom="$MAX_ZOOM" \
+        --coalesce \
+        --detect-shared-borders \
+        --drop-densest-as-needed \
+        --extend-zooms-if-still-dropping \
+        --simplification=10 \
+        --simplify-only-low-zooms \
+        --gamma=2 \
+        --read-parallel \
+        --force \
+        "/data/forest.geojsonl"
+
+t2=$(date +%s)
+echo "[3/3] pmtiles convert → $PMTILES_FILE"
+MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/$OUT_DIR:/data" protomaps/go-pmtiles \
+    convert "/data/forest.mbtiles" "/data/forest.pmtiles" --force
+
+t3=$(date +%s)
+size=$(du -h "$PMTILES_FILE" | cut -f1)
+
+# Очистка промежуточных артефактов — pmtiles файла достаточно
+rm -f "$GEOJSON_FILE" "$MBTILES_FILE"
+
+echo ""
+echo "done: $PMTILES_FILE ($size)"
+echo "  geojson dump: $((t1 - t0))s"
+echo "  tippecanoe:   $((t2 - t1))s"
+echo "  pmtiles:      $((t3 - t2))s"
+echo "  total:        $((t3 - t0))s"
