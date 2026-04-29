@@ -107,8 +107,12 @@ export const FOREST_LAYER_PAINT_PATTERN = {
  */
 const FOREST_OPACITY_EXPR = [
   "interpolate", ["linear"], ["zoom"],
-  7, 0.9,
-  9, 0.85,
+  // Opacity 1.0 на низких зумах — закрываем просветы между выделами,
+  // которые возникают на zoom 7-10 из-за tippecanoe-симплификации соседних
+  // полигонов (mismatch на пиксель → basemap просвечивает). Полупрозрачный
+  // лес возвращается с zoom 11+, где edges точные и просветов нет.
+  7, 1.0,
+  10, 1.0,
   11, 0.6,
 ];
 
