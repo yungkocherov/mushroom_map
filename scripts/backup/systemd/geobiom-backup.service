@@ -1,0 +1,16 @@
+[Unit]
+Description=Geobiom Postgres backup -> Yandex Object Storage
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/geobiom/.env.backup
+ExecStart=/srv/geobiom/scripts/backup/dump_db.sh
+StandardOutput=journal
+StandardError=journal
+# Don't run two backups at once; geobiom-backup-rotate is gated by After=
+# so it won't conflict, but a manual systemctl start during a running
+# backup would otherwise queue.
+TimeoutStartSec=2h

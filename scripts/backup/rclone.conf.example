@@ -1,0 +1,12 @@
+# rclone config template for Yandex Object Storage backup target.
+# Render to /root/.config/rclone/rclone.conf on the prod VM.
+# See scripts/backup/README.md §4 for the rendering recipe.
+
+[geobiom-yos]
+type = s3
+provider = Other
+access_key_id = REPLACE_ME
+secret_access_key = REPLACE_ME
+endpoint = https://storage.yandexcloud.net
+region = ru-central1
+acl = private

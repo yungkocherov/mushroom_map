@@ -297,6 +297,34 @@ CF Pages + R2 выпилены 2026-04-29 — TSPU режет CF SNI из РФ, 
   - Каждый `git push` обязательно проверять `gh run list` — `deploy-web`
     ~1 мин, `deploy-api` ~5 мин.
 
+## Backup (nightly to Yandex Object Storage)
+
+См. spec `docs/superpowers/specs/2026-04-30-prod-readiness-design.md` §1
++ runbook `scripts/backup/README.md`.
+
+- **Pipeline**: `docker exec mushroom_db_prod pg_dump -Fc -Z 9` →
+  `age -r $AGE_RECIPIENT` → `rclone rcat geobiom-yos:geobiom-backups/db/YYYY-MM-DD.sql.gz.age`
+  (no temp file on disk; pure stream).
+- **Schedule**: systemd timer `geobiom-backup.timer` (daily 03:00 UTC) +
+  `geobiom-backup-rotate.timer` (Sunday 04:00 UTC). Units и скрипты
+  лежат в `scripts/backup/` и `scripts/backup/systemd/`. Деплой —
+  `REMOTE=geobiom-prod bash scripts/deploy/install_backup_systemd.sh`.
+- **Retention**: 7 daily + 4 weekly + 3 monthly = 14 файлов.
+- **Encryption**: `age` (single-recipient). Public key — на VM в
+  `/etc/geobiom/.env.backup` (`AGE_RECIPIENT=age1...`). Private key —
+  на dev-машине в `~/.ssh/geobiom-backup.age`. **Без приватного ключа
+  бэкапы нерасшифровать** — резервная копия ключа в личном password
+  manager обязательна.
+- **Bucket**: `geobiom-backups` в Y.O.S., service account
+  `geobiom-backup-writer` с ролью `storage.editor` только на этот
+  bucket. Static key в `/etc/geobiom/.env.backup`, mode 600.
+- **Restore-drill**: `bash scripts/backup/restore_drill.sh` — pull
+  latest, decrypt, restore в transient docker postgres, ассерты на
+  `forest_polygon >= 2M`, `admin_area >= 18`, `vk_post >= 60k`. **Без
+  репетиции бэкап считаем несуществующим.**
+- **Disaster recovery**: см. `scripts/backup/README.md` «Disaster
+  recovery: VM полностью потеряна».
+
 ## Pre-prod-deploy checklist (для будущих environments / staging)
 
 1. **Yandex OAuth callback URL.** На [oauth.yandex.ru](https://oauth.yandex.ru/)

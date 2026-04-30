@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly Geobiom backup retention enforcement
+
+[Timer]
+OnCalendar=Sun *-*-* 04:00:00 UTC
+Persistent=true
+Unit=geobiom-backup-rotate.service
+
+[Install]
+WantedBy=timers.target

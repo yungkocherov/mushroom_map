@@ -1,0 +1,12 @@
+[Unit]
+Description=Geobiom backup retention (7d + 4w + 3m)
+After=geobiom-backup.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/geobiom/.env.backup
+ExecStart=/srv/geobiom/scripts/backup/rotate.sh
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=15min
