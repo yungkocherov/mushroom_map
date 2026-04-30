@@ -1,33 +1,54 @@
 #!/usr/bin/env bash
-# bootstrap_oracle.sh — однократная подготовка Oracle Cloud Free Tier
-# ARM Ampere VM (Ubuntu 22.04). Выполняется ВРУЧНУЮ при первом
-# подключении к свежей VM.
+# bootstrap_oracle.sh — однократная подготовка прод-VM (Oracle Cloud Free
+# Tier ARM Ampere VM 4 OCPU / 24 GB или эквивалент). Запускается ВРУЧНУЮ
+# при первом подключении к свежей VM.
 #
 # Что делает:
-#   1. Обновляет apt
-#   2. Ставит docker + docker compose v2
-#   3. Открывает 80/443 в iptables (Oracle ARM по умолчанию закрыт)
-#   4. Создаёт /srv/mushroom-map с правами текущего юзера
-#   5. Клонирует репозиторий
+#   1. Обновляет apt + ставит base пакеты
+#   2. 4 GB swapfile (Oracle ARM ships без swap'а; OOM ловит Postgres)
+#   3. Docker engine + compose v2 (официальный apt-repo)
+#   4. Tailscale (operator завершает OAuth-flow вручную)
+#   5. ufw lockdown: deny 22 except tailnet, allow 80/443
+#   6. age + rclone — для backup pipeline (см. scripts/backup/)
+#   7. /etc/geobiom (700 root:root) — для .env.backup
+#   8. /srv/mushroom-map с правами текущего юзера + git clone
 #
 # Использование (с локальной машины через ssh):
 #   ssh ubuntu@<vm-ip> 'bash -s' < scripts/deploy/bootstrap_oracle.sh
 #
-# После завершения — заполнить /srv/mushroom-map/.env.prod (см.
-# infra/.env.prod.example) и запустить `docker compose -f
-# docker-compose.prod.yml --env-file .env.prod up -d`.
+# После завершения — выйти/зайти заново (docker-группа), завершить
+# Tailscale OAuth, скопировать .env.prod, restore БД из Y.O.S. бэкапа
+# (scripts/deploy/cutover_to_oracle.sh).
 
 set -euo pipefail
 
 REPO_URL="https://github.com/yungkocherov/mushroom_map.git"
 TARGET="/srv/mushroom-map"
 
-echo "[1/5] apt update + базовые пакеты"
+echo "[1/8] apt update + базовые пакеты"
 sudo apt-get update
 sudo apt-get install -y --no-install-recommends \
     ca-certificates curl gnupg git ufw
 
-echo "[2/5] Docker engine + compose plugin (официальный apt-repo)"
+echo "[2/8] 4 GB swapfile (Oracle ARM Free Tier ships без swap'а)"
+if ! swapon --show 2>/dev/null | grep -q "/swapfile"; then
+    sudo fallocate -l 4G /swapfile
+    sudo chmod 600 /swapfile
+    sudo mkswap /swapfile
+    sudo swapon /swapfile
+    if ! grep -q "^/swapfile" /etc/fstab; then
+        echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab >/dev/null
+    fi
+    sudo sysctl -w vm.swappiness=10 >/dev/null
+    if ! grep -q "^vm.swappiness" /etc/sysctl.conf; then
+        echo 'vm.swappiness=10' | sudo tee -a /etc/sysctl.conf >/dev/null
+    fi
+    echo "  swap mounted, swappiness=10"
+else
+    echo "  swap already configured"
+fi
+
+echo "[3/8] Docker engine + compose plugin"
 if ! command -v docker >/dev/null 2>&1; then
     sudo install -m 0755 -d /etc/apt/keyrings
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
@@ -44,28 +65,35 @@ if ! command -v docker >/dev/null 2>&1; then
         docker-ce docker-ce-cli containerd.io \
         docker-buildx-plugin docker-compose-plugin
 fi
-
-# Без перелогина docker без sudo не заработает — просим юзера выйти/войти.
 sudo usermod -aG docker "$USER" || true
 
-echo "[3/5] iptables — открываем 80/443 (Oracle ARM закрыт по умолчанию)"
-sudo iptables -I INPUT -p tcp --dport 80  -j ACCEPT
-sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
-sudo netfilter-persistent save 2>/dev/null || \
-    sudo sh -c "iptables-save > /etc/iptables/rules.v4" || true
-
-# UFW (если используется) — на всякий случай.
-if command -v ufw >/dev/null 2>&1; then
-    sudo ufw allow 22/tcp || true
-    sudo ufw allow 80/tcp
-    sudo ufw allow 443/tcp
+echo "[4/8] Tailscale install"
+if ! command -v tailscale >/dev/null 2>&1; then
+    curl -fsSL https://tailscale.com/install.sh | sudo sh
 fi
 
-echo "[4/5] $TARGET с правами $USER"
+echo "[5/8] ufw lockdown"
+sudo ufw --force reset >/dev/null
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+# 22/tcp — только из Tailscale CGNAT (100.64.0.0/10) для emergency
+sudo ufw allow from 100.64.0.0/10 to any port 22 comment 'Tailscale CGNAT'
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw --force enable
+echo "  ufw active. Reminder: Oracle Cloud Console → Security List также drop 22 from public."
+
+echo "[6/8] backup tooling (age + rclone)"
+sudo apt-get install -y age rclone
+sudo mkdir -p /etc/geobiom
+sudo chown root:root /etc/geobiom
+sudo chmod 700 /etc/geobiom
+
+echo "[7/8] $TARGET с правами $USER"
 sudo mkdir -p "$TARGET"
 sudo chown -R "$USER:$USER" "$TARGET"
 
-echo "[5/5] git clone"
+echo "[8/8] git clone"
 if [ ! -d "$TARGET/.git" ]; then
     git clone --depth=1 "$REPO_URL" "$TARGET"
 fi
@@ -76,16 +104,25 @@ cat <<'NEXT'
 Готово. Дальнейшие шаги (вручную):
 
   1. Выйти и зайти заново по ssh (чтобы docker-группа применилась).
-  2. cd /srv/mushroom-map
-  3. cp infra/.env.prod.example .env.prod  (и заполнить секреты)
-  4. mkdir -p data/tiles data/copernicus/terrain
-     # затем — pg_restore + загрузить tiles (см. scripts/deploy/sync_to_remote.sh)
-  5. docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-  6. docker compose -f docker-compose.prod.yml exec api \
-        python /app/src/api/migrate_runner.py  (или применить миграции
-        иначе — см. db/migrate.py в репо)
+  2. Tailscale OAuth:
+       sudo tailscale up --ssh --hostname=geobiom-prod
+     После этого в https://login.tailscale.com/admin/machines:
+       - tag машины как `tag:prod`
+       - проверить что MagicDNS работает: ssh geobiom-prod.tail-XXXX.ts.net
+  3. /etc/geobiom/.env.backup (см. scripts/backup/README.md §3):
+       sudo nano /etc/geobiom/.env.backup
+       sudo chmod 600 /etc/geobiom/.env.backup
+  4. /root/.config/rclone/rclone.conf (см. scripts/backup/README.md §4)
+  5. /srv/mushroom-map/.env.prod (скопировать с TimeWeb или infra/.env.prod.example)
+  6. mkdir -p /srv/mushroom-map/data/tiles /srv/mushroom-map/data/copernicus/terrain
+  7. С dev-машины: bash scripts/deploy/install_backup_systemd.sh
+     (раскатает scripts/backup/*.sh + systemd unit'ы)
+  8. С dev-машины: bash scripts/deploy/cutover_to_oracle.sh
+     (restore БД из Y.O.S. бэкапа + sync tiles + up стека)
 
-Перед первым up: настроить DNS — A-запись api.<домен> → IP этой VM,
-иначе Caddy не сможет получить TLS-сертификат.
+Перед DNS cutover (Phase 4):
+  - Опустить TTL до 300 за 24h: bash scripts/deploy/cloudflare_set_ttl.sh
+  - Затем: NEW_IP=<oracle-ip> bash scripts/deploy/cloudflare_dns_cutover.sh
+  - Smoke-test: bash scripts/deploy/smoke_test_prod.sh geobiom.ru
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 NEXT

@@ -368,6 +368,42 @@ CF Pages + R2 выпилены 2026-04-29 — TSPU режет CF SNI из РФ, 
 - **Disaster recovery**: см. `scripts/backup/README.md` «Disaster
   recovery: VM полностью потеряна».
 
+## Migration to Oracle ARM (планируется)
+
+Текущий прод на TimeWeb VM временный — план переезда на Oracle Cloud
+Free Tier ARM (4 OCPU / 24 GB, always-free). Spec
+`docs/superpowers/specs/2026-04-30-prod-readiness-design.md` §6, plan
+`docs/superpowers/plans/2026-04-30-prod-readiness-oracle-migration.md`.
+
+Скрипты (все в `scripts/deploy/`):
+- `bootstrap_oracle.sh` — обновлён: +swap 4GB, +Tailscale install,
+  +ufw lockdown (deny 22 from any except tailnet 100.64.0.0/10), +age,
+  +rclone, +/etc/geobiom/. Запускается ОДИН раз на свежей Oracle VM.
+- `cutover_to_oracle.sh` — Phase 3: pull latest backup из Y.O.S. →
+  decrypt age → scp на Oracle → pg_restore → rsync tiles из TimeWeb
+  через dev → up стека (включая GlitchTip+Umami оверлеи если их env-files
+  заполнены) → smoke-test через tailnet. TimeWeb остаётся живой.
+- `smoke_test_prod.sh` — curl-чеки `/`, `/health`, `/api/healthz`,
+  `/api/species?q=...`, HEAD `/tiles/forest.pmtiles`. Авто-выбор
+  http (tailnet host) vs https (публичный домен) по точке в host'е.
+- `cloudflare_set_ttl.sh` — за 24h до cutover'а опускает TTL до 300
+  на geobiom A-records (для быстрого rollback).
+- `cloudflare_dns_cutover.sh` — Phase 4: flip A-записи на NEW_IP.
+- `rollback_to_timeweb.sh` — emergency: вернуть DNS на 178.253.43.136
+  (TimeWeb IP жёстко зашит).
+- `decommission_timeweb.sh` — Phase 8 после soak'а: tar /srv на TimeWeb
+  → age → Y.O.S. под configs/timeweb-decommission-DATE.tar.age, потом
+  manual finish (TimeWeb dashboard, ssh-config, CLAUDE.md update).
+
+Tailscale aliases в `~/.ssh/config`:
+- `geobiom-prod` — целевая Oracle VM (после bootstrap'а tagged
+  `tag:prod` в Tailscale admin)
+- `geobiom-prod-timeweb` — текущий TimeWeb (нужен для rsync tiles в
+  cutover'е и для decommission'а)
+
+Cloudflare API token живёт локально в `~/.cloudflare/geobiom-api-token`
+(scope `Zone — DNS — Edit` на zone `geobiom.ru`).
+
 ## Pre-prod-deploy checklist (для будущих environments / staging)
 
 1. **Yandex OAuth callback URL.** На [oauth.yandex.ru](https://oauth.yandex.ru/)
