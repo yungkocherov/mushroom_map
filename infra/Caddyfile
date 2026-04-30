@@ -144,9 +144,10 @@ www.{$CADDY_WEB_HOST} {
 # GlitchTip self-hosted error tracking. Контейнер биндится только на
 # loopback (127.0.0.1:8001 в docker-compose), сюда заходим строго через
 # Caddy. Хост подставляется из CADDY_SENTRY_HOST env (sentry.geobiom.ru
-# в проде). Если переменная не задана — site-block парсится но не
-# создаёт сертификат, GlitchTip остаётся недоступным извне.
-{$CADDY_SENTRY_HOST} {
+# в проде). Дефолт `sentry.unused.local` нужен чтобы Caddyfile парсился
+# когда переменная не задана (TimeWeb env не имеет наблюдательного
+# стека) — внешний трафик на этот dummy-домен не приходит.
+{$CADDY_SENTRY_HOST:sentry.unused.local} {
 	encode gzip
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -164,8 +165,9 @@ www.{$CADDY_WEB_HOST} {
 }
 
 # Umami self-hosted analytics. Та же модель — контейнер на loopback,
-# Caddy на 443 → 127.0.0.1:8002 → umami:3000.
-{$CADDY_UMAMI_HOST} {
+# Caddy на 443 → 127.0.0.1:8002 → umami:3000. Дефолт-домен — см.
+# комментарий выше про CADDY_SENTRY_HOST.
+{$CADDY_UMAMI_HOST:analytics.unused.local} {
 	encode gzip
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
