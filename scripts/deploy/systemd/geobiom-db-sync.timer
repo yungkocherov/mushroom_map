@@ -1,0 +1,12 @@
+[Unit]
+Description=Geobiom nightly DB sync — TimeWeb to Oracle replica
+Documentation=https://github.com/yungkocherov/mushroom_map
+
+[Timer]
+# Daily 04:00 UTC = 07:00 MSK — после backup'а (03:00 UTC) и до прод-трафика
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

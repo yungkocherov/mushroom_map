@@ -1,0 +1,14 @@
+[Unit]
+Description=Geobiom DB nightly sync TimeWeb -> Oracle
+Documentation=https://github.com/yungkocherov/mushroom_map
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/srv/mushroom-map
+ExecStart=/usr/local/bin/geobiom-db-sync.sh
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=30min
