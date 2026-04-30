@@ -57,13 +57,17 @@ export const FOREST_COLORS: Record<ForestSlug, string> = {
 };
 
 /**
+ * Opacity леса. 0.5 — чтобы под слоем читался basemap (рельеф/спутник/схема).
+ * Tippecanoe pipeline (build_forest_tiles.sh) использует buffer=5px и
+ * `--detect-shared-borders`, поэтому полос на стыках MVT-тайлов с opacity<1
+ * почти не видно — старая константа 1.0 была компенсацией за buffer=128 в
+ * предыдущем python-pipeline'е, теперь не нужна.
+ */
+const FOREST_OPACITY_EXPR = 0.5;
+
+/**
  * Paint через fill-pattern. Требует чтобы `map.addImage("forest-<slug>", ...)`
  * был вызван ДО применения paint'а. Иначе MapLibre тихо не покажет слой.
- *
- * Opacity = 1.0 — принципиально. С opacity < 1 на стыках MVT-тайлов
- * перекрытие buffer-зон соседних тайлов рендерится дважды → заметные
- * более тёмные горизонтальные/вертикальные полосы. При opacity = 1
- * повторное рисование поверх себя невидимо.
  */
 export const FOREST_LAYER_PAINT_PATTERN = {
   "fill-pattern": [
@@ -85,18 +89,10 @@ export const FOREST_LAYER_PAINT_PATTERN = {
     "mixed", textureImageId("mixed"),
     textureImageId("unknown"),
   ],
-  "fill-opacity": 0.8,
+  "fill-opacity": FOREST_OPACITY_EXPR,
   "fill-outline-color": "rgba(0,0,0,0)",
   "fill-antialias": true,
 } as const;
-
-/**
- * Opacity леса. Константа 1.0 — пользователь не хочет, чтобы насыщенность
- * цвета прыгала при приближении (раньше падала на 0.6 с z=11 чтобы под
- * лесом просвечивал basemap). Если нужны дороги/реки под лесом — выключи
- * слой «Породы» и включи «Дороги» / «Озёра» отдельно.
- */
-const FOREST_OPACITY_EXPR = 1.0;
 
 export const FOREST_LAYER_PAINT_COLOR = {
   "fill-color": [
