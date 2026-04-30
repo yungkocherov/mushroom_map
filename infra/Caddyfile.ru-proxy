@@ -1,0 +1,132 @@
+# RU-VPS reverse-proxy + static-host (Phase C′).
+#
+# История:  2026-04-30 пробовали миграцию TimeWeb → Oracle (Stockholm) для
+# экономии хостинга. Схема не взлетела — TSPU режет foreign-IP destination
+# (per-IP volume throttle ~16 KB freeze) у RU-юзеров без ВПН. Phase C
+# (RU-VPS как pure proxy на Oracle) тоже провалилась — backhaul leg
+# RU-VPS → Stockholm режется тем же TSPU. Phase C′ (этот конфиг) частично
+# работает: фронт + tiles + кэш districts.json раздаются локально с
+# RU-IP, только мелкие /api/* проксируются на Oracle.
+#
+# Ограничения Phase C′:
+# - VPN-юзеры с «грязными» AdGuard exit'ами получают throttle на
+#   RU-host → foreign-VPN-exit reply leg
+# - Foreign-CDN basemap (tiles.versatiles.org, server.arcgisonline.com)
+#   фронт дёргает напрямую — TSPU там тоже работает, но мелкие 5-30 KB
+#   тайлы в основном проскакивают (не гарантия)
+#
+# Применимость: используется как fallback для случаев когда TimeWeb
+# недоступен или закончился (REG.RU Free Tier 6 мес после активации
+# 2026-04-30 — пингуем чтоб не уснул, см. CLAUDE.md «Two-stack»).
+#
+# Зависимости на VM:
+#   /srv/web                    — Vite SPA (sync с TimeWeb через tar-pipe)
+#   /srv/mushroom-map/tiles     — PMTiles + places.geojson (sync с TimeWeb)
+#   /srv/mushroom-map/districts.json — статический GeoJSON 18 районов
+#                                     (curl docker exec api → tar-pipe)
+
+{
+	email ineedletter@gmail.com
+}
+
+# Web-фронт. Vite SPA из /srv/web, immutable assets.
+geobiom.ru {
+	root * /srv/web
+	encode zstd gzip
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	header Cache-Control "public, max-age=300, must-revalidate"
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		X-Frame-Options           "DENY"
+		Referrer-Policy           "strict-origin-when-cross-origin"
+		Permissions-Policy        "interest-cohort=()"
+		-Server
+	}
+
+	try_files {path} /index.html
+	file_server
+
+	log {
+		output stdout
+		format json
+	}
+}
+
+www.geobiom.ru {
+	redir https://geobiom.ru{uri} 308
+}
+
+api.geobiom.ru {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		Referrer-Policy           "no-referrer"
+		Permissions-Policy        "interest-cohort=()"
+		-Server
+	}
+
+	request_header -X-Forwarded-For
+	encode zstd gzip
+
+	# PMTiles + places.geojson — Range-requests локально. CORS обязателен:
+	# фронт на geobiom.ru, тайлы на api.geobiom.ru = cross-origin. На
+	# TimeWeb-стеке CORS отдавал FastAPI (он проксировал /tiles), здесь
+	# Caddy file_server напрямую — добавляем заголовки руками.
+	@tiles_preflight {
+		method OPTIONS
+		path /tiles/*
+	}
+	handle @tiles_preflight {
+		header Access-Control-Allow-Origin "https://geobiom.ru"
+		header Access-Control-Allow-Methods "GET, HEAD, OPTIONS"
+		header Access-Control-Allow-Headers "Range, Content-Type, If-None-Match, If-Match"
+		header Access-Control-Max-Age "86400"
+		respond "" 204
+	}
+	handle /tiles/* {
+		root * /srv/mushroom-map
+		header Access-Control-Allow-Origin "https://geobiom.ru"
+		header Access-Control-Expose-Headers "Content-Length, Content-Range, Accept-Ranges, Etag"
+		header Cache-Control "public, max-age=86400, immutable"
+		header Accept-Ranges bytes
+		file_server
+	}
+
+	# /api/districts/ — статический GeoJSON ~700 KB. Через proxy на Oracle
+	# тротлится TSPU (RU→Stockholm response > 16 KB). Кэшируем локально:
+	#   ssh geobiom-prod-timeweb "docker exec mushroom_api_prod curl -s \
+	#       http://localhost:8000/api/districts/ -o /tmp/districts.json && \
+	#       docker cp mushroom_api_prod:/tmp/districts.json /tmp/" \
+	#     && ssh geobiom-prod-timeweb "tar -cf - -C /tmp districts.json" \
+	#       | ssh geobiom-ru-proxy "tar -xf - -C /srv/mushroom-map"
+	# Пересинк по необходимости (после ребилда districts).
+	handle_path /api/districts/ {
+		root * /srv/mushroom-map
+		rewrite * /districts.json
+		header Access-Control-Allow-Origin "https://geobiom.ru"
+		header Content-Type "application/json"
+		header Cache-Control "public, max-age=3600"
+		file_server
+	}
+
+	# Всё остальное /api/*, /health — proxy на Oracle. Response'ы маленькие.
+	# CORS — FastAPI'й CORSMiddleware ставит сам, Caddy не трогает.
+	handle {
+		reverse_proxy https://79.76.46.181 {
+			header_up Host {host}
+			transport http {
+				tls
+				tls_server_name {host}
+			}
+		}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

@@ -255,47 +255,116 @@ docker build -f services/api/Dockerfile.prod -t mushroom-api:prod .
 #   bash scripts/deploy/sync_tiles_to_vm.sh forest    # один слой
 ```
 
-## Production стек (live с 2026-04-29, VPN-free)
+## Production стек: two-stack (с 2026-04-30)
 
-CF Pages + R2 выпилены 2026-04-29 — TSPU режет CF SNI из РФ, сайт не
-открывался без VPN. Всё переехало на одну TimeWeb VM (временно, до
-поимки Oracle ARM, см. memory `project_website_migration.md`).
+После попыток мигрировать TimeWeb → Oracle Stockholm (бесплатный ARM)
+выяснилось что TSPU режет любой foreign-IP destination для RU-юзеров без
+ВПН (per-IP volume throttle ~16 KB freeze). Чистый Oracle = 0% RU-no-VPN
+аудитории. Чистый RU-host = ~95% работает без ВПН но проблемы у части
+VPN-юзеров. **Решение — two-stack**, две независимые копии.
 
-- **Фронт** — Caddy на VM раздаёт `/srv/web/` (Vite SPA). Деплой через
-  `.github/workflows/deploy-web.yml` (push на main → vite build → rsync
-  apps/web/dist/ → root@VM:/srv/web/). Хост `geobiom.ru`.
-- **API** — TimeWeb VM `178.253.43.136`, alias `geobiom-prod` в
-  локальном `~/.ssh/config`. Деплой через `.github/workflows/deploy-api.yml`:
-  build → push в GHCR → ssh на VM → `docker compose pull && up -d` →
-  `db/migrate.py`. Хост `api.geobiom.ru`.
-- **PMTiles** — раздаёт Caddy → API:8000 → bind-mount
-  `/srv/mushroom-map/tiles/`. URL `api.geobiom.ru/tiles/*.pmtiles`.
-  `VITE_TILES_URL` НЕ задаётся — фронт fallback'ит на `${API_ORIGIN}/tiles`
-  (см. `apps/web/src/components/mapView/utils/api.ts`).
-- **Build forest.pmtiles** через `pipelines/build_forest_tiles.sh`
-  (tippecanoe v1.24 в `klokantech/tippecanoe` Docker + go-pmtiles
-  convert). 5 мин total на 2.17M полигонов, output 209 MB.
-- **DNS на CF (grey-cloud / DNS only)**: A `geobiom.ru → 178.253.43.136`,
-  A `www.geobiom.ru → 178.253.43.136`, A `api.geobiom.ru → 178.253.43.136`.
-  **Никаких proxied (orange-cloud) записей** — иначе CF SNI режется TSPU.
-- **CF Pages**, **R2 bucket**, **Cloudflare wrangler-action**, repo var
-  `VITE_TILES_URL` — **удалены**.
-- **GitHub secrets** (для deploy-api/deploy-web):
-  - `PROD_HOST` = IP VM
-  - `PROD_SSH_USER` = `root`
-  - `PROD_SSH_KEY` = приватная часть `~/.ssh/geobiom_yc`
-- **GitHub vars**: `VITE_API_URL=https://api.geobiom.ru`,
-  `PROD_DEPLOY_ENABLED=true`. **НЕ задавать `VITE_TILES_URL`** — фронт
-  возьмёт правильное значение через fallback.
-- **`.env.prod` на VM** должен содержать: `CADDY_API_HOST=api.geobiom.ru`,
-  `CADDY_WEB_HOST=geobiom.ru`, `CADDY_ACME_EMAIL=...`, `WEB_HOST_PATH=/srv/web`.
-  Без `CADDY_WEB_HOST` Caddyfile парсится, но site-block geobiom.ru пустой
-  → no TLS cert → site не работает.
-- **Известные грабли:**
-  - Vite env-vars **запекаются во время build'а** — менять переменную в
-    GH vars → редеплой обязателен, иначе старый bundle подхватит старое.
-  - Каждый `git push` обязательно проверять `gh run list` — `deploy-web`
-    ~1 мин, `deploy-api` ~5 мин.
+```
+geobiom.ru     →  178.253.43.136 (TimeWeb)  ← RU-no-VPN юзеры (primary)
+api.geobiom.ru →  178.253.43.136              full stack: db + api + tiles
+www.geobiom.ru →  178.253.43.136              + frontend(VITE_API_URL=api.geobiom.ru)
+
+app.geobiom.ru     →  79.76.46.181 (Oracle)  ← VPN/foreign юзеры
+app-api.geobiom.ru →  79.76.46.181              full stack replica
+                                                + frontend(VITE_API_URL=app-api.geobiom.ru)
+```
+
+Полная история и факты про TSPU — memory `project_website_migration.md`.
+
+### TimeWeb (primary RU)
+
+- **Хосты:** `geobiom.ru` / `www.geobiom.ru` / `api.geobiom.ru`
+- **VM:** `178.253.43.136`, alias `geobiom-prod-timeweb` в `~/.ssh/config`
+- **Stack:** `docker-compose.prod.yml` (db + api + caddy)
+- **Frontend:** `/srv/web/`, Vite-build с `VITE_API_URL=https://api.geobiom.ru`
+- **Tiles:** `/srv/mushroom-map/tiles/` → Caddy → `api.geobiom.ru/tiles/*`
+- **Deploy:** `.github/workflows/deploy-{api,web}.yml` (push main → GHCR/rsync → VM)
+- **DNS:** A grey-cloud (DNS only) на CF. **Никаких proxied (orange-cloud)** —
+  TSPU режет CF SNI.
+
+### Oracle (foreign replica)
+
+- **Хосты:** `app.geobiom.ru` / `app-api.geobiom.ru`
+- **VM:** `79.76.46.181` (Stockholm), alias `geobiom-prod-oracle`. Always-Free
+  (4 OCPU / 24 GB / 200 GB ARM).
+- **Stack:** тот же `docker-compose.prod.yml` + `imresamu/postgis:16-3.4` (ARM)
+- **Frontend:** `/srv/web/`, отдельная сборка с `VITE_API_URL=https://app-api.geobiom.ru`
+- **Tiles:** `/srv/mushroom-map/tiles/` (синкнуто однократно из TimeWeb)
+- **DB-sync:** nightly cron pg_dump TimeWeb → ssh-pipe → pg_restore Oracle
+  (~10 мин, заменяет full db). Данные на Oracle на **24h stale** — приемлемо.
+- **DNS:** `app` / `app-api` A-records на CF
+
+### Frontend env (две сборки)
+
+Vite-env-vars запекаются во время build'а. Для two-stack — два билда:
+
+```bash
+# TimeWeb билд (default flow)
+VITE_API_URL=https://api.geobiom.ru npm run build  # из репо-root
+
+# Oracle билд
+VITE_API_URL=https://app-api.geobiom.ru npm run build
+```
+
+CI: `.github/workflows/deploy-web.yml` собирает + деплоит на TimeWeb. Для
+Oracle отдельный target — пока **manual** (rsync с dev), позже добавить
+`deploy-web-oracle.yml`.
+
+### Build forest.pmtiles
+
+`pipelines/build_forest_tiles.sh` (tippecanoe v1.24 в `klokantech/tippecanoe`
+Docker + go-pmtiles convert). 5 мин на 2.17M полигонов, output 209 MB.
+Tiles собираются однократно на dev, потом sync на оба VM:
+- TimeWeb: `bash scripts/deploy/sync_tiles_to_vm.sh forest`
+- Oracle: тем же скриптом с `REMOTE=geobiom-prod-oracle`
+
+### GitHub secrets / vars (для CI)
+
+**Secrets:**
+- `PROD_HOST` = `178.253.43.136` (TimeWeb IP)
+- `PROD_SSH_USER` = `root`
+- `PROD_SSH_KEY` = приватная часть `~/.ssh/geobiom_yc`
+
+**Vars:**
+- `VITE_API_URL=https://api.geobiom.ru` (для TimeWeb билда)
+- `PROD_DEPLOY_ENABLED=true`
+- **НЕ задавать `VITE_TILES_URL`** — фронт fallback'ит на `${API_ORIGIN}/tiles`
+
+### `.env.prod` на VM
+
+**Обе VM:** `CADDY_API_HOST`, `CADDY_WEB_HOST`, `CADDY_ACME_EMAIL`,
+`WEB_HOST_PATH=/srv/web`. На TimeWeb: `CADDY_API_HOST=api.geobiom.ru`,
+`CADDY_WEB_HOST=geobiom.ru`. На Oracle: `CADDY_API_HOST=app-api.geobiom.ru`,
+`CADDY_WEB_HOST=app.geobiom.ru`.
+
+### RU-VPS REG.RU Free Tier (dormant fallback)
+
+`195.208.119.105` (Москва-2), 1 vCPU / 1 GB / 10 GB, alias `geobiom-ru-proxy`.
+Бесплатно до **~2026-10-30** (6 мес). Caddyfile в `infra/Caddyfile.ru-proxy`,
+схема — frontend + tiles локально, /api/* проксируется. Активен/не активен —
+не критично пока. Используется как backup-host если TimeWeb выпадет.
+
+### Known gotchas
+
+- **Vite env-vars запекаются** — менять `VITE_API_URL` → редеплой обязателен.
+- **Каждый `git push`** проверять `gh run list` — `deploy-web` ~1 мин,
+  `deploy-api` ~5 мин.
+- **TSPU CF SNI блокировка** — не возвращать orange-cloud на CF.
+- **Foreign basemap CDN** (`tiles.versatiles.org`, `server.arcgisonline.com`)
+  фронт дёргает напрямую — RU-no-VPN юзеры через TSPU. Иногда работает по
+  lottery (мелкие тайлы 5-30 KB). Полный fix через каддy-proxy + патч URL
+  во фронте отложен.
+
+### Через 1 месяц (2026-05-30): review
+
+- Если **есть пользователи** помимо автора → **продолжаем TimeWeb-primary**
+  (платный RU host = единственный гарантированный путь для RU-no-VPN)
+- Если только автор → **переезд на Oracle полностью** (decommission TimeWeb,
+  принимаем требование ВПН для всех юзеров, экономим $X/мес)
 
 ## Observability (GlitchTip + Umami)
 
