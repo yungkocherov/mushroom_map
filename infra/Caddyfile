@@ -23,6 +23,18 @@
 	# или env. Не хардкодим тут чтобы не конфликтовало с локальным
 	# тестом без TLS.
 	email {$CADDY_ACME_EMAIL}
+
+	# 2026-04-30: HTTP/1.1 only. После переезда TimeWeb→Oracle (новый IP
+	# 79.76.53.170 в Стокгольме) браузеры из РФ без ВПН валились с
+	# ERR_CONNECTION_RESET на загрузке assets через HTTP/2 multiplex.
+	# Bash curl с HTTP/1.1 — 200 OK, проблема именно в h2/h3
+	# fingerprint'е TSPU-фильтра. h1 без multiplexing'а проходит чисто.
+	# Минус: каждый ассет = отдельный TCP — медленнее на parallel-load,
+	# но ситуация «работает vs не работает». Когда (если) Oracle IP
+	# «обкатается» — можно вернуть h2.
+	servers {
+		protocols h1
+	}
 }
 
 # api-домен — единственный, который Caddy слушает на этой VM.
