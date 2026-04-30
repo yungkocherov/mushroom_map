@@ -19,7 +19,11 @@
 
 services:
   db:
-    image: postgis/postgis:16-3.4
+    # imresamu/postgis — multi-arch (amd64+arm64) drop-in замена для
+    # postgis/postgis. Бинарно совместима, тот же PG16+PostGIS3.4.
+    # Нужно на Oracle ARM (postgis/postgis официально только amd64).
+    # Override через POSTGIS_IMAGE env если хочется свой image.
+    image: ${POSTGIS_IMAGE:-imresamu/postgis:16-3.4}
     container_name: mushroom_db_prod
     restart: unless-stopped
     environment:
