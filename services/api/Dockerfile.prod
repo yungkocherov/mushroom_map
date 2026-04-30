@@ -42,7 +42,8 @@ RUN pip install --prefix=/install --no-deps . \
        "psycopg[binary]>=3.2" "psycopg-pool>=3.2" \
        "pydantic>=2.6" "pydantic-settings>=2.2" "python-dotenv>=1.0" \
        "rasterio>=1.3" "pyproj>=3.6" \
-       "pyjwt>=2.8" "httpx>=0.27"
+       "pyjwt>=2.8" "httpx>=0.27" \
+       "sentry-sdk[fastapi]>=2.20"
 
 
 # ─── stage 2: runtime ──────────────────────────────────────────────────
