@@ -51,6 +51,16 @@ class Settings(BaseSettings):
     # Fallback при ошибке OAuth (user denied / state mismatch / ...).
     frontend_auth_error_url: str = "http://localhost:5173/auth/error"
 
+    # ── Observability (GlitchTip / Sentry-compatible) ─────────────────
+    # sentry_dsn пустой = SDK не инициализируется (no-op). Это безопасный
+    # дефолт — код может ехать в проде до того как поднят GlitchTip.
+    # git_sha используется как release-тег для группировки событий по
+    # коммиту; задаётся через GIT_SHA env в deploy-api workflow.
+    sentry_dsn: str = ""
+    sentry_environment: str = "production"
+    sentry_traces_sample_rate: float = 0.1
+    git_sha: str = "unknown"
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

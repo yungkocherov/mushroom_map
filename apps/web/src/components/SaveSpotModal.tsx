@@ -14,6 +14,7 @@ import type { SpotRating } from "@mushroom-map/types";
 import { useAuth } from "../auth/useAuth";
 import { RATING_OPTIONS } from "../lib/spotRating";
 import { TREE_TAGS, MUSHROOM_TAGS, BERRY_TAGS, type SpotTag } from "../lib/spotTags";
+import { track } from "../lib/track";
 
 
 interface Props {
@@ -65,6 +66,9 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
       });
       setDone(true);
       setError(null);
+      // Аналитика: считаем, сколько спот'ов сохранено + как часто юзер
+      // рейтит/тегает. lat/lon/name НЕ трекаем — это PII.
+      track("spot.save", { has_rating: rating !== null, tag_count: tags.length });
       onSaved?.();
     } catch (err) {
       setError((err as Error).message);

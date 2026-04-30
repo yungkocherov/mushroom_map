@@ -81,14 +81,20 @@ jobs:
     steps:
       - name: SSH and pull/restart
         uses: appleboy/ssh-action@v1
+        env:
+          GIT_SHA: ${{ github.sha }}
         with:
           host: ${{ secrets.PROD_HOST }}
           username: ${{ secrets.PROD_SSH_USER }}
           key: ${{ secrets.PROD_SSH_KEY }}
+          envs: GIT_SHA
           script: |
             set -e
             cd /srv/mushroom-map
             git pull --ff-only origin main
+            # GIT_SHA пробрасывается во временный env compose'а — тэг
+            # релиза в Sentry/GlitchTip.
+            export GIT_SHA="${GIT_SHA}"
             docker compose -f docker-compose.prod.yml --env-file .env.prod pull api
             docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api
             # Применяем миграции (db/migrate.py живёт внутри prod-образа,

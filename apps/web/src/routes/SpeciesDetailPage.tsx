@@ -27,6 +27,7 @@ import {
   FOREST_LABEL,
 } from "../components/species/labels";
 import { usePageTitle } from "../lib/usePageTitle";
+import { track } from "../lib/track";
 import styles from "./SpeciesDetailPage.module.css";
 import prose from "./Prose.module.css";
 
@@ -40,6 +41,7 @@ export function SpeciesDetailPage() {
   useEffect(() => {
     let cancelled = false;
     setState("loading");
+    if (slug) track("species.open", { slug });
     fetchSpeciesDetail(slug)
       .then((d) => {
         if (cancelled) return;

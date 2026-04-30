@@ -75,6 +75,15 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    // Self-hosted source maps для GlitchTip. Sentry SDK на проде
+    // подтягивает .map по URL рядом с bundle'ом и резолвит stack-trace
+    // в исходник. Минус: maps публично доступны (acceptable для
+    // open-source). Альтернатива — @sentry/vite-plugin для аплоада в
+    // GlitchTip; см. services/observability/README.md «Source maps
+    // экспонированы».
+    sourcemap: true,
+  },
   server: {
     host: "0.0.0.0",
     port: 5173,

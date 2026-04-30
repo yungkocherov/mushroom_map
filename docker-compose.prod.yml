@@ -63,6 +63,10 @@ services:
       UVICORN_WORKERS:               ${UVICORN_WORKERS:-2}
       TILES_DIR:                     /tiles
       TERRAIN_DIR:                   /terrain
+      # Observability (GlitchTip). Пустой DSN = SDK no-op.
+      SENTRY_DSN:                    ${SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT:            ${SENTRY_ENVIRONMENT:-production}
+      GIT_SHA:                       ${GIT_SHA:-unknown}
     volumes:
       # PMTiles локально на VM как read-only mount. На Cloudflare R2
       # переносится отдельно (через Caddy или CDN-rewrite); пока проще

@@ -297,6 +297,49 @@ CF Pages + R2 выпилены 2026-04-29 — TSPU режет CF SNI из РФ, 
   - Каждый `git push` обязательно проверять `gh run list` — `deploy-web`
     ~1 мин, `deploy-api` ~5 мин.
 
+## Observability (GlitchTip + Umami)
+
+См. spec `docs/superpowers/specs/2026-04-30-prod-readiness-design.md`
+§4-§5 + runbook `services/observability/README.md`.
+
+- **GlitchTip** (Sentry-compatible) на `sentry.geobiom.ru`. Стек: web +
+  worker + redis. Compose-оверлей
+  `services/observability/glitchtip/docker-compose.yml`. Биндится на
+  `127.0.0.1:8001`, наружу — через Caddy. Использует отдельную БД
+  `glitchtip` на основном Postgres (бэкапится тем же `geobiom-backup.timer`).
+  SDK: `sentry-sdk[fastapi]` в API + `@sentry/react` во фронте. Init
+  no-op'ит если `SENTRY_DSN` / `VITE_SENTRY_DSN` не заданы — код можно
+  деплоить до того как поднят сервер. Release-tag = git SHA (через
+  `GIT_SHA` env в `deploy-api.yml` / `VITE_GIT_SHA` в `deploy-web.yml`).
+- **Umami** на `analytics.geobiom.ru`. Single Node контейнер,
+  `services/observability/umami/docker-compose.yml`. Privacy-first:
+  IP хешируется, нет cookies, нет third-party. Custom events в
+  `apps/web/src/lib/track.ts` (LayerGrid → `layer.toggle`, SaveSpotModal
+  → `spot.save`, SpeciesDetailPage → `species.open`, useMapMode →
+  `district.open`, Spotlight → `spotlight.search`). **PII в payload не
+  передаём** — только length / boolean / slug.
+- **Source maps** включены (`vite.config.ts: build.sourcemap=true`) —
+  GlitchTip подтягивает по URL, stack trace в исходник. Maps публично
+  доступны — приемлемо для open-source.
+- **Caddy** — site-block'и `{$CADDY_SENTRY_HOST}` и `{$CADDY_UMAMI_HOST}`
+  в `infra/Caddyfile`. В `.env.prod` добавить:
+  ```
+  CADDY_SENTRY_HOST=sentry.geobiom.ru
+  CADDY_UMAMI_HOST=analytics.geobiom.ru
+  GLITCHTIP_DB_PASSWORD=...
+  UMAMI_DB_PASSWORD=...
+  SENTRY_DSN=...
+  ```
+- **Запуск стека**:
+  ```
+  docker compose -f docker-compose.prod.yml \
+                 -f services/observability/glitchtip/docker-compose.yml \
+                 -f services/observability/umami/docker-compose.yml \
+                 --env-file .env.prod up -d
+  ```
+- **First-run** (createsuperuser в GlitchTip, регистрация website в
+  Umami, копирование DSN/website-id в GH Variables) — см. runbook §5-§7.
+
 ## Backup (nightly to Yandex Object Storage)
 
 См. spec `docs/superpowers/specs/2026-04-30-prod-readiness-design.md` §1

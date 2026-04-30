@@ -1,0 +1,28 @@
+# Umami self-hosted privacy-first web analytics.
+#
+# Запуск:
+#   docker compose -f docker-compose.prod.yml \
+#                  -f services/observability/umami/docker-compose.yml \
+#                  --env-file .env.prod up -d
+#
+# Биндится на 127.0.0.1:8002, наружу — только через Caddy
+# (analytics.geobiom.ru).
+
+services:
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-v2.13.1
+    container_name: umami
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: ./services/observability/umami/.env
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD}@db:5432/umami
+      DATABASE_TYPE: postgresql
+    ports:
+      - "127.0.0.1:8002:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 384m

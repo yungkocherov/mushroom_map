@@ -28,6 +28,7 @@ import {
   type GazetteerSearchResult,
 } from "@mushroom-map/api-client";
 import type { SpeciesSearchResult } from "@mushroom-map/types";
+import { track } from "../lib/track";
 import styles from "./Spotlight.module.css";
 
 const KIND_LABEL: Record<string, string> = {
@@ -98,6 +99,8 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
       setPlaces([]);
       return;
     }
+    // Аналитика — трекаем длину запроса (содержание текста — PII).
+    track("spotlight.search", { query_length: debouncedQ.length });
     let cancelled = false;
     setLoading(true);
     Promise.all([searchSpecies(debouncedQ, 6), searchGazetteer(debouncedQ, 8)])

@@ -25,6 +25,7 @@ import {
 } from "../../store/useLayerVisibility";
 import { useMapShare } from "./hooks/useMapShare";
 import { BaseMapPicker } from "./BaseMapPicker";
+import { track } from "../../lib/track";
 import styles from "./LayerGrid.module.css";
 
 export interface LayerGridProps {
@@ -81,9 +82,19 @@ export function LayerGrid({
     if (visible.forest && forestColorMode === mode) {
       // повторный клик по активному варианту forest — выключает слой
       setVisible("forest", false);
+      track("layer.toggle", { layer: `forest:${mode}`, visible: false });
     } else {
       selectForestMode(mode);
+      track("layer.toggle", { layer: `forest:${mode}`, visible: true });
     }
+  };
+
+  // Обёртка вокруг toggleVisible: фиксирует событие в Umami ДО переключения,
+  // когда `visible[key]` ещё содержит pre-toggle значение (поэтому новое =
+  // !current). track() безопасен — no-op если Umami не загрузился.
+  const trackedToggle = (key: keyof typeof visible) => {
+    track("layer.toggle", { layer: key, visible: !visible[key] });
+    toggleVisible(key);
   };
 
   const primaryChips: ChipDescriptor[] = [
@@ -91,19 +102,19 @@ export function LayerGrid({
       key: "forecastChoropleth",
       label: "Прогноз",
       active: visible.forecastChoropleth,
-      onClick: () => toggleVisible("forecastChoropleth"),
+      onClick: () => trackedToggle("forecastChoropleth"),
     },
     {
       key: "soil",
       label: "Почва",
       active: visible.soil,
-      onClick: () => toggleVisible("soil"),
+      onClick: () => trackedToggle("soil"),
     },
     {
       key: "hillshade",
       label: "Рельеф",
       active: visible.hillshade,
-      onClick: () => toggleVisible("hillshade"),
+      onClick: () => trackedToggle("hillshade"),
     },
   ];
 
@@ -114,19 +125,19 @@ export function LayerGrid({
       key: "userSpots",
       label: "Сохранённые",
       active: visible.userSpots,
-      onClick: () => toggleVisible("userSpots"),
+      onClick: () => trackedToggle("userSpots"),
     });
   }
 
   const secondaryChips: ChipDescriptor[] = [
-    { key: "waterway", label: "Водотоки", active: visible.waterway, onClick: () => toggleVisible("waterway") },
-    { key: "wetland",  label: "Болота",   active: visible.wetland,  onClick: () => toggleVisible("wetland") },
-    { key: "water",    label: "Водоохранные", active: visible.water, onClick: () => toggleVisible("water") },
-    { key: "oopt",     label: "ООПТ",     active: visible.oopt,     onClick: () => toggleVisible("oopt") },
-    { key: "roads",    label: "Дороги",   active: visible.roads,    onClick: () => toggleVisible("roads") },
-    { key: "felling",  label: "Вырубки",  active: visible.felling,  onClick: () => toggleVisible("felling") },
-    { key: "protective", label: "Защитные", active: visible.protective, onClick: () => toggleVisible("protective") },
-    { key: "districts", label: "Районы",  active: visible.districts, onClick: () => toggleVisible("districts") },
+    { key: "waterway", label: "Водотоки", active: visible.waterway, onClick: () => trackedToggle("waterway") },
+    { key: "wetland",  label: "Болота",   active: visible.wetland,  onClick: () => trackedToggle("wetland") },
+    { key: "water",    label: "Водоохранные", active: visible.water, onClick: () => trackedToggle("water") },
+    { key: "oopt",     label: "ООПТ",     active: visible.oopt,     onClick: () => trackedToggle("oopt") },
+    { key: "roads",    label: "Дороги",   active: visible.roads,    onClick: () => trackedToggle("roads") },
+    { key: "felling",  label: "Вырубки",  active: visible.felling,  onClick: () => trackedToggle("felling") },
+    { key: "protective", label: "Защитные", active: visible.protective, onClick: () => trackedToggle("protective") },
+    { key: "districts", label: "Районы",  active: visible.districts, onClick: () => trackedToggle("districts") },
   ];
 
   const containerClass = layout === "strip" ? styles.strip : styles.grid;

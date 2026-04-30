@@ -54,6 +54,13 @@ jobs:
           # (см. apps/web/src/components/mapView/utils/api.ts). Тайлы раздаёт
           # Caddy на api-домене из /srv/mushroom-map/tiles.
           VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # Observability envs запекаются в bundle при build'е. Если
+          # переменные не заданы в GH Variables — SDK инициализируется в
+          # no-op режиме (см. apps/web/src/main.tsx).
+          VITE_SENTRY_DSN:       ${{ vars.VITE_SENTRY_DSN }}
+          VITE_UMAMI_HOST:       ${{ vars.VITE_UMAMI_HOST }}
+          VITE_UMAMI_WEBSITE_ID: ${{ vars.VITE_UMAMI_WEBSITE_ID }}
+          VITE_GIT_SHA:          ${{ github.sha }}
         run: npm -w @mushroom-map/web run build
 
       - name: Rsync dist to VM

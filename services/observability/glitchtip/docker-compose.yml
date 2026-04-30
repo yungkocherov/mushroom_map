@@ -1,0 +1,64 @@
+# GlitchTip self-hosted Sentry-compatible error tracking.
+#
+# Запускается ОВЕРЛЕЕМ поверх docker-compose.prod.yml (нужен `db` сервис
+# из основного compose, на нём сидит отдельная БД `glitchtip` с
+# отдельной ролью). См. services/observability/README.md для одноразовых
+# шагов (CREATE DATABASE, миграции, createsuperuser).
+#
+# Запуск:
+#   docker compose -f docker-compose.prod.yml \
+#                  -f services/observability/glitchtip/docker-compose.yml \
+#                  --env-file .env.prod up -d
+#
+# Apline + Caddy уже разруливают TLS снаружи — GlitchTip биндится только
+# на loopback (127.0.0.1:8001), наружу не торчит.
+
+services:
+  glitchtip-redis:
+    image: redis:7-alpine
+    container_name: glitchtip_redis
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+
+  glitchtip-web:
+    image: glitchtip/glitchtip:v4.1
+    container_name: glitchtip_web
+    restart: unless-stopped
+    depends_on:
+      glitchtip-redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+    env_file: ./services/observability/glitchtip/.env
+    environment:
+      DATABASE_URL: postgresql://glitchtip:${GLITCHTIP_DB_PASSWORD}@db:5432/glitchtip
+      REDIS_URL: redis://glitchtip-redis:6379/0
+      PORT: "8000"
+    ports:
+      - "127.0.0.1:8001:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 768m
+
+  glitchtip-worker:
+    image: glitchtip/glitchtip:v4.1
+    container_name: glitchtip_worker
+    restart: unless-stopped
+    depends_on:
+      glitchtip-redis:
+        condition: service_started
+      db:
+        condition: service_healthy
+    env_file: ./services/observability/glitchtip/.env
+    environment:
+      DATABASE_URL: postgresql://glitchtip:${GLITCHTIP_DB_PASSWORD}@db:5432/glitchtip
+      REDIS_URL: redis://glitchtip-redis:6379/0
+    command: ./bin/run-celery-with-beat.sh
+    deploy:
+      resources:
+        limits:
+          memory: 384m

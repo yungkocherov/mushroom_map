@@ -12,6 +12,7 @@
  *          реагирует на districtId через useEffect.
  */
 import { create } from "zustand";
+import { track } from "../lib/track";
 
 export type MapMode = "overview" | "district";
 
@@ -32,6 +33,9 @@ export const useMapMode = create<MapModeState>((set) => ({
   districtSlug: null,
 
   setOverview: () => set({ mode: "overview", districtId: null, districtSlug: null }),
-  setDistrict: (id, slug) =>
-    set({ mode: "district", districtId: id, districtSlug: slug }),
+  setDistrict: (id, slug) => {
+    // Аналитика: фиксируем slug района (slug ≠ PII, это OSM admin_area).
+    track("district.open", { name: slug });
+    set({ mode: "district", districtId: id, districtSlug: slug });
+  },
 }));

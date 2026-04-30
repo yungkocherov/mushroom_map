@@ -140,3 +140,44 @@
 www.{$CADDY_WEB_HOST} {
 	redir https://{$CADDY_WEB_HOST}{uri} 308
 }
+
+# GlitchTip self-hosted error tracking. Контейнер биндится только на
+# loopback (127.0.0.1:8001 в docker-compose), сюда заходим строго через
+# Caddy. Хост подставляется из CADDY_SENTRY_HOST env (sentry.geobiom.ru
+# в проде). Если переменная не задана — site-block парсится но не
+# создаёт сертификат, GlitchTip остаётся недоступным извне.
+{$CADDY_SENTRY_HOST} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		Referrer-Policy           "no-referrer"
+		-Server
+	}
+	reverse_proxy glitchtip-web:8000 {
+		flush_interval -1
+	}
+	log {
+		output stdout
+		format json
+	}
+}
+
+# Umami self-hosted analytics. Та же модель — контейнер на loopback,
+# Caddy на 443 → 127.0.0.1:8002 → umami:3000.
+{$CADDY_UMAMI_HOST} {
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options    "nosniff"
+		Referrer-Policy           "no-referrer"
+		-Server
+	}
+	reverse_proxy umami:3000 {
+		flush_interval -1
+	}
+	log {
+		output stdout
+		format json
+	}
+}

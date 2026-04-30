@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -13,6 +14,23 @@ from api.routes import (
     forest, species, regions, soil, water, terrain, districts, stats,
     auth, user, cabinet, forecast, places,
 )
+
+
+# Sentry / GlitchTip init. Безопасный no-op если DSN не задан — код
+# может ехать в прод до того как поднят GlitchTip; активируется при
+# первом редеплое после установки SENTRY_DSN в .env.prod.
+# sentry-sdk[fastapi] авто-инструментирует ASGI middleware если init
+# вызван ДО создания FastAPI(), поэтому делаем это здесь.
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        release=settings.git_sha,
+        environment=settings.sentry_environment,
+        traces_sample_rate=settings.sentry_traces_sample_rate,
+        # request body может содержать координаты сохранённых spot'ов —
+        # это персональные данные с точки зрения 152-ФЗ.
+        send_default_pii=False,
+    )
 
 
 @asynccontextmanager
