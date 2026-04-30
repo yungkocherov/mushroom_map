@@ -255,6 +255,17 @@ def process_tile(
         if tree_species and not slug:
             stats.unknown_species[tree_species] = stats.unknown_species.get(tree_species, 0) + 1
 
+        # Приоритет: МЕНЬШИЙ zoom выигрывает.
+        # Контр-интуитивно, но обосновано: FGIS GWC seeded z=12 ЧАСТИЧНО — многие
+        # тайлы там содержат лишь маленький фрагмент полигона, чьи соседние z=12-
+        # тайлы FGIS не отдал вообще. Прежняя логика «higher zoom wins» приводила
+        # к тому, что полная z=10/z=11 геометрия выкидывалась в пользу z=12-обрезка
+        # → пользователь видел провалы в карте леса (см. fgislk_merge_fix 2026-05-01).
+        # Z=10/z=11 у нас полностью пересканены (memory fgislk_rescrape_z10_z11),
+        # геометрия там цельная. На любом display-zoom <=13 разница в точности
+        # между z=10 (~0.9 m/MVT-px) и z=12 (~0.18 m/MVT-px) невидима.
+        # Z=12-only выделы (~812k мелких) сохраняются — их забирает только z=12,
+        # никаких lower-zoom версий не существует, конфликт не возникает.
         rec = records.get(externalid)
         if rec is None:
             rec = VydelRecord(
@@ -266,12 +277,12 @@ def process_tile(
                 zoom=zoom,
             )
             records[externalid] = rec
-        elif zoom > rec.zoom:
-            # Нашли тот же выдел на более детальном зуме — сбрасываем грубую геометрию
+        elif zoom < rec.zoom:
+            # Нашли тот же выдел на БОЛЕЕ НИЗКОМ (надёжном) зуме — перезатираем.
             rec.zoom = zoom
             rec.polygon_parts.clear()
-        elif zoom < rec.zoom:
-            # Уже есть более детальная версия — пропускаем
+        elif zoom > rec.zoom:
+            # Уже есть более низкая (надёжная) версия — игнорируем higher-zoom.
             continue
 
         # Добавим полигон(ы) в накопитель (только для текущего zoom уровня)
@@ -347,6 +358,7 @@ def process_tile(
                 if geom_wgs.is_empty or not geom_wgs.is_valid:
                     continue
 
+            # Та же lower-zoom-wins логика, что и для VydelRecord — см. выше.
             wrec = water_records.get(eid)
             if wrec is None:
                 wrec = WaterZoneRecord(
@@ -356,9 +368,9 @@ def process_tile(
                     zoom=zoom,
                 )
                 water_records[eid] = wrec
-            elif zoom < wrec.zoom:
-                continue
             elif zoom > wrec.zoom:
+                continue
+            elif zoom < wrec.zoom:
                 wrec.zoom = zoom
                 wrec.polygon_parts.clear()
 
@@ -412,9 +424,10 @@ def merge_vydel_records(dst: dict[str, VydelRecord], src: dict[str, VydelRecord]
     """
     Мерджит src в dst с учётом правила zoom reconciliation:
         - если у dst записи не было → копируем
-        - если у src более детальный zoom → заменяем полностью
+        - если у src БОЛЕЕ НИЗКИЙ (надёжный) zoom → заменяем полностью
         - если у src тот же zoom → докидываем polygon_parts (соседние тайлы)
-        - если у dst более детальный zoom → игнорируем src
+        - если у dst более низкий zoom → игнорируем src
+    Логика приоритета объяснена в process_tile (FGIS GWC z=12 seeded частично).
     Бонитет/timber_stock не перетираем (берём первый не-None, чтобы разные
     тайлы для одного выдела не конфликтовали).
     """
@@ -423,8 +436,9 @@ def merge_vydel_records(dst: dict[str, VydelRecord], src: dict[str, VydelRecord]
         if dr is None:
             dst[eid] = sr
             continue
-        if sr.zoom > dr.zoom:
-            # src детальнее — полная замена полигонов, но атрибуты оставляем best-of
+        if sr.zoom < dr.zoom:
+            # src более низкий zoom (надёжнее) — полная замена полигонов,
+            # но атрибуты оставляем best-of
             sr.bonitet = sr.bonitet if sr.bonitet is not None else dr.bonitet
             sr.timber_stock = sr.timber_stock if sr.timber_stock is not None else dr.timber_stock
             dst[eid] = sr
@@ -437,13 +451,14 @@ def merge_vydel_records(dst: dict[str, VydelRecord], src: dict[str, VydelRecord]
 
 
 def merge_water_records(dst: dict[str, WaterZoneRecord], src: dict[str, WaterZoneRecord]) -> None:
-    """Аналогично merge_vydel_records, но для водоохранных зон."""
+    """Аналогично merge_vydel_records, но для водоохранных зон.
+    Lower-zoom-wins (та же логика — частичный seeding на z=12 во FGIS GWC)."""
     for eid, sr in src.items():
         dr = dst.get(eid)
         if dr is None:
             dst[eid] = sr
             continue
-        if sr.zoom > dr.zoom:
+        if sr.zoom < dr.zoom:
             dst[eid] = sr
         elif sr.zoom == dr.zoom:
             dr.polygon_parts.extend(sr.polygon_parts)
@@ -561,8 +576,9 @@ def main() -> None:
         raise SystemExit(f"нет директории {in_root}. Сначала запусти download_fgislk_tiles.py")
 
     tiles = iter_pbf_files(in_root)
-    # Сортируем по зуму — сначала грубые, потом детальные. Так при встрече выдела
-    # на более детальном зуме сбросим грубую геометрию.
+    # Сортируем по зуму ascending — сначала z=10, потом z=11, потом z=12. Lower-
+    # zoom-wins (см. process_tile): первая встреча выдела на самом низком зуме
+    # «забивает» рекорд, последующие higher-zoom версии игнорируются.
     tiles.sort(key=lambda t: t[1])
     print(f"Найдено pbf-файлов: {len(tiles)}, зумы: {sorted(set(t[1] for t in tiles))}")
     if not tiles:
