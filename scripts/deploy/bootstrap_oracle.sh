@@ -72,16 +72,18 @@ if ! command -v tailscale >/dev/null 2>&1; then
     curl -fsSL https://tailscale.com/install.sh | sudo sh
 fi
 
-echo "[5/8] ufw lockdown"
+echo "[5/8] ufw — safe rules (без 22-lockdown'а пока Tailscale не up)"
 sudo ufw --force reset >/dev/null
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
-# 22/tcp — только из Tailscale CGNAT (100.64.0.0/10) для emergency
-sudo ufw allow from 100.64.0.0/10 to any port 22 comment 'Tailscale CGNAT'
+# 22/tcp пока allowed from anywhere — иначе SSH-сессия, через которую
+# запущен bootstrap, оборвётся. После Tailscale OAuth запустить
+# scripts/deploy/lockdown_oracle.sh для финального deny 22 except tailnet.
+sudo ufw allow 22/tcp
 sudo ufw allow 80/tcp
 sudo ufw allow 443/tcp
 sudo ufw --force enable
-echo "  ufw active. Reminder: Oracle Cloud Console → Security List также drop 22 from public."
+echo "  ufw active с временным public 22. Lockdown позже — см. NEXT-блок."
 
 echo "[6/8] backup tooling (age + rclone)"
 sudo apt-get install -y age rclone
@@ -109,6 +111,9 @@ cat <<'NEXT'
      После этого в https://login.tailscale.com/admin/machines:
        - tag машины как `tag:prod`
        - проверить что MagicDNS работает: ssh geobiom-prod.tail-XXXX.ts.net
+  2.5. ПОСЛЕ Tailscale up: запустить ufw lockdown с dev-машины:
+       ssh geobiom-prod-oracle bash /srv/mushroom-map/scripts/deploy/lockdown_oracle.sh
+       Это закроет 22/tcp от public, оставив только из tailnet (100.64.0.0/10).
   3. /etc/geobiom/.env.backup (см. scripts/backup/README.md §3):
        sudo nano /etc/geobiom/.env.backup
        sudo chmod 600 /etc/geobiom/.env.backup
