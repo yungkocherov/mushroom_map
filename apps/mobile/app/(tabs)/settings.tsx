@@ -1,19 +1,26 @@
 import { useEffect, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Constants from "expo-constants";
+import { useRouter } from "expo-router";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
 import { isLoggedIn, loginWithYandex, logout } from "../../services/auth";
+import { useOfflineRegions } from "../../stores/useOfflineRegions";
 
 const YANDEX_MOBILE_CLIENT_ID =
   process.env.EXPO_PUBLIC_YANDEX_MOBILE_CLIENT_ID ?? "";
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const [logged, setLogged] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const downloadedCount = useOfflineRegions((s) => s.downloaded.size);
+  const availableCount = useOfflineRegions((s) => s.available.length);
+  const refreshRegions = useOfflineRegions((s) => s.refresh);
 
   useEffect(() => {
     void isLoggedIn().then(setLogged);
-  }, []);
+    if (availableCount === 0) void refreshRegions();
+  }, [availableCount, refreshRegions]);
 
   const onLogin = async () => {
     if (!YANDEX_MOBILE_CLIENT_ID) {
@@ -74,9 +81,16 @@ export default function SettingsScreen() {
 
       <Section title="Регионы">
         <Text style={styles.body}>
-          Скачай интересующие районы — карта будет работать в лесу без сети.
+          {downloadedCount === 0
+            ? "Скачай районы где обычно ходишь — карта будет работать в лесу без сети."
+            : `Скачано: ${downloadedCount} из ${availableCount} районов.`}
         </Text>
-        <Text style={styles.todo}>Phase 2 · download manager</Text>
+        <Pressable
+          style={styles.btnSecondary}
+          onPress={() => router.push("/regions" as never)}
+        >
+          <Text style={styles.btnSecondaryText}>Управление регионами →</Text>
+        </Pressable>
       </Section>
 
       <Section title="О приложении">
