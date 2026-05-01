@@ -1,25 +1,8 @@
 import * as SQLite from "expo-sqlite";
-import * as SecureStore from "expo-secure-store";
-import * as Crypto from "expo-crypto";
 
 const DB_NAME = "geobiom.db";
-const KEY_NAME = "geobiom.db.key.v1";
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
-
-async function getOrCreateDbKey(): Promise<string> {
-  const existing = await SecureStore.getItemAsync(KEY_NAME);
-  if (existing) return existing;
-
-  const bytes = await Crypto.getRandomBytesAsync(32);
-  const key = Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  await SecureStore.setItemAsync(KEY_NAME, key, {
-    keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
-  });
-  return key;
-}
 
 const SCHEMA_V1 = `
 PRAGMA journal_mode = WAL;
@@ -69,20 +52,20 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
 }
 
 /**
- * Opens (or returns memoised handle to) the encrypted SQLite database.
+ * Opens (or returns memoised handle to) the SQLite database.
  *
- * Encryption is via SQLCipher's `PRAGMA key`. expo-sqlite ships
- * SQLCipher when built with `EXSQLITE_USE_SQLCIPHER=1` Gradle flag —
- * see app.json plugin config in Phase 1. Without that flag, this still
- * opens but is not encrypted; safe enough for v0 dev, MUST verify
- * before Phase 5 release.
+ * **NOT encrypted in v0.** expo-sqlite ships без SQLCipher по умолчанию;
+ * включение требует кастомного билда (EXSQLITE_USE_SQLCIPHER=1 +
+ * react-native-quick-sqlite либо op-sqlite). Перед Phase 5 release
+ * (RuStore / публичная раздача APK) — обязательно: либо переезд на
+ * op-sqlite с SQLCipher, либо явное предупреждение юзеру что local DB
+ * читается root-доступом на устройстве. Сейчас (Phase 0/1 dev) — OK,
+ * данных нет.
  */
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const key = await getOrCreateDbKey();
       const db = await SQLite.openDatabaseAsync(DB_NAME);
-      await db.execAsync(`PRAGMA key = '${key.replace(/'/g, "''")}'`);
       await migrate(db);
       return db;
     })();

@@ -42,7 +42,16 @@ export function SpikeMap() {
           setAssetError("PMTiles asset has no localUri after download");
           return;
         }
-        setPmtilesUri(asset.localUri);
+        // MapLibre Native PMTiles handler ждёт `pmtiles://<file_path>` без
+        // лишней `file://`-обёртки. expo-asset выдаёт URI вида
+        // `file:///data/user/0/.../forest-luzhsky.pmtiles`; режем префикс,
+        // чтобы получился pmtiles:///data/user/0/.../forest-luzhsky.pmtiles
+        // — единственная схема которую ConcurrentMutuableMapResources
+        // в org.maplibre.gl парсит без ошибок.
+        const path = asset.localUri.startsWith("file://")
+          ? asset.localUri.slice("file://".length)
+          : asset.localUri;
+        setPmtilesUri(path);
       } catch (err) {
         setAssetError(err instanceof Error ? err.message : "asset-error");
       }
@@ -148,6 +157,9 @@ export function SpikeMap() {
         ) : (
           <Text style={styles.statusText}>ожидание фикса…</Text>
         )}
+        <Text style={styles.statusText}>
+          tiles: {pmtilesUri ? "loaded" : "—"}
+        </Text>
         {error ? <Text style={styles.errorOverlay}>{error}</Text> : null}
       </View>
     </View>
