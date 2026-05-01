@@ -65,12 +65,41 @@ def decode_access_token(token: str) -> UUID:
         )
     except jwt.InvalidTokenError as exc:
         raise AccessTokenInvalid(str(exc)) from exc
-    if payload.get("typ") != "access":
+    typ = payload.get("typ")
+    # `device` принимается тоже — long-lived mobile token используется
+    # как Bearer везде где access. Различие только в TTL и происхождении.
+    if typ not in {"access", "device"}:
         raise AccessTokenInvalid("wrong token type")
     try:
         return UUID(payload["sub"])
     except (ValueError, KeyError) as exc:
         raise AccessTokenInvalid("sub is not a uuid") from exc
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Device tokens (mobile)
+# ──────────────────────────────────────────────────────────────────────
+
+def encode_device_token(user_id: UUID, device_id: str) -> tuple[str, int]:
+    """Long-lived JWT для mobile-app. TTL ~год; используется как Bearer
+    в `/api/mobile/*` и `/api/cabinet/*`.
+
+    Хранит `device_id` в payload — при добавлении revocation таблицы
+    (Phase 2 spec) blacklist matche'ится по (user_id, device_id) tuple,
+    а не по jti.
+    """
+    now = int(time.time())
+    exp = now + settings.device_token_ttl_seconds
+    payload = {
+        "iss": settings.jwt_issuer,
+        "sub": str(user_id),
+        "iat": now,
+        "exp": exp,
+        "typ": "device",
+        "did": device_id,
+    }
+    token = jwt.encode(payload, settings.jwt_secret, algorithm=_ALGO)
+    return token, settings.device_token_ttl_seconds
 
 
 # ──────────────────────────────────────────────────────────────────────

@@ -101,7 +101,7 @@ def list_spots(user: CurrentUser) -> list[dict]:
             f"""
             SELECT {_SELECT_COLUMNS}
             FROM user_spot
-            WHERE user_id = %s
+            WHERE user_id = %s AND deleted_at IS NULL
             ORDER BY created_at DESC
             """,
             (user.id,),

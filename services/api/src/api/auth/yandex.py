@@ -92,6 +92,33 @@ def exchange_code(code: str, code_verifier: str) -> YandexTokenResponse:
         "client_secret": settings.yandex_client_secret,
         "redirect_uri": settings.yandex_redirect_uri,
     }
+    return _post_token_exchange(data)
+
+
+def exchange_code_mobile(
+    code: str, code_verifier: str, redirect_uri: str
+) -> YandexTokenResponse:
+    """Mobile-вариант обмена. Использует ОТДЕЛЬНОЕ Yandex-приложение
+    (тип «Мобильное») с собственным client_id/secret и redirect_uri
+    `geobiom://auth/callback`. Backend хранит client_secret —
+    в APK его не кладём по OAuth Mobile BCP."""
+    if not settings.yandex_mobile_client_id or not settings.yandex_mobile_client_secret:
+        raise YandexOAuthError(
+            "yandex_mobile_client_id / secret not configured — "
+            "register a 'Mobile' app at oauth.yandex.ru and set env vars"
+        )
+    data = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "code_verifier": code_verifier,
+        "client_id": settings.yandex_mobile_client_id,
+        "client_secret": settings.yandex_mobile_client_secret,
+        "redirect_uri": redirect_uri,
+    }
+    return _post_token_exchange(data)
+
+
+def _post_token_exchange(data: dict[str, str]) -> YandexTokenResponse:
     try:
         resp = httpx.post(TOKEN_URL, data=data, timeout=10.0)
     except httpx.HTTPError as exc:

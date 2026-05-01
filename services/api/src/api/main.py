@@ -11,7 +11,7 @@ from api.db import close_pool, get_conn, init_pool
 from api.settings import settings
 from api.routes import (
     forest, species, regions, soil, water, terrain, districts, stats,
-    auth, user, cabinet, forecast, places,
+    auth, user, cabinet, forecast, places, mobile,
 )
 
 
@@ -72,6 +72,7 @@ app.include_router(stats.router, prefix="/api/stats", tags=["stats"])
 app.include_router(auth.router,  prefix="/api/auth",  tags=["auth"])
 app.include_router(user.router,    prefix="/api/user",    tags=["user"])
 app.include_router(cabinet.router, prefix="/api/cabinet", tags=["cabinet"])
+app.include_router(mobile.router,  prefix="/api/mobile",  tags=["mobile"])
 
 # Статические PMTiles файлы — раздача с поддержкой Range-requests через
 # StaticFiles. Динамический /tiles/{z}/{x}/{y}.mvt был дроплен (мёртвый

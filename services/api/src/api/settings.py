@@ -44,6 +44,22 @@ class Settings(BaseSettings):
     yandex_client_secret: str = ""
     yandex_redirect_uri: str = "http://localhost:8000/api/auth/yandex/callback"
 
+    # ── Yandex ID OAuth (mobile, отдельное приложение) ────────────────
+    # Mobile-app использует OWN client_id (с типом «Мобильные приложения»),
+    # ОТДЕЛЬНЫЙ от web. Redirect URI у Yandex'а — `geobiom://auth/callback`,
+    # его регистрировать в Yandex Console; здесь не дублируем (не наш ход).
+    # Mobile-flow: app шлёт authorization code + PKCE verifier на
+    # /api/mobile/auth/yandex; backend обменивает code → access_token,
+    # возвращает device_token (long-lived JWT). См.
+    # docs/mobile-app-2026-05.md «Yandex OAuth integration».
+    yandex_mobile_client_id: str = ""
+    yandex_mobile_client_secret: str = ""
+
+    # Device token TTL (для /api/mobile/auth). Год — компромисс между
+    # удобством юзера и blast radius при компрометации устройства. На
+    # logout token revoke'ится через blacklist (TBD Phase 2).
+    device_token_ttl_seconds: int = 365 * 24 * 3600
+
     # Куда callback редиректит фронт после выдачи refresh-cookie.
     # Фронт по /auth/complete дёргает POST /api/auth/refresh и получает
     # access_token в JSON.

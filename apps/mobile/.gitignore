@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+android/
+ios/
+*.log
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+.env
+.env.local
+
+assets/forest-luzhsky.pmtiles
+assets/basemap-lo-low.pmtiles

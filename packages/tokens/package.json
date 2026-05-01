@@ -8,6 +8,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./native": "./src/native.ts",
     "./tokens.css": "./src/tokens.css",
     "./district-accents": "./src/district-accents.ts"
   },

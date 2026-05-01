@@ -20,6 +20,54 @@ will rename in a later phase.
 `forecast.prediction` (будущий `/api/forecast/at`). В public.* из
 forecast-репо не пишем — это двусторонний контракт.
 
+**Mobile app `apps/mobile`** (с 2026-05-01) — Geobiom Android-app
+(React Native + Expo bare + maplibre-react-native), цель: offline-карта
+леса с GPS-маркером в РФ-no-VPN. План — `docs/mobile-app-2026-05.md`
+(16 решений зафиксированы, 3 open questions).
+
+**Текущее состояние** (после autonomous run 2026-05-01):
+- **Phase 0 spike** — карта-экран `(tabs)/index.tsx` + `SpikeMap.tsx`
+  (PMTiles из bundled-asset через `pmtiles://` source + GPS-маркер +
+  cursor-точка в chanterelle). `tsc --noEmit` зелёный.
+- **Phase 1 foundation** — bottom tabs (Карта/Споты/Виды/Настройки),
+  SQLite (`expo-sqlite + SQLCipher`) + миграция local_spot,
+  `spotsRepo.ts` (CRUD + sync flags), API client (`services/api.ts`)
+  с `Authorization: Bearer device_token` через `expo-secure-store`,
+  Yandex OAuth flow с PKCE (`services/auth.ts` через
+  `expo-auth-session` + `expo-crypto`), Settings экран с login/logout.
+- **Backend дельта:**
+  - Миграция `db/migrations/031_user_spot_client_uuid.sql` —
+    `client_uuid UUID UNIQUE` (partial), `client_updated_at`,
+    `deleted_at` для soft-delete sync'a.
+  - `services/api/src/api/routes/mobile.py` — три эндпоинта:
+    `POST /api/mobile/auth/yandex` (PKCE code exchange → device_token),
+    `POST /api/mobile/auth/revoke` (Phase 2 stub),
+    `POST /api/mobile/spots/sync` (idempotent upsert по client_uuid +
+    last-write-wins по client_updated_at + diff с last_sync_at для
+    pull),
+    `GET /api/mobile/regions` (Phase 2 stub).
+  - `encode_device_token` в `auth/jwt_tokens.py` — long-lived JWT
+    (default 365 дней) с `typ='device'`, `did`-claim. Принимается
+    `decode_access_token` наравне с access-токеном.
+  - Settings: `yandex_mobile_client_id/secret` (отдельное Yandex-app
+    с типом «Мобильное», redirect URI `geobiom://auth/callback`).
+  - `cabinet.list_spots` теперь фильтрует `deleted_at IS NULL`
+    (sync пишет soft-delete).
+  - 5 unit-тестов на `encode_device_token` round-trip
+    (`tests/test_mobile_jwt.py`), 67 passed / 39 skipped (2 pre-existing
+    fails — нужен running API).
+
+**Что нужно поставить на dev** (см. `apps/mobile/README.md`):
+- JDK 17 ✓ (Microsoft.OpenJDK.17 через winget, JAVA_HOME выставлен)
+- Android Studio + SDK 34 (winget'ом, в фоне; ANDROID_HOME выставить
+  после установки)
+- Go (для `go install pmtiles@latest`)
+- Тестовый PMTiles: `scripts/clip_pmtiles_to_district.py`
+
+Workspaces: `@mushroom-map/mobile`, шерит `@mushroom-map/tokens` (новый
+export `/native` с number-размерами для RN). Distribution v1 —
+**Android only**, RuStore + APK direct; iOS отложен в v2.
+
 ## Iteration workflow — ОБЯЗАТЕЛЬНО в конце каждой итерации
 
 Чтобы любая новая сессия могла за 30 секунд понять «что сделано / что
