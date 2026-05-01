@@ -19,6 +19,7 @@ import {
 } from "../../services/location";
 import { getLayerLocalUri } from "../../services/regions";
 import { buildMapStyle, type ForestSource } from "./style";
+import { ForestPopup, type ForestFeatureProps } from "./ForestPopup";
 
 const TEST_ASSET = require("../../assets/forest-luzhsky.pmtiles");
 const LUZHSKY_CENTER: [number, number] = [29.85, 58.74];
@@ -26,7 +27,9 @@ const LUZHSKY_CENTER: [number, number] = [29.85, 58.74];
 export function SpikeMap() {
   const [bundledUri, setBundledUri] = useState<string | null>(null);
   const [assetError, setAssetError] = useState<string | null>(null);
+  const [popupFeature, setPopupFeature] = useState<ForestFeatureProps | null>(null);
   const cameraRef = useRef<CameraRef>(null);
+  const mapRef = useRef<unknown>(null);
 
   const fix = useUserLocation((s) => s.fix);
   const followMode = useUserLocation((s) => s.followMode);
@@ -125,6 +128,14 @@ export function SpikeMap() {
         mapStyle={style as object}
         compassEnabled
         attributionEnabled={false}
+        onPress={(feature) => {
+          // Только forest features имеют dominant_species — отфильтровываем
+          // background tap'ы и user-fix-dot.
+          const props = (feature as { properties?: ForestFeatureProps })?.properties;
+          if (props && typeof props.dominant_species === "string") {
+            setPopupFeature(props);
+          }
+        }}
       >
         <Camera
           ref={cameraRef}
@@ -162,6 +173,12 @@ export function SpikeMap() {
           </ShapeSource>
         ) : null}
       </MapView>
+
+      <ForestPopup
+        visible={popupFeature !== null}
+        feature={popupFeature}
+        onClose={() => setPopupFeature(null)}
+      />
 
       <View style={styles.statusOverlay} pointerEvents="none">
         <Text style={styles.statusText}>
