@@ -12,17 +12,19 @@ import {
 
 import { palette, fontSize, spacing } from "@mushroom-map/tokens/native";
 import { useUserLocation } from "../../stores/useUserLocation";
+import { useOfflineRegions } from "../../stores/useOfflineRegions";
 import {
   startLocationWatch,
   stopLocationWatch,
 } from "../../services/location";
-import { buildSpikeStyle } from "./style";
+import { getLayerLocalUri } from "../../services/regions";
+import { buildMapStyle, type ForestSource } from "./style";
 
 const TEST_ASSET = require("../../assets/forest-luzhsky.pmtiles");
 const LUZHSKY_CENTER: [number, number] = [29.85, 58.74];
 
 export function SpikeMap() {
-  const [pmtilesUri, setPmtilesUri] = useState<string | null>(null);
+  const [bundledUri, setBundledUri] = useState<string | null>(null);
   const [assetError, setAssetError] = useState<string | null>(null);
   const cameraRef = useRef<CameraRef>(null);
 
@@ -30,6 +32,8 @@ export function SpikeMap() {
   const followMode = useUserLocation((s) => s.followMode);
   const permission = useUserLocation((s) => s.permission);
   const error = useUserLocation((s) => s.error);
+  const downloaded = useOfflineRegions((s) => s.downloaded);
+  const refreshRegions = useOfflineRegions((s) => s.refresh);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,11 +48,9 @@ export function SpikeMap() {
         }
         // MapLibre Native PMTiles handler ждёт URL вида
         //   pmtiles://file:///data/user/0/<pkg>/cache/<asset>.pmtiles
-        // т.е. inner-URL обязан иметь file:// префикс — MapLibre
-        // distinguish file vs http по схеме после `pmtiles://`.
-        // expo-asset.localUri и так возвращает `file:///...`, поэтому
-        // достаточно prepend `pmtiles://`.
-        setPmtilesUri(asset.localUri);
+        // — inner-URL обязан иметь file:// префикс. expo-asset.localUri
+        // и так возвращает file:///..., поэтому prepend в style.ts.
+        setBundledUri(asset.localUri);
       } catch (err) {
         setAssetError(err instanceof Error ? err.message : "asset-error");
       }
@@ -57,6 +59,10 @@ export function SpikeMap() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    void refreshRegions();
+  }, [refreshRegions]);
 
   useEffect(() => {
     void startLocationWatch();
@@ -71,9 +77,24 @@ export function SpikeMap() {
     });
   }, [followMode, fix?.lat, fix?.lon]);
 
+  // Prefer downloaded regions; fallback на bundled placeholder если
+  // юзер ничего не скачал (Phase 0 spike compatibility).
+  const sources = useMemo<ForestSource[]>(() => {
+    if (downloaded.size > 0) {
+      return Array.from(downloaded).map((slug) => ({
+        id: `forest-${slug}`,
+        pmtilesFileUri: getLayerLocalUri(slug, "forest"),
+      }));
+    }
+    if (bundledUri) {
+      return [{ id: "forest", pmtilesFileUri: bundledUri }];
+    }
+    return [];
+  }, [downloaded, bundledUri]);
+
   const style = useMemo(
-    () => (pmtilesUri ? buildSpikeStyle(pmtilesUri) : null),
-    [pmtilesUri],
+    () => (sources.length > 0 ? buildMapStyle(sources) : null),
+    [sources],
   );
 
   if (assetError) {
@@ -155,7 +176,7 @@ export function SpikeMap() {
           <Text style={styles.statusText}>ожидание фикса…</Text>
         )}
         <Text style={styles.statusText}>
-          tiles: {pmtilesUri ? "loaded" : "—"}
+          tiles: {sources.length > 0 ? `${sources.length} ${downloaded.size > 0 ? "regions" : "(spike)"}` : "—"}
         </Text>
         {error ? <Text style={styles.errorOverlay}>{error}</Text> : null}
       </View>

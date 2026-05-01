@@ -1,12 +1,12 @@
 import { palette } from "@mushroom-map/tokens/native";
 
 /**
- * Phase 0 spike map style. Minimal — paints forest polygons by
- * dominant_species over a flat paper-coloured background. No basemap
- * (basemap.pmtiles will land in Phase 2).
+ * Phase 2 map style. Multi-source: один vector source per downloaded
+ * region (forest-{slug}). Когда юзер ничего не скачал — fallback на
+ * bundled `forest-luzhsky.pmtiles` placeholder (Phase 0 spike).
  *
- * Source URL is passed in at runtime so we can swap between bundled
- * test asset and downloaded per-district pmtiles.
+ * Phase 2.3 (basemap pipeline) добавит ещё `basemap` source снизу
+ * (paper фон сейчас выступает как placeholder под выделами).
  */
 
 const SPECIES_COLOR_MATCH = [
@@ -36,35 +36,64 @@ type Style = {
   glyphs?: string;
 };
 
-export function buildSpikeStyle(forestPmtilesUri: string): Style {
-  return {
-    version: 8,
-    sources: {
-      forest: {
-        type: "vector",
-        url: `pmtiles://${forestPmtilesUri}`,
+export type ForestSource = {
+  /** Stable id для MapLibre source ("forest-luzhsky", "forest-vyborgsky", ...). */
+  id: string;
+  /** Either bundled file:// URI или path в FileSystem.documentDirectory. */
+  pmtilesFileUri: string;
+};
+
+/**
+ * Build style.json для текущего набора forest sources. Если пусто —
+ * рисуется только paper-фон (юзер увидит пустой экран и поймёт что
+ * нужно скачать регион).
+ */
+export function buildMapStyle(sources: ForestSource[]): Style {
+  const mapSources: Record<string, unknown> = {};
+  const layers: unknown[] = [
+    {
+      id: "background",
+      type: "background",
+      paint: {
+        "background-color": palette.light.paper,
       },
     },
-    layers: [
-      {
-        id: "background",
-        type: "background",
-        paint: {
-          "background-color": palette.light.paper,
-        },
+  ];
+
+  for (const src of sources) {
+    mapSources[src.id] = {
+      type: "vector",
+      url: `pmtiles://${src.pmtilesFileUri}`,
+    };
+    layers.push({
+      id: `${src.id}-fill`,
+      type: "fill",
+      source: src.id,
+      "source-layer": "forest",
+      minzoom: 8,
+      paint: {
+        "fill-color": SPECIES_COLOR_MATCH as unknown as string,
+        "fill-opacity": 0.85,
+        "fill-outline-color": palette.light.forestDeep,
       },
-      {
-        id: "forest-fill",
-        type: "fill",
-        source: "forest",
-        "source-layer": "forest",
-        minzoom: 8,
-        paint: {
-          "fill-color": SPECIES_COLOR_MATCH as unknown as string,
-          "fill-opacity": 0.85,
-          "fill-outline-color": palette.light.forestDeep,
-        },
-      },
-    ],
+    });
+  }
+
+  return {
+    version: 8,
+    sources: mapSources,
+    layers,
   };
+}
+
+/**
+ * Backward-compat alias для Phase 0 single-source spike. Удалить
+ * после того как SpikeMap полностью переедет на multi-source.
+ *
+ * @deprecated use buildMapStyle()
+ */
+export function buildSpikeStyle(forestPmtilesUri: string): Style {
+  return buildMapStyle([
+    { id: "forest", pmtilesFileUri: forestPmtilesUri },
+  ]);
 }
