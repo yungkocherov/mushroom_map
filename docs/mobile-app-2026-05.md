@@ -847,6 +847,60 @@ Pixel 6 / API 34 / x86_64:
 
 ---
 
+## Phase 2 progress (autonomous run, 2026-05-01) — IN PROGRESS
+
+### Phase 2.1 — backend: per-district pipeline + endpoint ✅
+
+- Migration 032: `admin_area.slug TEXT` partial UNIQUE. Backfill 18 ASCII slugs (luzhsky, vyborgsky, sosnovoborsky, ...). Slug закреплён — mobile хранит его в region-пакетах.
+- `pipelines/build_district_tiles.py`: режет 4 слоя (forest, water, waterway, wetlands) по 18 районам через `pmtiles extract --bbox`. Auto-clusters non-clustered source pmtiles через python-pmtiles lib (read all_tiles + sort by zxy_to_tileid + write via Writer). Кэш в `data/tiles/_clustered/`.
+- `data/tiles/regions.json` манифест (sha256+sizes+URLs). Локальный прогон: 18 регионов, 627 МБ всего. Размер per region: 3 МБ (Сосновоборский) — 70 МБ (Тихвинский), среднее ~35 МБ. Лучше плановых ~80 МБ.
+- `/api/mobile/regions` real impl: читает manifest из `tiles_dir/regions.json`. 503 если файла нет, 200 + `RegionsResponse{version, base_url, regions[]}`. 4 pytest unit-теста.
+
+### Phase 2.1.5 — deploy ✅
+
+- TimeWeb (`api.geobiom.ru`): миграция 032 пришла через CI. `data/tiles/districts/*` + `regions.json` залиты через scp (per-district чтобы избежать connection-reset на single 627 МБ перекачке). 18 районов × 4 слоя × ~30 МБ. Smoke-test: `curl https://api.geobiom.ru/tiles/regions.json` → 200, 25 КБ.
+- Oracle (`app-api.geobiom.ru`): миграция 032 пришла через nightly pg_dump→pg_restore. Tiles upload — autonomous run в работе.
+
+### Phase 2.2 — mobile download manager ✅
+
+- `services/regions.ts`: `fetchRegions()` → API, `downloadRegion()` через `expo-file-system createDownloadResumable` (per-layer .partial → atomic move + sha256 verify через `expo-crypto`), persistence в `sync_meta` table (`region.<slug>.installed = manifest_version`).
+- `stores/useOfflineRegions.ts` Zustand: `available[]`, `downloaded: Set<slug>`, `inProgress: Record<slug, {layer, bytes_done, bytes_total}>`, actions `refresh / startDownload / remove`.
+- `app/regions.tsx` экран (Stack screen): FlatList с pull-to-refresh, per-район row (имя + size, либо «Скачано», либо progress bar в chanterelle). Tap downloaded → confirm-delete. Tap available → start download.
+- Settings → Section «Регионы» с counter «Скачано N из 18» + ссылка на /regions.
+
+### Phase 2.3a — SpikeMap dynamic sources ✅
+
+- `style.ts` → `buildMapStyle(sources[])` — multi-source. Per-region forest source/layer (`forest-{slug}`) с paint по `dominant_species`. Background paper остаётся внизу.
+- `SpikeMap.tsx` подписан на `useOfflineRegions.downloaded`. Если есть скачанные — sources из них через `getLayerLocalUri(slug, "forest")`. Если ничего — fallback на bundled `forest-luzhsky.pmtiles` (Phase 0 placeholder, удалим в Phase 5).
+- Status overlay: «tiles: 3 regions» / «tiles: 1 (spike)» / «tiles: —».
+
+### Phase 2.4 — popup на тапе по выделу ✅
+
+- `scripts/dump_species_affinity.py` + `_dump_affinity.sql`: выгружает 23 вида × ~4 affinity-pair'ов в JSON (4.5 КБ). Source: `species_forest_affinity` JOIN `species`.
+- `apps/mobile/assets/species-affinity.json` bundled.
+- `services/affinity.ts`: lazy-load + cache, `topSpeciesForForestType(forestType, limit=5)` returns species с affinity > 0.3.
+- `components/MapView/ForestPopup.tsx` Modal slide-up: KV-блок (порода RU, возраст, бонитет, источник), section «Виды по биотопу» с affinity scores в chanterelle.
+- `SpikeMap.tsx` `onPress` фильтр: только forest features (по `feature.properties.dominant_species`). Open Modal.
+
+### Phase 2 outstanding
+
+- **Phase 2.3b basemap**: `pipelines/build_basemap.py` (planetiler / OSM-extract LO) → `basemap-lo-low.pmtiles` z6-10 bundled в APK. Заменит paper-фон на «Google-Maps-стиль» с дорогами/реками/имёнами населённых пунктов. Требует planetiler.jar + OSM extract Northwestern Federal District (~150 МБ). Перенесено на следующую session — независимая работа.
+- **Sync tiles to Oracle**: scp в работе. Oracle будет иметь те же 627 МБ что TimeWeb после завершения.
+- **`@gorhom/bottom-sheet` вместо Modal** в ForestPopup — gesture-driven snap-points. Phase 4 polish.
+- **Cancel in-progress download** через AbortController. Текущая реализация — wait completion. Phase 4 polish.
+- **Update detection**: при mismatch `region.<slug>.installed` vs API `manifest_version` → notification «доступно обновление». Phase 4.
+
+### Граблины Phase 2
+
+| # | Симптом | Причина | Решение |
+|---|---|---|---|
+| 1 | `pmtiles extract: source archive must be clustered` | water/waterway/wetlands собирались с iteration по z (внешний loop) вместо tile_id order — в результате non-clustered. forest.pmtiles был clustered. | inline `cluster_pmtiles()` через python-pmtiles lib: read + sort + rewrite |
+| 2 | scp -r 627 МБ → connection reset peer на середине | Single ssh сессия timing out на больших uploads | Per-district scp в for-loop |
+| 3 | dump_species_affinity.py: column "tree_species" does not exist | Фактическая колонка называется `forest_type`, table — `species` (не `species_registry`) | Проверил `\\d species_forest_affinity`, переписал SQL |
+| 4 | `psql -c "..."` через ssh + nested escapes давал empty output | Bash escape complexity со вложенными `'"'"'` | docker cp файла + `psql -f /tmp/dump.sql` |
+
+---
+
 ## How to read this plan in future sessions
 
 1. **Если стартуешь новую mobile-сессию:** прочти журнал решений (16
