@@ -28,28 +28,75 @@ from pathlib import Path
 import psycopg
 
 
+# Slug -> Russian root для 18 районов LO. SQL'у скармливаем %root% LIKE,
+# чтобы прицепиться независимо от падежа («Лужский»/«Лужского»). До
+# Phase 2 (отдельный slug-column в admin_area) — самый дешёвый матч.
+DISTRICT_SLUG_TO_RU = {
+    "vyborg":         "Выборгск",
+    "vyborgsky":      "Выборгск",
+    "priozersk":      "Приозерск",
+    "priozersky":     "Приозерск",
+    "vsevolozhsk":    "Всеволожск",
+    "vsevolozhsky":   "Всеволожск",
+    "luzhsky":        "Лужск",
+    "luga":           "Лужск",
+    "tikhvin":        "Тихвинск",
+    "tikhvinsky":     "Тихвинск",
+    "volosovo":       "Волосовск",
+    "volosovsky":     "Волосовск",
+    "boksitogorsky":  "Бокситогорск",
+    "volkhovsky":     "Волховск",
+    "tosno":          "Тосненск",
+    "tosnensky":      "Тосненск",
+    "kirovsky":       "Кировск",
+    "slantsy":        "Сланцевск",
+    "slantsevsky":    "Сланцевск",
+    "kirishi":        "Киришск",
+    "kirishsky":      "Киришск",
+    "podporozhsky":   "Подпорожск",
+    "lodeynopolsky":  "Лодейнопольск",
+    "gatchina":       "Гатчинск",
+    "gatchinsky":     "Гатчинск",
+    "kingisepp":      "Кингисеппск",
+    "kingiseppsky":   "Кингисеппск",
+    "lomonosov":      "Ломоносовск",
+    "lomonosovsky":   "Ломоносовск",
+    "sosnovy_bor":    "Сосновоборск",
+    "sosnovoborsky":  "Сосновоборск",
+}
+
+
 def get_district_bbox(dsn: str, slug: str) -> tuple[float, float, float, float]:
     """Return (south, west, north, east) for the named district."""
+    ru_root = DISTRICT_SLUG_TO_RU.get(slug.lower())
+    if ru_root is None:
+        sys.exit(
+            f"unknown district slug {slug!r}. Known: "
+            + ", ".join(sorted(set(DISTRICT_SLUG_TO_RU)))
+        )
     with psycopg.connect(dsn) as conn, conn.cursor() as cur:
-        # admin_area.code is like 'osm_rel_<id>'; we don't have a slug
-        # column yet (TODO migration in Phase 1). Match by name LIKE for now.
         cur.execute(
             """
             SELECT
               ST_YMin(ST_Envelope(geometry)),
               ST_XMin(ST_Envelope(geometry)),
               ST_YMax(ST_Envelope(geometry)),
-              ST_XMax(ST_Envelope(geometry))
+              ST_XMax(ST_Envelope(geometry)),
+              name_ru
             FROM admin_area
-            WHERE LOWER(name) LIKE LOWER(%s)
+            WHERE level = 6 AND name_ru ILIKE %s
             ORDER BY ST_Area(geometry::geography) DESC
             LIMIT 1
             """,
-            (f"%{slug}%",),
+            (f"%{ru_root}%",),
         )
         row = cur.fetchone()
         if not row:
-            sys.exit(f"district matching {slug!r} not found in admin_area")
+            sys.exit(
+                f"district matching root {ru_root!r} not found in admin_area "
+                f"(level=6). Did you run pipelines/ingest_districts.py?"
+            )
+        print(f"matched district: {row[4]}", flush=True)
         return (row[0], row[1], row[2], row[3])
 
 
@@ -61,38 +108,23 @@ def clip(in_path: Path, out_path: Path, bbox: tuple[float, float, float, float],
     e += buffer_deg
 
     if not shutil.which("pmtiles"):
-        sys.exit("pmtiles CLI not found in PATH. Install via go install github.com/protomaps/go-pmtiles/cmd/pmtiles@latest")
-    if not shutil.which("tile-join"):
-        sys.exit("tile-join (tippecanoe) not found in PATH")
-
-    with tempfile.TemporaryDirectory() as td:
-        td_path = Path(td)
-        mbtiles_in = td_path / "in.mbtiles"
-        mbtiles_clip = td_path / "clip.mbtiles"
-
-        # PMTiles -> MBTiles (lossless container swap)
-        subprocess.run(
-            ["pmtiles", "convert", str(in_path), str(mbtiles_in)],
-            check=True,
+        sys.exit(
+            "pmtiles CLI not found in PATH. Download prebuilt binary from "
+            "https://github.com/protomaps/go-pmtiles/releases and place "
+            "in %USERPROFILE%\\bin\\ (or anywhere on PATH)."
         )
 
-        # tile-join with bbox restriction does the actual clip
-        subprocess.run(
-            [
-                "tile-join",
-                "-o", str(mbtiles_clip),
-                "--bounds", f"{w},{s},{e},{n}",
-                "--no-tile-size-limit",
-                str(mbtiles_in),
-            ],
-            check=True,
-        )
-
-        # MBTiles -> PMTiles
-        subprocess.run(
-            ["pmtiles", "convert", str(mbtiles_clip), str(out_path)],
-            check=True,
-        )
+    # pmtiles 1.x extract: subset by bbox in a single pass, no Docker, no
+    # tippecanoe. Tiles intersecting bbox are copied wholesale (edge tiles
+    # carry features that extend outside the bbox, but MapLibre clips at
+    # viewport on the device — fine for our spike).
+    subprocess.run(
+        [
+            "pmtiles", "extract", str(in_path), str(out_path),
+            "--bbox", f"{w},{s},{e},{n}",
+        ],
+        check=True,
+    )
 
 
 def main() -> None:
