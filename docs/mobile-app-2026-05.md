@@ -766,8 +766,8 @@ beta. v2 (iOS, breadcrumb) — после первой обратной связ
 - planetiler (basemap builder): https://github.com/onthegomap/planetiler
 
 **Текущие deferred TODO для перехода к mobile:**
-- Phase 0 spike стартует 2026-05-01 после user-confirm плана — см.
-  `apps/mobile/README.md` после первого коммита.
+- Phase 0 spike — ✅ VERIFIED 2026-05-01 (см. `## Phase 0 progress`).
+- Phase 2 — NEXT.
 
 ---
 
@@ -789,6 +789,61 @@ beta. v2 (iOS, breadcrumb) — после первой обратной связ
 
 После onboarding юзер всегда может вернуться в Settings → Регионы и
 управлять списком (добавить, удалить, проверить обновления).
+
+---
+
+## Phase 0 progress (autonomous run, 2026-05-01) — VERIFIED PASS ✅
+
+**Спайк успешно прошёл Go/no-go gate.** Доказано на физическом эмуляторе
+Pixel 6 / API 34 / x86_64:
+
+- **Stack works:** React Native + Expo bare 52 + maplibre-react-native
+  v10.4.2 + native MapLibre Android v11.12.1 + expo-location.
+- **PMTiles offline rendering:** `forest-luzhsky.pmtiles` (39 МБ, clip
+  через `pmtiles extract` по bbox Лужского) подключается из
+  bundled-asset через схему `pmtiles://file:///абс/путь.pmtiles`.
+  Forest layer painted by `dominant_species` (14 пород).
+- **GPS:** `expo-location` requestForegroundPermissionsAsync +
+  watchPositionAsync; на эмуляторе fix приходит из «Set location»
+  Extended controls. На реальном Android — должен работать как обычно
+  (не тестировано в этом spike, но API стандартный).
+- **Build chain on Windows w/o Android Studio for build:** JDK 17 +
+  cmdline-tools + sdkmanager (platforms;android-35, build-tools;35,
+  platform-tools) → `expo prebuild --platform android --clean` →
+  `expo run:android`. APK билдится за ~2 минуты после первичного
+  Gradle warm-up.
+- **Tabs нав:** Карта · Споты · Виды · Настройки в bottom tabs, активный
+  таб chanterelle.
+- **Airplane mode test (частичный):** в bbox Лужского карта продолжает
+  рисоваться; за пределами bbox — paper-фон без выделов (ожидаемо,
+  pmtiles клипнут только на 1 район).
+
+**Граблины которые пришлось фиксить (записано для следующих сессий):**
+
+| # | Симптом | Причина | Решение |
+|---|---|---|---|
+| 1 | `drawable/splashscreen_logo not found` | expo-splash-screen в SDK 52 нужны image assets даже под placeholder | Сгенерил 1024×1024 PNG'и (paper + chanterelle dot) для icon/splash/adaptive-icon |
+| 2 | `Compose Compiler 1.5.15 requires Kotlin 1.9.25 but using 1.9.24` | Default Kotlin SDK 52 1.9.24, expo-modules-core ждёт 1.9.25 | `expo-build-properties` plugin с явным `kotlinVersion: "1.9.25"` |
+| 3 | `androidx.core:core-splashscreen:1.2.0-alpha02 requires compileSdk 35` | Transitive dep требует API 35 | Бамп `compileSdkVersion: 35` + `targetSdkVersion: 35` через build-properties; `sdkmanager "platforms;android-35"` |
+| 4 | `Unable to resolve "@mushroom-map/tokens/native"` в Metro | Metro в SDK 52 default не парсит package.json `exports` field | `config.resolver.unstable_enablePackageExports = true` в `metro.config.js` |
+| 5 | `[HTTP] Unable to parse resourceUrl /data/user/0/.../.pmtiles` | URL-форма pmtiles была `pmtiles:///abs/path` (3 слеша) — handler не знает что делать с bare-path внутри | Правильная форма: `pmtiles://file:///abs/path` (inner URL — file://) |
+| 6 | `LocationManager Error: ACCESS_FINE_LOCATION` | Permission dialog не вылез / был disссnut | `adb shell pm grant ru.geobiom.mobile android.permission.ACCESS_*_LOCATION` или manual в Settings → Apps |
+| 7 | `Could not connect to development server` | Metro reachable только через `adb reverse` или 10.0.2.2 alias | `adb reverse tcp:8081 tcp:8081` ставится автоматически от `expo run:android`, но иногда сбрасывается; ручной retry помогает |
+| 8 | `Git Bash на Windows: adb command not found` | User PATH не пробрасывается в Git Bash | `~/.bashrc` со ссылками на ANDROID_HOME / JAVA_HOME |
+
+**Что НЕ покрыл spike (намеренно, перенесено в Phase 2):**
+
+- Базовая карта (OSM-стиль с дорогами/реками/населёнными пунктами).
+  Сейчас рендерится только paper-фон + forest layer.
+- Hillshade / рельеф.
+- Per-district download manager UI и pipeline. Сейчас единственный
+  bundled тайл — Лужский, и за его bbox карта пуста.
+- Popup на тапе по выделу.
+- Save spot UI + sync test.
+- Production keystore (debug.keystore используется для Yandex SHA256).
+- iOS build (Phase 2 / v2).
+
+**Статус: Phase 0 closed. Phase 2 unblocked.**
 
 ---
 

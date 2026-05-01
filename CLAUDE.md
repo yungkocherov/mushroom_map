@@ -26,9 +26,12 @@ forecast-репо не пишем — это двусторонний контр
 (16 решений зафиксированы, 3 open questions).
 
 **Текущее состояние** (после autonomous run 2026-05-01):
-- **Phase 0 spike** — карта-экран `(tabs)/index.tsx` + `SpikeMap.tsx`
-  (PMTiles из bundled-asset через `pmtiles://` source + GPS-маркер +
-  cursor-точка в chanterelle). `tsc --noEmit` зелёный.
+- **Phase 0 spike** — ✅ VERIFIED 2026-05-01 на эмуляторе Pixel 6 /
+  API 34 / x86_64. Карта-экран `(tabs)/index.tsx` + `SpikeMap.tsx`
+  (PMTiles из bundled-asset через `pmtiles://file:///abs/path` +
+  GPS-маркер + chanterelle dot). 8 граблин зафиксированы в
+  `docs/mobile-app-2026-05.md` секции «Phase 0 progress». `tsc
+  --noEmit` зелёный.
 - **Phase 1 foundation** — bottom tabs (Карта/Споты/Виды/Настройки),
   SQLite (`expo-sqlite + SQLCipher`) + миграция local_spot,
   `spotsRepo.ts` (CRUD + sync flags), API client (`services/api.ts`)
