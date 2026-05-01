@@ -1,6 +1,8 @@
 import * as SecureStore from "expo-secure-store";
 
-const DEFAULT_BASE_URL = "https://api.geobiom.ru";
+const DEFAULT_BASE_URL =
+  process.env.EXPO_PUBLIC_API_BASE_URL?.replace(/\/$/, "") ??
+  "https://api.geobiom.ru";
 const TOKEN_KEY = "geobiom.device_token.v1";
 
 let baseUrl = DEFAULT_BASE_URL;

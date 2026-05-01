@@ -6,23 +6,49 @@ Android-first React Native приложение по `docs/mobile-app-2026-05.md
 стек (Expo bare + maplibre-react-native + локальный PMTiles +
 expo-location) работает offline.
 
-## Что нужно поставить на dev-машину
+## Что должно быть установлено
 
-1. **Node 18+** уже стоит для веба, ОК.
-2. **Java JDK 17** (Adoptium / Microsoft Build of OpenJDK).
-3. **Android Studio** + Android SDK (API 34) + Android SDK Build-Tools 34.
-   Через SDK Manager: `Android 14.0 (API 34)`, `Android SDK Build-Tools
-   34.0.0`, `Android SDK Command-line Tools`, `Android Emulator`,
-   `Android SDK Platform-Tools`.
-4. **Android device** — физический телефон с включенным USB-debugging,
-   либо AVD-эмулятор (Pixel 6 / API 34, x86_64).
-5. **Environment variables**:
-   - `JAVA_HOME` → JDK 17 install
-   - `ANDROID_HOME` → `%LOCALAPPDATA%\Android\Sdk`
-   - PATH += `%ANDROID_HOME%\platform-tools;%ANDROID_HOME%\emulator`
+### Поставлено autonomous-run'ом 2026-05-01
 
-Проверить: `adb devices` показывает устройство; `java -version` пишет
-17.x.
+- **Node 24** уже было для веба
+- **JDK 17** — `Microsoft.OpenJDK.17` через winget,
+  `JAVA_HOME=%LOCALAPPDATA%\Programs\Microsoft\jdk-17.0.10.7-hotspot`,
+  на User PATH
+- **Android SDK** через cmdline-tools (без полного Android Studio) в
+  `%LOCALAPPDATA%\Android\Sdk\`. `ANDROID_HOME` + `ANDROID_SDK_ROOT` в
+  User env. На User PATH добавлены `Sdk\platform-tools` и
+  `Sdk\cmdline-tools\latest\bin`. Установлены пакеты: `platform-tools`
+  (adb), `platforms;android-34`, `build-tools;34.0.0`.
+- **pmtiles CLI** v1.22.2 в `%USERPROFILE%\bin\pmtiles.exe` (уже на PATH)
+- **RN deps** через `npm install --workspaces`
+
+### Чего НЕТ — поставить вручную если нужно
+
+- **Android Emulator** — для AVD понадобится `emulator` package + system
+  image. `sdkmanager "emulator" "system-images;android-34;google_apis;x86_64"`.
+  Дев на физическом устройстве (USB-debug) — рекомендованный путь.
+- **Полный Android Studio (IDE)** — не нужен для `expo run:android`.
+  Если хочешь Logcat-UI / профайлер / AVD-manager — поставь руками
+  с developer.android.com (1+ ГБ, требует click-through wizard).
+- **Go** — winget MSI просит admin (1603). Если нужно `go install` для
+  чего-то — установи руками: https://go.dev/dl/. Сейчас pmtiles взяли
+  prebuilt-бинарник, Go не критичен.
+
+### Открыть новый терминал после установки
+
+Env vars выставлены в **User scope** через
+`[Environment]::SetEnvironmentVariable(..., "User")`. Уже открытые
+терминалы их не видят. Перезапусти PowerShell / VS Code — `adb`,
+`java`, `pmtiles` появятся на PATH.
+
+### Проверка
+
+```bash
+java -version          # → openjdk 17.0.10
+adb version            # → Android Debug Bridge 35.0.x
+pmtiles version        # → pmtiles 1.22.2
+echo $ANDROID_HOME     # → C:\Users\<user>\AppData\Local\Android\Sdk
+```
 
 ## Установка зависимостей
 

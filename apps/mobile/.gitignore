@@ -10,6 +10,7 @@ ios/
 *.mobileprovision
 .env
 .env.local
+.env.development
 
 assets/forest-luzhsky.pmtiles
 assets/basemap-lo-low.pmtiles

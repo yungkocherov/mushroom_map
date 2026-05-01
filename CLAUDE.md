@@ -57,12 +57,24 @@ forecast-репо не пишем — это двусторонний контр
     (`tests/test_mobile_jwt.py`), 67 passed / 39 skipped (2 pre-existing
     fails — нужен running API).
 
-**Что нужно поставить на dev** (см. `apps/mobile/README.md`):
-- JDK 17 ✓ (Microsoft.OpenJDK.17 через winget, JAVA_HOME выставлен)
-- Android Studio + SDK 34 (winget'ом, в фоне; ANDROID_HOME выставить
-  после установки)
-- Go (для `go install pmtiles@latest`)
-- Тестовый PMTiles: `scripts/clip_pmtiles_to_district.py`
+**Что поставлено на dev** (см. `apps/mobile/README.md`):
+- JDK 17 ✓ Microsoft.OpenJDK.17 через winget,
+  `JAVA_HOME=%LOCALAPPDATA%\Programs\Microsoft\jdk-17.0.10.7-hotspot`
+- Android SDK ✓ через cmdline-tools (без полного Android Studio) в
+  `%LOCALAPPDATA%\Android\Sdk\`. `ANDROID_HOME`+`ANDROID_SDK_ROOT` в User env.
+  Пакеты: `platform-tools` (adb), `platforms;android-34`,
+  `build-tools;34.0.0`. Лицензии preseed'ом через `Sdk\licenses\*`
+  (стандартный CI-трюк, sdkmanager не умеет non-interactive license
+  accept на Windows-pipe'ах).
+- pmtiles CLI ✓ v1.22.2 в `%USERPROFILE%\bin\pmtiles.exe`
+- Что НЕ поставлено: Android Studio IDE (1+ ГБ, не нужен для
+  `expo run:android`), Go (winget MSI требует admin; pmtiles взяли
+  prebuilt-бинарником вместо `go install`), Android Emulator
+  (`sdkmanager "emulator" "system-images;android-34;google_apis;x86_64"` —
+  если понадобится AVD; рекомендация — физический Android device).
+
+**Перезапустить терминал** после `setx`/`SetEnvironmentVariable("User")` —
+открытые сессии не видят новые env vars.
 
 Workspaces: `@mushroom-map/mobile`, шерит `@mushroom-map/tokens` (новый
 export `/native` с number-размерами для RN). Distribution v1 —
