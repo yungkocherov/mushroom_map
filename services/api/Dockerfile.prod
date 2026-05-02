@@ -31,19 +31,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /build
 
-# pyproject.toml + src копируются из services/api (полный относительный
-# путь, потому что context=root).
-COPY services/api/pyproject.toml ./
+# pyproject.toml + lockfile + src копируются из services/api (полный
+# относительный путь, потому что context=root).
+COPY services/api/pyproject.toml services/api/requirements.lock ./
 COPY services/api/src ./src
 
-RUN pip install --prefix=/install --no-deps . \
- && pip install --prefix=/install \
-       "fastapi>=0.110" "uvicorn[standard]>=0.29" \
-       "psycopg[binary]>=3.2" "psycopg-pool>=3.2" \
-       "pydantic>=2.6" "pydantic-settings>=2.2" "python-dotenv>=1.0" \
-       "rasterio>=1.3" "pyproj>=3.6" \
-       "pyjwt>=2.8" "httpx>=0.27" \
-       "sentry-sdk[fastapi]>=2.20"
+# Lockfile freeze'ит все transitive deps к точным версиям + хэшам.
+# Сгенерирован через `bash scripts/dev/regen_api_lockfile.sh` (Docker
+# python:3.11-slim, тот же base что этот Dockerfile).
+#
+# ВАЖНО: после правки services/api/pyproject.toml — обязательно регенерить
+# lockfile тем же скриптом и закоммитить вместе с pyproject. CI build
+# упадёт если lock не покрывает новый dependency.
+#
+# --no-deps на обоих pip install означает:
+#   1. requirements.lock ставит exact versions всех transitive deps
+#   2. наш package встаёт поверх без re-resolve того, что уже установлено
+RUN pip install --prefix=/install --no-deps -r requirements.lock \
+ && pip install --prefix=/install --no-deps .
 
 
 # ─── stage 2: runtime ──────────────────────────────────────────────────
