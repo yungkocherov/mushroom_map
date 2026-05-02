@@ -77,44 +77,40 @@ echo "      $n_features features → $(du -h "$GEOJSON_FILE" | cut -f1)"
 
 t1=$(date +%s)
 echo "[2/3] tippecanoe → $MBTILES_FILE  (z=$MIN_ZOOM..$MAX_ZOOM)"
-# Tippecanoe v1.24.1 (klokantech/tippecanoe). Флаги:
-#   -l forest           — layer name (matches frontend forestStyle.ts source-layer)
-#   --read-parallel     — параллельное чтение line-delimited GeoJSON
-#   --detect-shared-borders — чистые рёбра полигонов (без двойных линий)
-#   (--coalesce НАМЕРЕННО НЕ используется: tippecanoe сливал соседние
-#    same-species вы́делы в один MVT-feature, и при отзумивании вы́делы
-#    «исчезали» в общую заливку, теряя свои границы и идентичность.
-#    Без --coalesce каждый из 1.68M вы́делов сохраняется как отдельная
-#    feature на всех зумах z=8-13. Файл крупнее, но детализация честная.)
-#   --no-tile-size-limit — НЕ дропать ничего по размеру тайла. Без
-#                          этого флага tippecanoe выкидывает мелкие
-#                          features на low-zoom когда тайл >500KB, и
-#                          лес выглядит фрагментированно «листочками»
-#                          вместо сплошного массива. С --coalesce
-#                          совместно: мелочь сначала сливается в
-#                          соседей с теми же properties, остаётся
-#                          компактный набор. На z=5-8 тайлы могут быть
-#                          1-3MB — ОК для PMTiles HTTP Range.
-#   --extend-zooms-if-still-dropping — поднимает MAX_ZOOM если все ещё
-#                                       дропаем на нём (с --no-tile-
-#                                       size-limit не сработает, но
-#                                       безопасно)
-#   --simplification=10 --simplify-only-low-zooms — Дугласа-Пеккера на
-#                       промежуточных зумах, maxzoom оставляем pristine
-#   --gamma=2           — выкидывает overlapping features при дропе
-#                         (предпочитает сохранить большой полигон)
+# Tippecanoe v1.24.1 (klokantech/tippecanoe). Минимальный набор флагов
+# чтобы НИЧЕГО не дропалось/мержилось/упрощалось — каждый из 1.68M
+# вы́делов должен оставаться отдельной MVT-feature на всех зумах:
+#   -l forest                   — layer name (matches frontend source-layer)
+#   --read-parallel             — параллельное чтение line-delimited GeoJSON
+#   --no-tile-size-limit        — НЕ дропать features по размеру тайла
+#   --no-feature-limit          — снять hard-limit 200000 features/tile.
+#                                 На z=5 у нас один тайл = 1.34M вы́делов,
+#                                 без флага tippecanoe бросает «too many
+#                                 features» и дропает их
+#   --no-tiny-polygon-reduction — НЕ заменять sub-pixel polygons на points
+#                                 и не дропать их (default behavior дропает)
+#   --no-line-simplification    — НЕ применять Douglas-Peucker (он
+#                                 коллапсировал мелкие полигоны на низких
+#                                 зумах в ничего)
+# Что НАМЕРЕННО НЕ используется:
+#   --coalesce          — сливал same-species соседей в общий MVT-feature
+#                         → вы́делы «пропадали» при отзумивании
+#   --gamma=N           — стохастически дропает features в плотных
+#                         кластерах (power-law). С нашими 1.68M в ЛО это
+#                         было видимо как «пропадание» вы́делов
+#   --simplification=N  — Douglas-Peucker на низких зумах коллапсировал
+#                         мелкие полигоны
+#   --drop-*-as-needed  — любая логика drop'а features по тайл-лимиту
 MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/$OUT_DIR:/data" klokantech/tippecanoe \
     tippecanoe \
         -o "/data/forest.mbtiles" \
         -l forest \
         --minimum-zoom="$MIN_ZOOM" \
         --maximum-zoom="$MAX_ZOOM" \
-        --detect-shared-borders \
         --no-tile-size-limit \
-        --extend-zooms-if-still-dropping \
-        --simplification=10 \
-        --simplify-only-low-zooms \
-        --gamma=2 \
+        --no-feature-limit \
+        --no-tiny-polygon-reduction \
+        --no-line-simplification \
         --read-parallel \
         --force \
         "/data/forest.geojsonl"
