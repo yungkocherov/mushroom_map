@@ -63,24 +63,25 @@ npm install --workspaces --include-workspace-root
 hoists большую часть в `node_modules` корня, native pods/aar — в
 workspace-локальном).
 
-## Тестовые тайлы для spike
+## Тайлы леса
 
-Spike читает `apps/mobile/assets/forest-luzhsky.pmtiles` — клипнутую
-по bbox Лужского района копию forest.pmtiles. Файл в `.gitignore`
-(большой). Сгенерировать локально:
+С Phase 5 (2026-05-03) bundled `forest-luzhsky.pmtiles` placeholder
+**удалён**. Источники forest-выделов теперь:
 
-```bash
-# из репо-root, при docker compose up -d db
-.venv/Scripts/python.exe -u scripts/clip_pmtiles_to_district.py \
-  --district luzhsky \
-  --in data/tiles/forest.pmtiles \
-  --out apps/mobile/assets/forest-luzhsky.pmtiles
-```
+1. **Скачанные районы** (per-district pmtiles в FileSystem.documentDirectory)
+   — основной режим offline. Onboarding заставляет скачать минимум
+   один регион при первом запуске.
+2. **Online через api.geobiom.ru** (forest.pmtiles + forest_lo.pmtiles
+   через HTTP Range) — fallback когда нет скачанных регионов и есть
+   интернет.
+3. **Offline без скачанного региона** — лес не показывается, только
+   paper-фон + basemap. UI status-overlay показывает «offline · нет
+   региона». В нормальном flow эта ветка недостижима благодаря
+   onboarding'у.
 
-(Скрипт `scripts/clip_pmtiles_to_district.py` — будет добавлен в Phase 0
-вместе с реальной интеграцией. Пока — обходной путь: взять
-`data/tiles/forest.pmtiles` целиком, но осторожно — он 302 МБ, APK не
-соберётся.)
+Базовая карта (`assets/basemap-lo-low.pmtiles`, 12 МБ z0-10) **остаётся
+bundled** — генерируется через `pipelines/build_basemap.py` и тащится
+в APK как fallback offline.
 
 ## Запуск
 
