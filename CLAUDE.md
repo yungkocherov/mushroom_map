@@ -36,17 +36,25 @@ forecast-репо не пишем — это двусторонний контр
   SQLite (`expo-sqlite`, **NOT encrypted** в v0 — TODO до Phase 5
   release: op-sqlite или quick-sqlite + SQLCipher), `spotsRepo.ts`,
   API client с `Authorization: Bearer device_token`, Yandex OAuth PKCE.
-- **Phase 2** (in progress) — per-district pmtiles pipeline + download
-  manager + popup на выделе. Migration 032 (`admin_area.slug`),
-  `pipelines/build_district_tiles.py` (auto-cluster non-clustered
-  source pmtiles через python-pmtiles), 18 районов × 4 слоя = 627 МБ
-  на TimeWeb. `services/regions.ts` + `useOfflineRegions` store +
-  `app/regions.tsx` экран с download-progress UI. SpikeMap.tsx читает
-  multi-source style.json из downloaded регионов. ForestPopup Modal
-  slide-up с КВ + «Виды по биотопу» из bundled
-  `apps/mobile/assets/species-affinity.json` (23 вида, 4.5 КБ).
-  Outstanding: basemap-lo (planetiler), Oracle sync, gorhom/bottom-sheet,
-  cancel-in-progress download.
+- **Phase 2** (essentially done) — per-district pmtiles pipeline +
+  download manager + popup на выделе + basemap. Migration 032
+  (`admin_area.slug`), `pipelines/build_district_tiles.py` (auto-cluster
+  через python-pmtiles), 18 районов × 4 слоя = 627 МБ на TimeWeb +
+  Oracle. `services/regions.ts` + `useOfflineRegions` + `/regions`
+  экран. `pipelines/build_basemap.py` (planetiler v0.7 + Geofabrik
+  northwestern-fed-district extract) → bundled `apps/mobile/assets/
+  basemap-lo-low.pmtiles` 11.7 МБ z0-10 (OpenMapTiles schema). SpikeMap
+  multi-source style.json (basemap + forest sources). ForestPopup
+  Modal с КВ + «Виды по биотопу» из bundled species-affinity.json.
+- **Phase 3** (done) — spots offline-first. SaveSpotSheet (FAB на
+  карте → form modal), spots list с distance-from-GPS sort
+  (haversine), spot detail (`app/spot/[uuid].tsx`) с компасом
+  (`expo-sensors` Magnetometer + Animated rotate, bearing computed
+  haversine'ом).
+- **Phase 4 polish outstanding**: gorhom/bottom-sheet вместо Modal,
+  cancel-in-progress download (AbortController), manifest update
+  detection, slug→russian в popup species, bundled forest-luzhsky
+  removal (Phase 5).
 - **Backend дельта:**
   - Миграция `db/migrations/031_user_spot_client_uuid.sql` —
     `client_uuid UUID UNIQUE` (partial), `client_updated_at`,

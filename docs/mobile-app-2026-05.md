@@ -882,13 +882,25 @@ Pixel 6 / API 34 / x86_64:
 - `components/MapView/ForestPopup.tsx` Modal slide-up: KV-блок (порода RU, возраст, бонитет, источник), section «Виды по биотопу» с affinity scores в chanterelle.
 - `SpikeMap.tsx` `onPress` фильтр: только forest features (по `feature.properties.dominant_species`). Open Modal.
 
-### Phase 2 outstanding
+### Phase 2.3b — basemap-lo через planetiler ✅
 
-- **Phase 2.3b basemap**: `pipelines/build_basemap.py` (planetiler / OSM-extract LO) → `basemap-lo-low.pmtiles` z6-10 bundled в APK. Заменит paper-фон на «Google-Maps-стиль» с дорогами/реками/имёнами населённых пунктов. Требует planetiler.jar + OSM extract Northwestern Federal District (~150 МБ). Перенесено на следующую session — независимая работа.
-- **Sync tiles to Oracle**: scp в работе. Oracle будет иметь те же 627 МБ что TimeWeb после завершения.
-- **`@gorhom/bottom-sheet` вместо Modal** в ForestPopup — gesture-driven snap-points. Phase 4 polish.
-- **Cancel in-progress download** через AbortController. Текущая реализация — wait completion. Phase 4 polish.
-- **Update detection**: при mismatch `region.<slug>.installed` vs API `manifest_version` → notification «доступно обновление». Phase 4.
+- `pipelines/build_basemap.py`: planetiler v0.7.0 (Java 17 compatible — v0.8+ требует Java 21) с `--osm-url=https://download.geofabrik.de/russia/northwestern-fed-district-latest.osm.pbf` + `--bounds=27.8,58.5,33.0,61.8`. Output `data/tiles/basemap-lo.pmtiles` 197 МБ z0-14. Trim через `pmtiles extract --maxzoom=10` → `apps/mobile/assets/basemap-lo-low.pmtiles` 11.7 МБ z0-10 (419 tiles). Schema OpenMapTiles (12 vector layers): water, waterway, transportation, place, landcover, boundary, building, poi, etc.
+- `style.ts` обновлён: `buildMapStyle({forests, basemapPmtilesUri})` рисует layers basemap (под forest): water (filled bcd1cc), landcover (filtered wood/forest/grass, semi-transparent), waterway (line), roads (style-class по road class), boundary (admin_level<=6 dashed), place names (city/town/village/hamlet halo'd text). Forest fill-opacity 0.85 → 0.7 чтобы basemap читался под выделами.
+
+### Phase 3 — spots offline-first ✅
+
+- `components/SaveSpotSheet.tsx`: Modal slide-up с form (name, note ≤500, rating 1-5 chips, popular tags multi-select). Сохранение → useSpots.add() в SQLite + sync queue.
+- FAB «+» chanterelle на карте справа-снизу, disabled без GPS-fix. Открывает SaveSpotSheet.
+- `app/(tabs)/spots.tsx` переписан: FlatList sorted by haversine distance от current GPS (asc) либо created_at desc если нет fix. Per-row: rating dot, name, tags, distance, date, sync indicator.
+- `app/spot/[uuid].tsx`: detail screen с компасом. Magnetometer (`expo-sensors` 14.x) + Animated.Value rotate, bearing к спот рассчитывается haversine'ом. Distance text, KV block, note, tag chips, delete button с confirm.
+
+### Phase 2/3 outstanding
+
+- **`@gorhom/bottom-sheet` вместо Modal** в SaveSpotSheet и ForestPopup — gesture-driven snap-points. Phase 4 polish.
+- **Cancel in-progress download** через AbortController в useOfflineRegions. Phase 4 polish.
+- **Update detection**: при mismatch `region.<slug>.installed` vs API `manifest_version` → notification. Phase 4.
+- **Slug → Russian** в ForestPopup «Виды по биотопу» (сейчас `boletus-edulis`, нужно «Белый»). Phase 4.
+- **Bundled `forest-luzhsky.pmtiles`** placeholder remove — Phase 5.
 
 ### Граблины Phase 2
 
