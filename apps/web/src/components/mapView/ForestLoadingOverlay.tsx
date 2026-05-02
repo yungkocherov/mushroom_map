@@ -36,7 +36,6 @@ function tileBoundsLngLat(x: number, y: number, z: number) {
 
 interface Props {
   mapRef: React.MutableRefObject<MapLibreMap | null>;
-  ready: boolean;
 }
 
 type PendingMap = globalThis.Map<TileKey, TileCoords>;
@@ -49,30 +48,23 @@ type TileLikeEvent = MapDataEvent & {
   };
 };
 
-export function ForestLoadingOverlay({ mapRef, ready }: Props) {
-  const map = ready ? mapRef.current : null;
-  // debug: видеть что компонент рендерится вообще
-  // eslint-disable-next-line no-console
-  console.log("[forest-overlay] render", { ready, hasMap: !!map });
+export function ForestLoadingOverlay({ mapRef }: Props) {
   const [pending, setPending] = useState<PendingMap>(() => new globalThis.Map());
   // bump'аем при move/zoom — provoke'аем re-projection без хранения координат
   const [proj, setProj] = useState(0);
   const rafRef = useRef<number | null>(null);
+  // bumpаем при retry если mapRef.current ещё null
+  const [attachTick, setAttachTick] = useState(0);
 
   useEffect(() => {
-    if (!map) return;
-    // eslint-disable-next-line no-console
-    console.log("[forest-overlay] listener attached");
+    const map = mapRef.current;
+    if (!map) {
+      // mapRef ещё не сетнут — retry на следующем frame'е
+      const id = requestAnimationFrame(() => setAttachTick((t) => t + 1));
+      return () => cancelAnimationFrame(id);
+    }
 
     const onData = (e: TileLikeEvent) => {
-      // debug: ВСЕ data events без фильтра — посмотреть что прилетает
-      // eslint-disable-next-line no-console
-      console.log("[forest-overlay-all]", {
-        sid: e.sourceId,
-        dataType: e.dataType,
-        hasTile: !!e.tile,
-        tileState: e.tile?.state,
-      });
       const sid = e.sourceId;
       if (!sid || !FOREST_SOURCES.includes(sid)) return;
       if (e.dataType !== "source" || !e.tile) return;
@@ -109,8 +101,9 @@ export function ForestLoadingOverlay({ mapRef, ready }: Props) {
       map.off("zoom", onMove);
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     };
-  }, [map]);
+  }, [mapRef, attachTick]);
 
+  const map = mapRef.current;
   if (!map || pending.size === 0) return null;
 
   return (

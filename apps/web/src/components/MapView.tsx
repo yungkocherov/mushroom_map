@@ -91,7 +91,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
 
       <Legend />
       <CursorReadout mapRef={map} />
-      <ForestLoadingOverlay mapRef={map} ready={mapReady} />
+      <ForestLoadingOverlay mapRef={map} />
       <MapOverlays />
       <SpeciesFilterBadge />
     </div>
