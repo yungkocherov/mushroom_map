@@ -1,136 +1,63 @@
-import { useEffect, useRef, useState } from "react";
-import type { Map as MapLibreMap, MapDataEvent } from "maplibre-gl";
+import { useEffect, useState } from "react";
+import type { Map as MapLibreMap } from "maplibre-gl";
 
 import styles from "./ForestLoadingOverlay.module.css";
 
 /**
- * Per-tile shimmer overlay для forest-источников. Слушает MapLibre
- * `data` events на обоих source'ах (forest + forest_lo). Когда какой-то
- * tile state === 'loading' — добавляем его в pending Set. Когда loaded
- * (или errored / unloaded) — удаляем.
+ * Full-viewport shimmer overlay пока карта что-то догружает.
  *
- * Render: для каждого pending tile вычисляем bbox в lng/lat (стандартная
- * tile-math z/x/y → lng/lat углы), проектируем через map.project() в
- * pixel-координаты и рисуем absolute-positioned div с CSS-shimmer.
- *
- * При панорамировании / зуме перепроецируем — слушаем `move` event,
- * bumpаем version → re-render.
- *
- * Перформанс: requestAnimationFrame batching на move event'ах. Pending
- * Set обновляется по факту, без RAF (один data event = один setState).
+ * Отслеживание: `map.areTilesLoaded()` обновляется по `data`-событиям;
+ * `idle` событие = всё догружено и spawn-rendered. Per-tile precision
+ * (рисовать shimmer на конкретных квадратах) сложна с pmtiles custom
+ * protocol — некоторые события не доносят `tile.state`. Full-viewport
+ * вариант — простой и надёжный, лёгкий полупрозрачный pulsing
+ * gradient поверх карты пока что-то грузится.
  */
-
-type TileKey = string;
-type TileCoords = { z: number; x: number; y: number };
-
-const FOREST_SOURCES = ["forest", "forest_lo"];
-
-function tileBoundsLngLat(x: number, y: number, z: number) {
-  const n = 2 ** z;
-  const lonW = (x / n) * 360 - 180;
-  const lonE = ((x + 1) / n) * 360 - 180;
-  const latN = (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
-  const latS = (Math.atan(Math.sinh(Math.PI * (1 - (2 * (y + 1)) / n))) * 180) / Math.PI;
-  return { nw: [lonW, latN] as [number, number], se: [lonE, latS] as [number, number] };
-}
-
 interface Props {
   mapRef: React.MutableRefObject<MapLibreMap | null>;
 }
 
-type PendingMap = globalThis.Map<TileKey, TileCoords>;
-
-type TileLikeEvent = MapDataEvent & {
-  sourceId?: string;
-  tile?: {
-    state?: string;
-    tileID?: { canonical?: { z: number; x: number; y: number } };
-  };
-};
-
 export function ForestLoadingOverlay({ mapRef }: Props) {
-  const [pending, setPending] = useState<PendingMap>(() => new globalThis.Map());
-  // bump'аем при move/zoom — provoke'аем re-projection без хранения координат
-  const [proj, setProj] = useState(0);
-  const rafRef = useRef<number | null>(null);
-  // bumpаем при retry если mapRef.current ещё null
+  const [loading, setLoading] = useState(false);
   const [attachTick, setAttachTick] = useState(0);
 
   useEffect(() => {
     const map = mapRef.current;
     if (!map) {
-      // mapRef ещё не сетнут — retry на следующем frame'е
       const id = requestAnimationFrame(() => setAttachTick((t) => t + 1));
       return () => cancelAnimationFrame(id);
     }
 
-    const onData = (e: TileLikeEvent) => {
-      const sid = e.sourceId;
-      if (!sid || !FOREST_SOURCES.includes(sid)) return;
-      if (e.dataType !== "source" || !e.tile) return;
-      const c = e.tile.tileID?.canonical;
-      if (!c) return;
-      const key = `${sid}/${c.z}/${c.x}/${c.y}`;
-      const state = e.tile.state;
-      setPending((prev) => {
-        const next: PendingMap = new globalThis.Map(prev);
-        if (state === "loading") {
-          next.set(key, { z: c.z, x: c.x, y: c.y });
-        } else {
-          // 'loaded' | 'errored' | 'unloaded' | 'expired' — больше не pending
-          next.delete(key);
-        }
-        return next;
-      });
+    const update = () => {
+      // areTilesLoaded возвращает false пока хотя бы один тайл (любого
+      // source'а) ещё в loading-state. В состоянии стабильного view'а
+      // = true, во время pan/zoom = временно false.
+      try {
+        setLoading(!map.areTilesLoaded());
+      } catch {
+        // map.removed() может сделать areTilesLoaded() throw'ит — ignore
+      }
     };
+    const onIdle = () => setLoading(false);
 
-    const onMove = () => {
-      if (rafRef.current != null) return;
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null;
-        setProj((v) => v + 1);
-      });
-    };
+    map.on("data", update);
+    map.on("dataloading", update);
+    map.on("idle", onIdle);
+    map.on("moveend", update);
+    map.on("zoomend", update);
 
-    map.on("data", onData as never);
-    map.on("move", onMove);
-    map.on("zoom", onMove);
+    // initial check
+    update();
+
     return () => {
-      map.off("data", onData as never);
-      map.off("move", onMove);
-      map.off("zoom", onMove);
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      map.off("data", update);
+      map.off("dataloading", update);
+      map.off("idle", onIdle);
+      map.off("moveend", update);
+      map.off("zoomend", update);
     };
   }, [mapRef, attachTick]);
 
-  const map = mapRef.current;
-  if (!map || pending.size === 0) return null;
-
-  return (
-    <div className={styles.overlay}>
-      {Array.from(pending.entries()).map(([key, { z, x, y }]) => {
-        const { nw, se } = tileBoundsLngLat(x, y, z);
-        const nwPx = map.project(nw);
-        const sePx = map.project(se);
-        const left = nwPx.x;
-        const top = nwPx.y;
-        const w = sePx.x - nwPx.x;
-        const h = sePx.y - nwPx.y;
-        // Скрываем тайлы за пределами viewport — не нужно рендерить
-        if (w <= 0 || h <= 0) return null;
-        return (
-          <div
-            key={`${key}#${proj}`}
-            className={styles.shimmer}
-            style={{
-              left: `${left}px`,
-              top: `${top}px`,
-              width: `${w}px`,
-              height: `${h}px`,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
+  if (!loading) return null;
+  return <div className={styles.overlay} aria-hidden />;
 }
