@@ -42,17 +42,30 @@ Key file inventory:
 These steps require the operator (you) to do them manually. Scripts
 won't run until they're done.
 
-### 1. Y.O.S. bucket + service account
+> **Текущий backend (с 2026-05-03):** Cloudflare R2 free-tier (10 ГБ).
+> YOS_*-имена env-переменных оставлены как исторические алиасы — это
+> только метки, скрипты не привязаны к конкретному провайдеру (всё через
+> rclone S3-совместимый интерфейс). Размер бэкапа держим в free-tier через
+> `INCLUDE_TABLES` (см. §3): дампим только irreducible — `users`,
+> `user_spot`, `user_refresh_token`, `vk_post`, `vk_post_model_result`.
+> Гео-таблицы (`forest_polygon`, `osm_*`, `wetland`, ...) восстанавливаются
+> перезапуском `pipelines/` и в бэкап не попадают.
 
-В [Yandex Cloud Console](https://console.cloud.yandex.com):
+### 1. R2 bucket + API token
 
-1. Создать **bucket** `geobiom-backups` (Standard storage class,
-   Private access).
-2. Создать **service account** `geobiom-backup-writer`.
-3. На bucket'е выдать роль `storage.editor` сервисному аккаунту
-   (вкладка Access bindings).
-4. Создать **Static access key** для аккаунта. Сохранить
-   `Access Key ID` + `Secret Key` — Y.O.S. показывает Secret один раз.
+В [dash.cloudflare.com](https://dash.cloudflare.com) → R2 Object Storage:
+
+1. Создать **bucket** `geobiom-backups` (Automatic location,
+   Standard storage class — у IA минимум 30 days/object, для daily-rotated
+   daily'ев получается дороже).
+2. R2 → **Manage R2 API Tokens** → Create API token:
+   - Name: `geobiom-backup-writer`
+   - Permissions: **Object Read and Write**
+   - Specify bucket: только `geobiom-backups` (НЕ all buckets)
+   - TTL: Forever (или 5 лет)
+3. CF покажет один раз: **Access Key ID** (32 char) + **Secret Access Key**
+   (64 char) + **S3 endpoint** (`https://<account-id>.r2.cloudflarestorage.com`).
+   Записать все три.
 
 ### 2. age keypair (на dev-машине)
 
@@ -83,20 +96,33 @@ disaster'ом.
 # На VM (root):
 mkdir -p /etc/geobiom
 cat >/etc/geobiom/.env.backup <<'EOF'
-YOS_ACCESS_KEY=AKIAxxxxxxxxxxxxxxxx
-YOS_SECRET_KEY=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+# R2 credentials (из CF API token, §1)
+YOS_ACCESS_KEY=<32-char access key id>
+YOS_SECRET_KEY=<64-char secret>
 YOS_BUCKET=geobiom-backups
-YOS_ENDPOINT=https://storage.yandexcloud.net
-AGE_RECIPIENT=age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+YOS_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+
+# age recipients (public-keys из §2)
+AGE_RECIPIENT=age1<primary>
+AGE_RECIPIENT_BACKUP=age1<paper>
+
+# Postgres
 POSTGRES_USER=mushroom
 POSTGRES_DB=mushroom_map
 PG_CONTAINER=mushroom_db_prod
+
+# rclone remote-name (любой; должен совпадать с rclone.conf [section] в §4)
 RCLONE_REMOTE=geobiom-yos
+
+# Partial dump: только irreducible-таблицы. Гео-данные восстанавливаются
+# через pipelines/, в бэкап не идут — это держит R2-storage в free-tier.
+# Пробел-разделённый список таблиц (передаётся в pg_dump как -t).
+INCLUDE_TABLES="public.users public.user_spot public.user_refresh_token public.vk_post public.vk_post_model_result"
 EOF
 chmod 600 /etc/geobiom/.env.backup
 ```
 
-### 4. rclone config на VM
+### 4. rclone config на VM (R2 backend)
 
 ```bash
 # На VM:
@@ -105,11 +131,11 @@ mkdir -p /root/.config/rclone
 cat >/root/.config/rclone/rclone.conf <<EOF
 [geobiom-yos]
 type = s3
-provider = Other
+provider = Cloudflare
 access_key_id = $(grep ^YOS_ACCESS_KEY /etc/geobiom/.env.backup | cut -d= -f2)
 secret_access_key = $(grep ^YOS_SECRET_KEY /etc/geobiom/.env.backup | cut -d= -f2)
-endpoint = https://storage.yandexcloud.net
-region = ru-central1
+endpoint = $(grep ^YOS_ENDPOINT /etc/geobiom/.env.backup | cut -d= -f2)
+region = auto
 acl = private
 EOF
 chmod 600 /root/.config/rclone/rclone.conf
