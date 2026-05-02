@@ -68,6 +68,20 @@ def test_round_trip_preserves_pkce_verifier() -> None:
     assert decoded["typ"] == "oauth_state"
 
 
+def test_round_trip_preserves_pkce_challenge() -> None:
+    """С 2026-05-02 в state кладём не verifier, а его S256-challenge.
+    Реальный flow: на login генерируем verifier (cookie) + challenge
+    (state). На callback пересчитываем challenge из cookie-verifier
+    и сравниваем со state — это бьёт атакующего, который смог
+    подменить только PKCE-cookie. См. routes/auth.py yandex_callback.
+    """
+    challenge = "h" * 43  # base64url-encoded SHA256 = 43 chars без padding'а
+    token = _encode({"nonce": "abc", "challenge": challenge})
+    decoded = _decode_with_settings(token)
+    assert decoded["challenge"] == challenge
+    assert decoded["nonce"] == "abc"
+
+
 def test_wrong_secret_rejected() -> None:
     token = _encode({"nonce": "abc", "pkce_verifier": "v"}, secret="other-secret")
     with pytest.raises(pyjwt.InvalidTokenError):

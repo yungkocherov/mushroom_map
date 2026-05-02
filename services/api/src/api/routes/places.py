@@ -24,9 +24,10 @@ Pydantic-валидация на входе:
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from api.db import get_conn
+from api.rate_limit import limiter
 
 router = APIRouter()
 
@@ -36,7 +37,9 @@ router = APIRouter()
 # ──────────────────────────────────────────────────────────────────────
 
 @router.get("/search")
+@limiter.limit("60/minute")
 def search_places(
+    request: Request,
     q: str = Query(..., min_length=2, max_length=200),
     limit: int = Query(10, ge=1, le=50),
     region: str = Query("lenoblast"),
