@@ -14,7 +14,6 @@ export function Footer() {
           </p>
         </div>
         <nav className={styles.linksCol} aria-label="Ссылки">
-          <Link to="/methodology/about" className={styles.link}>О проекте</Link>
           <Link to="/methodology" className={styles.link}>Методология</Link>
           <Link to="/legal/privacy" className={styles.link}>Конфиденциальность</Link>
           <Link to="/legal/terms" className={styles.link}>Условия</Link>

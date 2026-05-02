@@ -20,7 +20,6 @@ import { Layout } from "./components/layout/Layout";
 import { MapHomePage } from "./routes/MapHomePage";
 import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
-import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
 import { SpeciesListPage } from "./routes/SpeciesListPage";
 import { SpeciesDetailPage } from "./routes/SpeciesDetailPage";
 import { AuthPage } from "./routes/AuthPage";
@@ -95,10 +94,11 @@ export const router = createBrowserRouter([
       { path: "species",        element: <SpeciesListPage /> },
       { path: "species/:slug",  element: <SpeciesDetailPage /> },
       { path: "methodology",         element: <MethodologyPage /> },
-      { path: "methodology/:slug",    element: <MethodologyArticlePage /> },
-      // /about и /about-legacy → /methodology/about (контент в MDX).
-      { path: "about",         element: <Navigate to="/methodology/about" replace /> },
-      { path: "about-legacy",  element: <Navigate to="/methodology/about" replace /> },
+      // Статьи методологии скрыты — раздел переписывается. Все
+      // /methodology/:slug ведут на placeholder hub.
+      { path: "methodology/:slug",    element: <Navigate to="/methodology" replace /> },
+      { path: "about",         element: <Navigate to="/methodology" replace /> },
+      { path: "about-legacy",  element: <Navigate to="/methodology" replace /> },
 
       // Auth flow: /auth (login) -> Yandex -> /api/auth/yandex/callback
       // (backend, устанавливает cookie) -> /auth/complete (hydrate) ->
