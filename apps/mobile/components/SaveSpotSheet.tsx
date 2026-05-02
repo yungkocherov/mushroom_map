@@ -1,14 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
 import {
-  Alert,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+  BottomSheetBackdrop,
+  BottomSheetModal,
+  BottomSheetScrollView,
+  BottomSheetTextInput,
+  type BottomSheetBackdropProps,
+} from "@gorhom/bottom-sheet";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
 import { useUserLocation } from "../stores/useUserLocation";
 import { useSpots } from "../stores/useSpots";
@@ -48,20 +46,42 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   // Берём явные координаты (long-press на карте) или fallback на GPS.
   const effectiveCoords = coords ?? (fix ? { lat: fix.lat, lon: fix.lon } : null);
 
+  const sheetRef = useRef<BottomSheetModal>(null);
+
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [rating, setRating] = useState(4);
   const [tags, setTags] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 
+  // Контролируем present/dismiss извне через `visible`-prop —
+  // SpikeMap пока остаётся single-source-of-truth открытости.
   useEffect(() => {
     if (visible) {
       setName("");
       setNote("");
       setRating(4);
       setTags(new Set());
+      sheetRef.current?.present();
+    } else {
+      sheetRef.current?.dismiss();
     }
   }, [visible]);
+
+  const snapPoints = useMemo(() => ["75%", "92%"], []);
+
+  const renderBackdrop = useCallback(
+    (props: BottomSheetBackdropProps) => (
+      <BottomSheetBackdrop
+        {...props}
+        appearsOnIndex={0}
+        disappearsOnIndex={-1}
+        opacity={0.45}
+        pressBehavior="close"
+      />
+    ),
+    [],
+  );
 
   const toggleTag = (slug: string) => {
     const next = new Set(tags);
@@ -94,148 +114,137 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   };
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
+    <BottomSheetModal
+      ref={sheetRef}
+      snapPoints={snapPoints}
+      onDismiss={onClose}
+      backdropComponent={renderBackdrop}
+      backgroundStyle={styles.sheetBg}
+      handleIndicatorStyle={styles.handle}
+      keyboardBehavior="interactive"
+      keyboardBlurBehavior="restore"
+      android_keyboardInputMode="adjustResize"
     >
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
-          <ScrollView contentContainerStyle={styles.content}>
-            <View style={styles.handle} />
-            <Text style={styles.title}>Сохранить спот</Text>
+      <BottomSheetScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Сохранить спот</Text>
 
-            {effectiveCoords ? (
-              <Text style={styles.coords}>
-                {effectiveCoords.lat.toFixed(5)}, {effectiveCoords.lon.toFixed(5)}
-                {coords ? " · точка тапа" : fix?.accuracy != null
-                  ? ` · ±${Math.round(fix.accuracy)} м (GPS)`
-                  : ""}
-              </Text>
-            ) : (
-              <Text style={styles.coordsWarn}>
-                GPS ещё не пришёл — нажми длительно на карту, чтобы выбрать точку.
-              </Text>
-            )}
+        {effectiveCoords ? (
+          <Text style={styles.coords}>
+            {effectiveCoords.lat.toFixed(5)}, {effectiveCoords.lon.toFixed(5)}
+            {coords ? " · точка тапа" : fix?.accuracy != null
+              ? ` · ±${Math.round(fix.accuracy)} м (GPS)`
+              : ""}
+          </Text>
+        ) : (
+          <Text style={styles.coordsWarn}>
+            GPS ещё не пришёл — нажми длительно на карту, чтобы выбрать точку.
+          </Text>
+        )}
 
-            <Text style={styles.label}>Название</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Поляна с боровиками…"
-              placeholderTextColor={palette.light.inkDim}
-              value={name}
-              onChangeText={setName}
-              maxLength={100}
-            />
+        <Text style={styles.label}>Название</Text>
+        <BottomSheetTextInput
+          style={styles.input}
+          placeholder="Поляна с боровиками…"
+          placeholderTextColor={palette.light.inkDim}
+          value={name}
+          onChangeText={setName}
+          maxLength={100}
+        />
 
-            <Text style={styles.label}>Заметка</Text>
-            <TextInput
-              style={[styles.input, styles.inputMulti]}
-              placeholder="Что нашёл, какой склон, ориентир…"
-              placeholderTextColor={palette.light.inkDim}
-              value={note}
-              onChangeText={setNote}
-              multiline
-              numberOfLines={3}
-              maxLength={500}
-            />
+        <Text style={styles.label}>Заметка</Text>
+        <BottomSheetTextInput
+          style={[styles.input, styles.inputMulti]}
+          placeholder="Что нашёл, какой склон, ориентир…"
+          placeholderTextColor={palette.light.inkDim}
+          value={note}
+          onChangeText={setNote}
+          multiline
+          numberOfLines={3}
+          maxLength={500}
+        />
 
-            <Text style={styles.label}>Оценка места</Text>
-            <View style={styles.ratingRow}>
-              {[1, 2, 3, 4, 5].map((r) => (
-                <Pressable
-                  key={r}
-                  style={[
-                    styles.ratingChip,
-                    r === rating && styles.ratingChipActive,
-                  ]}
-                  onPress={() => setRating(r)}
-                >
-                  <Text
-                    style={[
-                      styles.ratingChipText,
-                      r === rating && styles.ratingChipTextActive,
-                    ]}
-                  >
-                    {r}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Text style={styles.ratingLabel}>{RATING_LABELS[rating - 1]}</Text>
-
-            <Text style={styles.label}>Что нашёл</Text>
-            <View style={styles.tagsRow}>
-              {POPULAR_TAGS.map((slug) => (
-                <Pressable
-                  key={slug}
-                  style={[
-                    styles.tagChip,
-                    tags.has(slug) && styles.tagChipActive,
-                  ]}
-                  onPress={() => toggleTag(slug)}
-                >
-                  <Text
-                    style={[
-                      styles.tagChipText,
-                      tags.has(slug) && styles.tagChipTextActive,
-                    ]}
-                  >
-                    {TAG_RU[slug] ?? slug}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <View style={styles.actions}>
-              <Pressable style={styles.btnSecondary} onPress={onClose}>
-                <Text style={styles.btnSecondaryText}>Отмена</Text>
-              </Pressable>
-              <Pressable
+        <Text style={styles.label}>Оценка места</Text>
+        <View style={styles.ratingRow}>
+          {[1, 2, 3, 4, 5].map((r) => (
+            <Pressable
+              key={r}
+              style={[
+                styles.ratingChip,
+                r === rating && styles.ratingChipActive,
+              ]}
+              onPress={() => setRating(r)}
+            >
+              <Text
                 style={[
-                  styles.btnPrimary,
-                  (!fix || busy) && styles.btnDisabled,
+                  styles.ratingChipText,
+                  r === rating && styles.ratingChipTextActive,
                 ]}
-                disabled={!fix || busy}
-                onPress={onSave}
               >
-                <Text style={styles.btnPrimaryText}>
-                  {busy ? "Сохраняю…" : "Сохранить"}
-                </Text>
-              </Pressable>
-            </View>
-          </ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
+                {r}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.ratingLabel}>{RATING_LABELS[rating - 1]}</Text>
+
+        <Text style={styles.label}>Что нашёл</Text>
+        <View style={styles.tagsRow}>
+          {POPULAR_TAGS.map((slug) => (
+            <Pressable
+              key={slug}
+              style={[
+                styles.tagChip,
+                tags.has(slug) && styles.tagChipActive,
+              ]}
+              onPress={() => toggleTag(slug)}
+            >
+              <Text
+                style={[
+                  styles.tagChipText,
+                  tags.has(slug) && styles.tagChipTextActive,
+                ]}
+              >
+                {TAG_RU[slug] ?? slug}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.actions}>
+          <Pressable style={styles.btnSecondary} onPress={onClose}>
+            <Text style={styles.btnSecondaryText}>Отмена</Text>
+          </Pressable>
+          <Pressable
+            style={[
+              styles.btnPrimary,
+              (!effectiveCoords || busy) && styles.btnDisabled,
+            ]}
+            disabled={!effectiveCoords || busy}
+            onPress={onSave}
+          >
+            <Text style={styles.btnPrimaryText}>
+              {busy ? "Сохраняю…" : "Сохранить"}
+            </Text>
+          </Pressable>
+        </View>
+      </BottomSheetScrollView>
+    </BottomSheetModal>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: "rgba(32,36,30,0.4)",
-    justifyContent: "flex-end",
-  },
-  sheet: {
+  sheetBg: {
     backgroundColor: palette.light.paper,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: "90%",
+  },
+  handle: {
+    backgroundColor: palette.light.rule,
+    width: 40,
+    height: 4,
   },
   content: {
     padding: spacing[5],
     paddingTop: spacing[3],
     paddingBottom: spacing[7],
-  },
-  handle: {
-    alignSelf: "center",
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: palette.light.rule,
-    marginBottom: spacing[4],
   },
   title: {
     fontSize: fontSize.h2,
