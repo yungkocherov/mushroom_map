@@ -64,7 +64,7 @@ jobs:
         run: npm -w @mushroom-map/web run build
 
       - name: Rsync dist to VM
-        uses: easingthemes/ssh-deploy@01a39e33483634cbd7ac99020c55b72ca7f098fe  # v5.0.3
+        uses: easingthemes/ssh-deploy@2cc5b27bf3029d0455dd5e09fe02633904031447  # v6.0.3
         with:
           SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_KEY }}
           REMOTE_HOST:     ${{ secrets.PROD_HOST }}
