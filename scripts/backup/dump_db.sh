@@ -39,6 +39,19 @@ if [[ -n "${AGE_RECIPIENT_BACKUP:-}" ]]; then
     age_args+=(-r "$AGE_RECIPIENT_BACKUP")
 fi
 
+# INCLUDE_TABLES: пробел/перевод-разделённый список таблиц для частичного
+# дампа. Используется чтобы держать total backup size в пределах free-tier
+# storage (R2 / B2 / etc.) — гео-таблицы (forest_polygon, osm_*, ...)
+# восстанавливаются перезапуском pipelines/, в бэкап их класть смысла нет.
+# Если не задано — дампим всю БД (старое поведение).
+include_args=()
+if [[ -n "${INCLUDE_TABLES:-}" ]]; then
+    for tbl in $INCLUDE_TABLES; do
+        include_args+=(-t "$tbl")
+    done
+    echo "[backup] partial dump: ${#include_args[@]} tables (${include_args[*]})"
+fi
+
 # pipefail catches a failure in any stage. -Z 9 = max compression
 # (slower CPU but smaller upload; net-bound so worth it).
 docker exec -i "$PG_CONTAINER" pg_dump \
@@ -48,6 +61,7 @@ docker exec -i "$PG_CONTAINER" pg_dump \
         -Z 9 \
         --no-owner \
         --no-acl \
+        "${include_args[@]}" \
     | age "${age_args[@]}" \
     | rclone rcat "${RCLONE_REMOTE}:${YOS_BUCKET}/${KEY}"
 

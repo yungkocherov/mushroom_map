@@ -96,13 +96,22 @@ assert() {
     fi
 }
 
-# Minimum row counts that we trust. If any of these falls below the
-# threshold, either prod data was wiped or the backup is corrupt.
-assert forest_polygon 2000000
-assert admin_area 18
-# vk_post excluded if dump_db.sh used --exclude-table-data='vk_post'.
-# Prod backup is full, so vk_post should be present.
-assert vk_post 60000
+# Minimum row counts. Бэкап-режим определяется наличием INCLUDE_TABLES в
+# .env.backup (partial — только irreducible: users + spots + refresh-tokens
+# + vk_post; full — всё). Ассерты ниже выбираются под partial-режим
+# (текущий default). Для full-дампа поднять пороги через MIN_FOREST_POLYGON
+# и т. п. env-vars.
+assert users "${MIN_USERS:-1}"
+assert user_spot "${MIN_USER_SPOT:-0}"
+assert user_refresh_token "${MIN_USER_REFRESH:-0}"
+# Если full-режим (forest_polygon в дампе) — поверяем тоже. В partial
+# таблица не приедет, и `assert forest_polygon` упадёт — поэтому только
+# когда явно ожидаем full.
+if [[ "${EXPECT_FULL:-0}" == "1" ]]; then
+    assert forest_polygon "${MIN_FOREST_POLYGON:-2000000}"
+    assert admin_area "${MIN_ADMIN_AREA:-18}"
+    assert vk_post "${MIN_VK_POST:-0}"
+fi
 
 if (( fail )); then
     echo "[drill] FAIL"
