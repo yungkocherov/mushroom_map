@@ -52,6 +52,10 @@ export function useMapInstance(
       center: [initialView.lon, initialView.lat],
       zoom: initialView.zoom,
       attributionControl: false,
+      // Default RAM-кеш ~50 тайлов на source эвиктит forest_lo (20 тайлов
+      // на всю ЛО) при zoom-in/out. Бамп до 500 = forest_lo живёт вечно
+      // + forest для типичного pan'а сохраняется без re-parse'а MVT.
+      maxTileCacheSize: 500,
     });
     mapRef.current = m;
 
