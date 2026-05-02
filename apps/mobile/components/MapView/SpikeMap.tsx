@@ -54,6 +54,7 @@ export function SpikeMap() {
   const [assetError, setAssetError] = useState<string | null>(null);
   const [popupFeature, setPopupFeature] = useState<ForestFeatureProps | null>(null);
   const [saveSpotOpen, setSaveSpotOpen] = useState(false);
+  const [saveSpotCoords, setSaveSpotCoords] = useState<{ lat: number; lon: number } | null>(null);
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapViewRef>(null);
 
@@ -187,6 +188,15 @@ export function SpikeMap() {
         mapStyle={style as object}
         compassEnabled
         attributionEnabled={false}
+        onLongPress={(feature) => {
+          // Long-press где угодно на карте → открыть SaveSpotSheet с
+          // координатами точки тапа (как «Save place» в Google Maps).
+          const geom = feature.geometry as { coordinates?: [number, number] };
+          const coords = geom?.coordinates;
+          if (!coords) return;
+          setSaveSpotCoords({ lon: coords[0], lat: coords[1] });
+          setSaveSpotOpen(true);
+        }}
         onPress={async (feature) => {
           // MapView.onPress даёт точку тапа но БЕЗ properties с layer'а.
           // Нужно явно queryRenderedFeaturesAtPoint по forest-fill ID'ам.
@@ -255,7 +265,11 @@ export function SpikeMap() {
 
       <SaveSpotSheet
         visible={saveSpotOpen}
-        onClose={() => setSaveSpotOpen(false)}
+        coords={saveSpotCoords}
+        onClose={() => {
+          setSaveSpotOpen(false);
+          setSaveSpotCoords(null);
+        }}
       />
 
       <Pressable
@@ -263,7 +277,11 @@ export function SpikeMap() {
           styles.fab,
           !fix && styles.fabDisabled,
         ]}
-        onPress={() => fix && setSaveSpotOpen(true)}
+        onPress={() => {
+          if (!fix) return;
+          setSaveSpotCoords(null); // FAB → SaveSpotSheet возьмёт GPS fix
+          setSaveSpotOpen(true);
+        }}
       >
         <Text style={styles.fabPlus}>+</Text>
       </Pressable>

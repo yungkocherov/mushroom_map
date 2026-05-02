@@ -25,7 +25,7 @@ const SPECIES_COLOR_MATCH = [
   "larch", "#9a4626",
   "fir", "#56564e",
   "cedar", "#5c3a24",
-  "birch", "#eee8da",
+  "birch", "#c8b890",
   "aspen", "#9ea48c",
   "alder", "#6c5844",
   "oak", "#5a3c20",

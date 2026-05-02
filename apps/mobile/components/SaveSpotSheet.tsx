@@ -38,11 +38,15 @@ const TAG_RU: Record<string, string> = {
 type Props = {
   visible: boolean;
   onClose: () => void;
+  /** Координаты сохраняемой точки. Если не переданы — берём GPS fix. */
+  coords?: { lat: number; lon: number } | null;
 };
 
-export function SaveSpotSheet({ visible, onClose }: Props) {
+export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   const fix = useUserLocation((s) => s.fix);
   const add = useSpots((s) => s.add);
+  // Берём явные координаты (long-press на карте) или fallback на GPS.
+  const effectiveCoords = coords ?? (fix ? { lat: fix.lat, lon: fix.lon } : null);
 
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
@@ -67,15 +71,15 @@ export function SaveSpotSheet({ visible, onClose }: Props) {
   };
 
   const onSave = async () => {
-    if (!fix) {
-      Alert.alert("Нет GPS", "Подожди фикса позиции, потом сохраняй.");
+    if (!effectiveCoords) {
+      Alert.alert("Нет координат", "Подожди GPS-фикса или коснись карты длительно.");
       return;
     }
     setBusy(true);
     try {
       await add({
-        lat: fix.lat,
-        lon: fix.lon,
+        lat: effectiveCoords.lat,
+        lon: effectiveCoords.lon,
         name: name.trim() || null,
         note: note.trim() || null,
         rating,
@@ -102,14 +106,16 @@ export function SaveSpotSheet({ visible, onClose }: Props) {
             <View style={styles.handle} />
             <Text style={styles.title}>Сохранить спот</Text>
 
-            {fix ? (
+            {effectiveCoords ? (
               <Text style={styles.coords}>
-                {fix.lat.toFixed(5)}, {fix.lon.toFixed(5)} · ±
-                {fix.accuracy != null ? Math.round(fix.accuracy) : "?"} м
+                {effectiveCoords.lat.toFixed(5)}, {effectiveCoords.lon.toFixed(5)}
+                {coords ? " · точка тапа" : fix?.accuracy != null
+                  ? ` · ±${Math.round(fix.accuracy)} м (GPS)`
+                  : ""}
               </Text>
             ) : (
               <Text style={styles.coordsWarn}>
-                GPS ещё не пришёл — спот сохранить пока нельзя.
+                GPS ещё не пришёл — нажми длительно на карту, чтобы выбрать точку.
               </Text>
             )}
 
