@@ -138,7 +138,7 @@ export function SpikeMap() {
           id: "forest-remote-lo",
           pmtilesFileUri: `${getApiBaseUrl()}/tiles/forest_lo.pmtiles`,
           sourceLayer: "forest_lo",
-          maxzoom: 9,
+          // Без maxzoom — overzoom z=8 тайлов на z>=9 как continuous bridge
         },
         {
           id: "forest-remote",
