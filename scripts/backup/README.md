@@ -73,6 +73,10 @@ chmod 600 ~/.ssh/geobiom-backup.age
 1Password / Bitwarden) **до** первого реального backup'а. Если ключ
 потерян — все будущие бэкапы непригодны для recovery.
 
+**Сильно рекомендуется второй recipient** (см. §9 ниже): любой из
+двух private-key расшифрует, и потеря дев-ноута перестаёт быть
+disaster'ом.
+
 ### 3. `.env.backup` на VM
 
 ```bash
@@ -168,6 +172,7 @@ Alert contacts:
 
 ### 8. Tailscale (опционально на TimeWeb, обязательно на Oracle)
 
+
 ```bash
 # Dev-машина:
 # Windows: https://tailscale.com/download/windows
@@ -196,6 +201,53 @@ ufw enable
 
 В GitHub Actions secrets обновить `PROD_HOST` на tailnet IP машины
 (`100.x.x.x`) или MagicDNS (`oracle-prod.tail-xxxx.ts.net`).
+
+### 9. Optional: second age recipient (paper backup, must-do для соло-prod)
+
+`AGE_RECIPIENT` в `.env.backup` — это **single point of failure**: дев-ноут
+украден или умер физически = всё, что зашифровано этим ключом, можно
+выкидывать. Решение — добавить второй recipient: любой из двух
+private-key расшифрует.
+
+```bash
+# Сгенерить второй keypair:
+age-keygen -o ~/Documents/geobiom-backup-paper.age
+# Public key (одна строка age1...) — добавим на VM как AGE_RECIPIENT_BACKUP.
+# Private key (3 строки SECRET-KEY...) — НЕ хранить на дев-ноуте:
+#   - Распечатать на бумагу + положить в физический сейф / ячейку банка.
+#   - Или wrap в yubikey (age-plugin-yubikey).
+#   - Или дать доверенному человеку в другой географии.
+# Затем УДАЛИТЬ файл с дев-ноута (на бумаге уже есть).
+
+shred -u ~/Documents/geobiom-backup-paper.age
+```
+
+На VM (root):
+
+```bash
+# Дописать в /etc/geobiom/.env.backup:
+echo 'AGE_RECIPIENT_BACKUP=age1xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' >> /etc/geobiom/.env.backup
+chmod 600 /etc/geobiom/.env.backup
+
+# Smoke-тест: запустить бэкап вручную и убедиться что обе recipient'а
+# приняты:
+systemctl start geobiom-backup.service
+journalctl -u geobiom-backup.service -n 20 --no-pager
+# Не должно быть ошибок про "no recipients"; size > 0.
+```
+
+`dump_db.sh` автоматически детектит `AGE_RECIPIENT_BACKUP` (опциональный):
+если переменная пуста — шифрует только на primary, как раньше; если
+задана — `age -r primary -r backup`. Существующие бэкапы (зашифрованные
+до добавления второго ключа) расшифровываются только primary —
+**нельзя** ретроактивно добавить recipient к уже зашифрованному файлу.
+Поэтому: после добавления `AGE_RECIPIENT_BACKUP` старые YOS-бэкапы
+постепенно сами уйдут по retention'у через 3 месяца, и весь storage
+будет dual-recipient.
+
+**Ротация (раз в год):** перегенерить обе пары, обновить `.env.backup`,
+обновить бумажный backup, прогнать `restore_drill.sh` с обоими
+private-key (поочерёдно), убедиться что оба расшифровывают.
 
 ## Disaster recovery: VM полностью потеряна
 
