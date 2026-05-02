@@ -71,16 +71,23 @@ describe("AuthProvider — hydrate flows", () => {
     expect(screen.getByTestId("user").textContent).toBe("user-42");
   });
 
-  it("network error → status=unauth (current behavior; PR-W3 заменит на retry-with-backoff)", async () => {
+  it("network error → status остаётся 'loading' (retry-with-backoff активен)", async () => {
+    // PR-W3 поведение: на сетевую ошибку hydrate ставит retry-таймер
+    // и НЕ переходит в unauth с первого blip'а. Status держится в
+    // loading до исчерпания backoff'а (1s/5s/30s) или успешного refresh'а.
     mocks.authRefresh.mockRejectedValue(new Error("network"));
     render(
       <AuthProvider>
         <StatusProbe />
       </AuthProvider>,
     );
-    await waitFor(() =>
-      expect(screen.getByTestId("status").textContent).toBe("unauth"),
-    );
+    // Дать react flush + rejected promise обработаться.
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId("status").textContent).toBe("loading");
     expect(mocks.authRefresh).toHaveBeenCalledTimes(1);
   });
 
