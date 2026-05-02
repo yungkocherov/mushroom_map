@@ -52,10 +52,13 @@ export type StyleInput = {
 
 /**
  * Layers OpenMapTiles schema, которые мы рисуем (subset, optimized for
- * forest-day use case): water, waterway, transportation, place,
- * boundary, landcover. Pruning'ом стараемся не перегружать карту:
- * урбанистика / housenumbers / poi скрыты (грибнику не нужны
- * магазины и mailboxes).
+ * forest-day use case): water, waterway, transportation, boundary,
+ * landcover. Pruning'ом стараемся не перегружать карту: урбанистика /
+ * housenumbers / poi скрыты (грибнику не нужны магазины и mailboxes).
+ *
+ * Symbol-слои (place-names) ОТКЛЮЧЕНЫ в v0 — для них нужен bundled
+ * `glyphs` PBF-pack, иначе MapLibre Native шлёт fetch на empty URL и
+ * выдаёт `[HTTP] Unable to parse resourceUrl`. Bundled-шрифты — Phase 5.
  */
 function buildBasemapLayers(): unknown[] {
   return [
@@ -130,34 +133,22 @@ function buildBasemapLayers(): unknown[] {
         "line-dasharray": [3, 2],
       },
     },
-    {
-      id: "basemap-place-names",
-      type: "symbol",
-      source: "basemap",
-      "source-layer": "place",
-      minzoom: 7,
-      filter: ["in", ["get", "class"], ["literal", ["city", "town", "village", "hamlet"]]],
-      layout: {
-        "text-field": ["get", "name"],
-        "text-font": ["Noto Sans Regular"],
-        "text-size": [
-          "match",
-          ["get", "class"],
-          "city", 14,
-          "town", 12,
-          "village", 11,
-          "hamlet", 10,
-          11,
-        ],
-        "text-anchor": "center",
-      },
-      paint: {
-        "text-color": "#20241e",
-        "text-halo-color": "#f5f1e6",
-        "text-halo-width": 1.5,
-      },
-    },
   ];
+}
+
+/**
+ * Нормализует path/URI к форме `file:///...` чтобы pmtiles handler в
+ * MapLibre Native смог открыть файл. expo-asset.localUri / FileSystem.*
+ * на Android могут возвращать одну из:
+ *   - "file:///data/...": готово
+ *   - "/data/...": absolute path → префиксуем `file://`
+ *   - "asset:///...": не работает с pmtiles (не file system) — отбрасываем
+ *     (до сих пор не наблюдалось, но defensively)
+ */
+function normalizeFileUri(uri: string): string {
+  if (uri.startsWith("file://")) return uri;
+  if (uri.startsWith("/")) return `file://${uri}`;
+  return uri;
 }
 
 /**
@@ -184,7 +175,7 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
   if (normalized.basemapPmtilesUri) {
     mapSources.basemap = {
       type: "vector",
-      url: `pmtiles://${normalized.basemapPmtilesUri}`,
+      url: `pmtiles://${normalizeFileUri(normalized.basemapPmtilesUri)}`,
     };
     layers.push(...buildBasemapLayers());
   }
@@ -192,7 +183,7 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
   for (const src of normalized.forests) {
     mapSources[src.id] = {
       type: "vector",
-      url: `pmtiles://${src.pmtilesFileUri}`,
+      url: `pmtiles://${normalizeFileUri(src.pmtilesFileUri)}`,
     };
     layers.push({
       id: `${src.id}-fill`,

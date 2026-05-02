@@ -13,11 +13,13 @@ import {
 import { palette, fontSize, spacing } from "@mushroom-map/tokens/native";
 import { useUserLocation } from "../../stores/useUserLocation";
 import { useOfflineRegions } from "../../stores/useOfflineRegions";
+import { useNetwork } from "../../stores/useNetwork";
 import {
   startLocationWatch,
   stopLocationWatch,
 } from "../../services/location";
 import { getLayerLocalUri } from "../../services/regions";
+import { getApiBaseUrl } from "../../services/api";
 import { buildMapStyle, type ForestSource } from "./style";
 import { ForestPopup, type ForestFeatureProps } from "./ForestPopup";
 import { SaveSpotSheet } from "../SaveSpotSheet";
@@ -34,6 +36,17 @@ try {
 }
 const LUZHSKY_CENTER: [number, number] = [29.85, 58.74];
 
+function tilesStatusLabel(
+  sources: ForestSource[],
+  downloadedCount: number,
+  online: boolean,
+): string {
+  if (sources.length === 0) return "—";
+  if (downloadedCount > 0) return `${sources.length} regions`;
+  if (online && sources[0]?.id === "forest-remote") return "online";
+  return "(spike)";
+}
+
 export function SpikeMap() {
   const [bundledUri, setBundledUri] = useState<string | null>(null);
   const [basemapUri, setBasemapUri] = useState<string | null>(null);
@@ -48,6 +61,7 @@ export function SpikeMap() {
   const error = useUserLocation((s) => s.error);
   const downloaded = useOfflineRegions((s) => s.downloaded);
   const refreshRegions = useOfflineRegions((s) => s.refresh);
+  const online = useNetwork((s) => s.online);
 
   useEffect(() => {
     let cancelled = false;
@@ -99,8 +113,12 @@ export function SpikeMap() {
     });
   }, [followMode, fix?.lat, fix?.lon]);
 
-  // Prefer downloaded regions; fallback на bundled placeholder если
-  // юзер ничего не скачал (Phase 0 spike compatibility).
+  // Приоритет источников forest-выделов:
+  //   1. Скачанные районы (per-district) — самое быстрое, работает offline
+  //   2. Online + не скачано → remote forest.pmtiles через HTTP Range
+  //      (как на сайте; нативный pmtiles plugin умеет https://)
+  //   3. Bundled placeholder (только Лужский район) — fallback offline
+  //      без скачанных регионов
   const sources = useMemo<ForestSource[]>(() => {
     if (downloaded.size > 0) {
       return Array.from(downloaded).map((slug) => ({
@@ -108,11 +126,19 @@ export function SpikeMap() {
         pmtilesFileUri: getLayerLocalUri(slug, "forest"),
       }));
     }
+    if (online) {
+      return [
+        {
+          id: "forest-remote",
+          pmtilesFileUri: `${getApiBaseUrl()}/tiles/forest.pmtiles`,
+        },
+      ];
+    }
     if (bundledUri) {
       return [{ id: "forest", pmtilesFileUri: bundledUri }];
     }
     return [];
-  }, [downloaded, bundledUri]);
+  }, [downloaded, online, bundledUri]);
 
   const style = useMemo(
     () => (sources.length > 0 || basemapUri
@@ -229,7 +255,7 @@ export function SpikeMap() {
           <Text style={styles.statusText}>ожидание фикса…</Text>
         )}
         <Text style={styles.statusText}>
-          tiles: {sources.length > 0 ? `${sources.length} ${downloaded.size > 0 ? "regions" : "(spike)"}` : "—"}
+          tiles: {tilesStatusLabel(sources, downloaded.size, online)}
         </Text>
         {error ? <Text style={styles.errorOverlay}>{error}</Text> : null}
       </View>
