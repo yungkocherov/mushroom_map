@@ -10,24 +10,31 @@ import { palette } from "@mushroom-map/tokens/native";
  * Phase 0/1.
  */
 
+/**
+ * Цвета синхронизированы с web FOREST_COLORS (apps/web/src/lib/forestStyle.ts).
+ * Палитра «коры дерева» — pine коричневый, spruce почти-чёрный, birch
+ * светло-кремовый, и т.д. Не зелёные тона — это намеренно: на спутник-
+ * basemap'е зелёный сливается, кора лучше различима. Также matches
+ * tinge web-versii.
+ */
 const SPECIES_COLOR_MATCH = [
   "match",
   ["coalesce", ["get", "dominant_species"], "mixed"],
-  "pine", "#5a7a3a",
-  "spruce", "#3a5a45",
-  "birch", "#bcc890",
-  "aspen", "#a8b87a",
-  "oak", "#7a8c2e",
-  "alder", "#6b8050",
-  "willow", "#9bb47a",
-  "fir", "#3a5a4f",
-  "larch", "#7a9b3a",
-  "linden", "#a0a85a",
-  "maple", "#8c9a45",
-  "ash", "#7a8a3a",
-  "elm", "#6b7a3a",
-  "mixed", "#7a9b64",
-  /* default */ palette.light.moss,
+  "pine", "#8b5a34",
+  "spruce", "#3e2e1c",
+  "larch", "#9a4626",
+  "fir", "#56564e",
+  "cedar", "#5c3a24",
+  "birch", "#eee8da",
+  "aspen", "#9ea48c",
+  "alder", "#6c5844",
+  "oak", "#5a3c20",
+  "linden", "#a48c72",
+  "maple", "#7e5638",
+  "mixed_coniferous", "#463a22",
+  "mixed_broadleaved", "#a0845a",
+  "mixed", "#607244",
+  /* default */ "#9e9e9e",
 ] as const;
 
 type Style = {
@@ -42,6 +49,12 @@ export type ForestSource = {
   id: string;
   /** Either bundled file:// URI или path в FileSystem.documentDirectory. */
   pmtilesFileUri: string;
+  /** MVT source-layer name (default 'forest'). Lo-zoom форест использует 'forest_lo'. */
+  sourceLayer?: string;
+  /** Layer minzoom (default 8). undefined для lo-zoom (рисует с 0). */
+  minzoom?: number;
+  /** Layer maxzoom (default undefined = до z=24). 9 для lo-zoom (renders <9). */
+  maxzoom?: number;
 };
 
 export type StyleInput = {
@@ -185,18 +198,21 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
       type: "vector",
       url: `pmtiles://${normalizeFileUri(src.pmtilesFileUri)}`,
     };
-    layers.push({
+    const layer: Record<string, unknown> = {
       id: `${src.id}-fill`,
       type: "fill",
       source: src.id,
-      "source-layer": "forest",
-      minzoom: 8,
+      "source-layer": src.sourceLayer ?? "forest",
       paint: {
         "fill-color": SPECIES_COLOR_MATCH as unknown as string,
-        "fill-opacity": 0.7,
-        "fill-outline-color": palette.light.forestDeep,
+        "fill-opacity": 0.5,
+        "fill-outline-color": "rgba(0,0,0,0)",
       },
-    });
+    };
+    if (src.minzoom !== undefined) layer.minzoom = src.minzoom;
+    else if (src.sourceLayer !== "forest_lo") layer.minzoom = 8;
+    if (src.maxzoom !== undefined) layer.maxzoom = src.maxzoom;
+    layers.push(layer);
   }
 
   return {

@@ -3,6 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-nati
 import { Asset } from "expo-asset";
 import {
   MapView,
+  type MapViewRef,
   Camera,
   type CameraRef,
   ShapeSource,
@@ -54,6 +55,7 @@ export function SpikeMap() {
   const [popupFeature, setPopupFeature] = useState<ForestFeatureProps | null>(null);
   const [saveSpotOpen, setSaveSpotOpen] = useState(false);
   const cameraRef = useRef<CameraRef>(null);
+  const mapRef = useRef<MapViewRef>(null);
 
   const fix = useUserLocation((s) => s.fix);
   const followMode = useUserLocation((s) => s.followMode);
@@ -127,7 +129,16 @@ export function SpikeMap() {
       }));
     }
     if (online) {
+      // Online mode: оба слоя remote через HTTP Range. forest_lo для z=5-8,
+      // forest для z=8-13. На z=8 оба активны — forest рисуется поверх
+      // (добавлен после lo).
       return [
+        {
+          id: "forest-remote-lo",
+          pmtilesFileUri: `${getApiBaseUrl()}/tiles/forest_lo.pmtiles`,
+          sourceLayer: "forest_lo",
+          maxzoom: 9,
+        },
         {
           id: "forest-remote",
           pmtilesFileUri: `${getApiBaseUrl()}/tiles/forest.pmtiles`,
@@ -171,16 +182,31 @@ export function SpikeMap() {
   return (
     <View style={styles.flex}>
       <MapView
+        ref={mapRef}
         style={styles.flex}
         mapStyle={style as object}
         compassEnabled
         attributionEnabled={false}
-        onPress={(feature) => {
-          // Только forest features имеют dominant_species — отфильтровываем
-          // background tap'ы и user-fix-dot.
-          const props = (feature as { properties?: ForestFeatureProps })?.properties;
-          if (props && typeof props.dominant_species === "string") {
-            setPopupFeature(props);
+        onPress={async (feature) => {
+          // MapView.onPress даёт точку тапа но БЕЗ properties с layer'а.
+          // Нужно явно queryRenderedFeaturesAtPoint по forest-fill ID'ам.
+          // properties.{screenPointX, screenPointY} — pixel-координаты для query.
+          const sx = (feature.properties as { screenPointX?: number })?.screenPointX;
+          const sy = (feature.properties as { screenPointY?: number })?.screenPointY;
+          if (sx == null || sy == null || !mapRef.current) return;
+          const layerIds = sources.flatMap((s) => [`${s.id}-fill`, `${s.id}-lo-fill`]);
+          try {
+            const fc = await mapRef.current.queryRenderedFeaturesAtPoint(
+              [sx, sy],
+              undefined,
+              layerIds,
+            );
+            const hit = fc?.features?.find(
+              (f) => typeof (f.properties as { dominant_species?: unknown })?.dominant_species === "string",
+            );
+            if (hit?.properties) setPopupFeature(hit.properties as ForestFeatureProps);
+          } catch {
+            // ignore — query может фейлить пока стиль ещё не готов
           }
         }}
       >
