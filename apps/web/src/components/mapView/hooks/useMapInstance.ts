@@ -56,6 +56,10 @@ export function useMapInstance(
       // на всю ЛО) при zoom-in/out. Бамп до 500 = forest_lo живёт вечно
       // + forest для типичного pan'а сохраняется без re-parse'а MVT.
       maxTileCacheSize: 500,
+      // Default 5 zoom levels per source — при zoom-in/out с z=6 → z=10 → z=6
+      // тайлы z=6 эвиктились. Бамп до 16 = тайлы всех зумов retain'ятся,
+      // не нужно перепарсивать при возврате к ранее показанному виду.
+      maxTileCacheZoomLevels: 16,
     });
     mapRef.current = m;
 

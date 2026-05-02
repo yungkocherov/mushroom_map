@@ -88,14 +88,23 @@ export function ForestLoadingOverlay({ mapRef }: Props) {
       });
     };
 
+    // Гарантированный safety-net: на map.idle (карта в стабильном
+    // состоянии, ничего не грузится) очищаем весь pending Set. Без
+    // этого pending мог залипать когда pmtiles plugin не доставлял
+    // 'data'-event для тайла (cached path), и shimmer оставался над
+    // реально-загруженным forest'ом.
+    const onIdle = () => setPending(new globalThis.Map());
+
     map.on("dataloading", onLoading as never);
     map.on("data", onData as never);
+    map.on("idle", onIdle);
     map.on("move", onMove);
     map.on("zoom", onMove);
 
     return () => {
       map.off("dataloading", onLoading as never);
       map.off("data", onData as never);
+      map.off("idle", onIdle);
       map.off("move", onMove);
       map.off("zoom", onMove);
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
