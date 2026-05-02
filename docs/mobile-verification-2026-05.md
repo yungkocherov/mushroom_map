@@ -175,6 +175,11 @@ adb logcat -t 100 *:E ReactNativeJS:V *:S | head -50
 - [ ] После скачивания выделы Гатчинского видны на карте
 - [ ] Тап на выдел открывает popup с породой + видами
 - [ ] Закрытие popup'а через backdrop tap
+- [ ] **Phase 4:** Onboarding wizard на fresh install
+- [ ] **Phase 4:** Species catalog с фильтрами + detail с сезоном
+- [ ] **Phase 4:** Русские имена в popup «Виды по биотопу»
+- [ ] **Phase 4:** Cancel скачивания работает
+- [ ] **Phase 4:** Network banner при airplane mode
 
 Если хоть что-то ❌ или ⚠️ — пришли скрин + описание. Если всё ✅ —
 скажи «всё работает» и пойдём в Phase 4 polish (gorhom bottom-sheet,
@@ -187,19 +192,68 @@ prep).
 
 - **Magnetometer на эмуляторе** не вращает стрелку компаса (нет
   железа). Реальный Android — будет.
-- **Slug-имена видов** в popup секции «Виды по биотопу» (`boletus-edulis`
-  вместо «Белый»). Phase 4 polish.
 - **Bundled forest-luzhsky.pmtiles** ещё в APK как Phase 0 placeholder —
   карта спайка показывает Лужский даже без download. Phase 5 удалит.
-- **Cancel** скачивания через tap-on-progress пока no-op (TODO Phase 4
-  AbortController).
-- **Manifest update** detection при изменении `manifest_version` ещё
-  не реализован (TODO Phase 4).
+- **gorhom/bottom-sheet** не внедрён — сейчас RN Modal slide-up.
+  Жесты-snap-points в Phase 5.
 - **Yandex login** не тестировался в этой сессии. Пробуй если хочешь;
   должен работать после установки `EXPO_PUBLIC_YANDEX_MOBILE_CLIENT_ID`
   в `apps/mobile/.env`.
 - **Sync с сервером**: создание спота шлёт его на `/api/mobile/spots/sync`
   только если ты залогинен. Без login споты только локальные. Это by-design.
+
+## 6. Phase 4 polish — добавлено в эту сессию
+
+Кроме базовых пунктов из чек-листа (1-13) проверь также:
+
+### 6.1 Onboarding (первый запуск)
+
+При первом запуске после fresh install / `pm clear ru.geobiom.mobile`
+должен открыться 3-шаг wizard:
+1. **Welcome** — название Geobiom, описание lead, кнопка «Дальше»
+2. **GPS** — объяснение зачем нужен access, кнопка «Разрешить» →
+   native permission dialog → если grant'нул → переход дальше
+3. **Регионы** — описание download manager'а, кнопка «Открыть регионы»
+   (Phase 5 — сейчас просто закрывает onboarding, нужно отдельно
+   зайти Settings → Регионы)
+
+После прохождения — `sync_meta.onboarding.completed.v1 = '1'`. На
+следующий запуск onboarding не показывается.
+
+### 6.2 Species catalog (tab «Виды»)
+
+Был placeholder, теперь **полный каталог** 25 видов:
+- Filter chips сверху (Все · Съедобные · Условно · Ядовитые · Смертельные)
+- Per-row: edibility-dot, имя на русском, латинское italic, сезон + edibility
+- Tap → species detail с 12-month season strip, forest_types chips,
+  ссылка-placeholder на сайт
+
+### 6.3 Forest popup — русские имена
+
+Тап на выдел → popup. Section «Виды по биотопу» теперь показывает
+**«Белый гриб»** вместо `boletus-edulis`, **«Подберёзовик»** вместо
+`leccinum-scabrum`, и т.д.
+
+### 6.4 Cancel скачивания
+
+В Settings → Регионы → начни download любого района → tap снова на
+тот же row пока качается → confirm «Прервать?» → скачивание
+останавливается.
+
+### 6.5 Update detection
+
+Если перегенеришь forest.pmtiles на сервере (через
+`pipelines/build_district_tiles.py` с новым `--manifest-version`),
+при refresh регионов на mobile уже скачанные регионы отметятся как
+«Обновление доступно» (caution-цвет) → tap → confirm → пересоздаст
+регион (delete + re-download). Phase 4 polish.
+
+### 6.6 Network banner
+
+Включи Airplane mode на эмуляторе → должен появиться **тёмный banner**
+сверху карты «Офлайн · карта читается из скачанных регионов».
+Если есть pending spots для sync — банner покажет «Офлайн · N спотов
+не синкнуто». Выключи Airplane mode → banner пропадёт.
 
 ---
 

@@ -51,10 +51,16 @@ forecast-репо не пишем — это двусторонний контр
   (haversine), spot detail (`app/spot/[uuid].tsx`) с компасом
   (`expo-sensors` Magnetometer + Animated rotate, bearing computed
   haversine'ом).
-- **Phase 4 polish outstanding**: gorhom/bottom-sheet вместо Modal,
-  cancel-in-progress download (AbortController), manifest update
-  detection, slug→russian в popup species, bundled forest-luzhsky
-  removal (Phase 5).
+- **Phase 4 polish** (done) — Russian species names в popup,
+  cancel-in-progress download через `dl.cancelAsync()`, manifest
+  update detection (outdated Set + UI badge), 3-screen onboarding
+  flow (welcome / GPS permission / regions), species catalog tab
+  с filters + detail screen, NetworkBanner (NetInfo + animated
+  slide-in при offline + pending-spots indicator).
+- **Phase 5 prep** outstanding: gorhom/bottom-sheet вместо Modal,
+  production keystore (signed APK), SQLCipher через op-sqlite,
+  real app icon + splash design, RuStore submission, bundled
+  forest-luzhsky placeholder removal.
 - **Backend дельта:**
   - Миграция `db/migrations/031_user_spot_client_uuid.sql` —
     `client_uuid UUID UNIQUE` (partial), `client_updated_at`,
