@@ -62,6 +62,15 @@ export function ForestLoadingOverlay({ mapRef, ready }: Props) {
     const onData = (e: TileLikeEvent) => {
       const sid = e.sourceId;
       if (!sid || !FOREST_SOURCES.includes(sid)) return;
+      // debug: видеть что именно прилетает от MapLibre на forest source'ы
+      // eslint-disable-next-line no-console
+      console.log("[forest-overlay]", {
+        sid,
+        dataType: e.dataType,
+        hasTile: !!e.tile,
+        tileState: e.tile?.state,
+        zxy: e.tile?.tileID?.canonical,
+      });
       if (e.dataType !== "source" || !e.tile) return;
       const c = e.tile.tileID?.canonical;
       if (!c) return;
