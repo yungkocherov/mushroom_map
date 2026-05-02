@@ -41,6 +41,7 @@ data/vk/
 data/oopt/
 data/osm/
 data/soil/
+data/backups/
 
 # VK report outputs (regenerable)
 vk_photos_report*.html

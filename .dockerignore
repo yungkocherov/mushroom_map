@@ -12,17 +12,38 @@ __pycache__
 node_modules
 **/node_modules
 
-# Данные (tiles, DEM, VK cache) — никогда не попадают в образ.
+# Данные (tiles, DEM, VK cache, db dumps) — никогда не попадают в образ.
 data
 
-# Build artefacts
-apps/web/dist
-dist
-build
+# Build artefacts (для всех workspace'ов и языков)
+**/dist
+**/build
+**/.gradle
+
+# Mobile native build cache — 678 MB android/ + iOS Pods.
+# До 2026-05-02 это утекало в mushroom-map-web (раздуло образ до 29.6 GB).
+apps/mobile/android/build
+apps/mobile/android/.gradle
+apps/mobile/android/app/build
+apps/mobile/ios/build
+apps/mobile/ios/Pods
+apps/mobile/.expo
+
+# Logs (`?? logs/` в git status)
+logs
+
+# Python / JS dev caches
+.coverage
+.pytest_cache
+.mypy_cache
+.ruff_cache
+**/.vite
+**/.turbo
 
 # Local env / IDE
 .env
 .env.local
+.env.*
 .vscode
 .idea
 
