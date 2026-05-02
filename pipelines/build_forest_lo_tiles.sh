@@ -22,7 +22,10 @@ DB_USER="${DB_USER:-mushroom}"
 DB_NAME="${DB_NAME:-mushroom_map}"
 OUT_DIR="${OUT_DIR:-data/tiles}"
 MIN_ZOOM=5
-MAX_ZOOM=7
+# Включаем z=8 для перекрытия с forest.pmtiles (z>=8): на z=8 frontend
+# рисует ОБА слоя, forest_lo blob'ит фон пока forest подгружает детали,
+# transition z=7→8 без «дырки» в данных.
+MAX_ZOOM=8
 
 GEOJSON_FILE="$OUT_DIR/forest_lo.geojsonl"
 MBTILES_FILE="$OUT_DIR/forest_lo.mbtiles"

@@ -11,7 +11,7 @@ export const FOREST_LO_PMTILES_URL = `pmtiles://${TILES_BASE}/forest_lo.pmtiles`
 /**
  * Forest состоит из ДВУХ pmtiles-источников и ДВУХ layer'ов:
  *
- *   forest-lo (z=5..7):  forest_lo.pmtiles, ~MB, same-species union'ы
+ *   forest-lo (z=5..8):  forest_lo.pmtiles, ~30MB, same-species union'ы
  *                        внутри породы → крупные блобы. Цвета те же что
  *                        и full forest. Грузится в 10-30× быстрее на
  *                        обзорных зумах.
@@ -19,8 +19,10 @@ export const FOREST_LO_PMTILES_URL = `pmtiles://${TILES_BASE}/forest_lo.pmtiles`
  *                        Рослесхоза, каждый со своими границами +
  *                        properties.
  *
- * При z=7.x → z=8.0 happens layer swap. MapLibre layer.minzoom inclusive,
- * .maxzoom exclusive — 7.99 рисует только forest-lo, 8.0 только forest.
+ * На z=8 рендерятся ОБА слоя (overlap). forest добавлен после, поэтому
+ * рисуется поверх — visually forest dominate'ит. Пока forest тайлы
+ * качаются на z=7→8 transition, forest-lo даёт continuous fallback
+ * (без «дырки» в данных).
  *
  * setForestVisibility переключает оба layer'а синхронно.
  */
@@ -40,7 +42,8 @@ export function addForestLayer(m: Map): void {
         type: "fill",
         source: "forest_lo",
         "source-layer": "forest_lo",
-        maxzoom: 8,
+        // maxzoom exclusive в MapLibre: 9 → renders at z<9, т.е. 5..8
+        maxzoom: 9,
         paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
       },
       beforeId,
