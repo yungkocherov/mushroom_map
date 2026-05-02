@@ -29,12 +29,12 @@ jobs:
         working-directory: services/geodata
         run: pytest -v tests/
 
-  # TypeScript typecheck + production build для веб-фронта.
-  # Vitest не настроен — нет смысла гонять пустой test runner. Зато
-  # `tsc --noEmit` ловит API-несоответствия + `vite build` падает на
-  # ошибках импортов и неразрешённых ассетах.
+  # TypeScript typecheck + vitest unit-тесты + production build для
+  # веб-фронта. tsc --noEmit ловит API-несоответствия, vitest гоняет
+  # юнит-тесты (escapeHtml, useLayerVisibility, AuthProvider), vite
+  # build падает на ошибках импортов и неразрешённых ассетах.
   web-typecheck:
-    name: web typecheck + build
+    name: web typecheck + tests + build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
@@ -51,6 +51,10 @@ jobs:
       - name: TypeScript typecheck (web)
         working-directory: apps/web
         run: npx tsc --noEmit
+
+      - name: Vitest (web unit tests)
+        working-directory: apps/web
+        run: npm test
 
       - name: Vite build (web)
         working-directory: apps/web
