@@ -21,11 +21,13 @@ export default function RegionsScreen() {
   const router = useRouter();
   const available = useOfflineRegions((s) => s.available);
   const downloaded = useOfflineRegions((s) => s.downloaded);
+  const outdated = useOfflineRegions((s) => s.outdated);
   const inProgress = useOfflineRegions((s) => s.inProgress);
   const loading = useOfflineRegions((s) => s.loading);
   const error = useOfflineRegions((s) => s.error);
   const refresh = useOfflineRegions((s) => s.refresh);
   const startDownload = useOfflineRegions((s) => s.startDownload);
+  const cancel = useOfflineRegions((s) => s.cancel);
   const remove = useOfflineRegions((s) => s.remove);
 
   useEffect(() => {
@@ -38,6 +40,35 @@ export default function RegionsScreen() {
   );
 
   const onTap = async (region: Region) => {
+    if (inProgress[region.slug]) {
+      Alert.alert(
+        region.name,
+        "Скачивание идёт. Прервать?",
+        [
+          { text: "Нет", style: "cancel" },
+          { text: "Прервать", style: "destructive", onPress: () => cancel(region.slug) },
+        ],
+      );
+      return;
+    }
+    if (outdated.has(region.slug)) {
+      Alert.alert(
+        region.name,
+        `Доступно обновление (${formatMb(region.total_size_bytes)}). Скачать новую версию?`,
+        [
+          { text: "Позже", style: "cancel" },
+          {
+            text: "Обновить",
+            onPress: async () => {
+              await remove(region.slug);
+              const result = await startDownload(region.slug);
+              if (result.kind === "error") Alert.alert("Ошибка", result.message);
+            },
+          },
+        ],
+      );
+      return;
+    }
     if (downloaded.has(region.slug)) {
       Alert.alert(
         region.name,
@@ -53,10 +84,6 @@ export default function RegionsScreen() {
       );
       return;
     }
-    if (inProgress[region.slug]) {
-      // TODO(phase-2.3): cancel in-progress download via AbortController
-      return;
-    }
     const result = await startDownload(region.slug);
     if (result.kind === "error") {
       Alert.alert("Ошибка", result.message);
@@ -65,6 +92,7 @@ export default function RegionsScreen() {
 
   const renderItem = ({ item }: { item: Region }) => {
     const isDone = downloaded.has(item.slug);
+    const isOutdated = outdated.has(item.slug);
     const dl = inProgress[item.slug];
     const isProgress = !!dl;
     const percent = dl
@@ -73,12 +101,15 @@ export default function RegionsScreen() {
 
     let status: string;
     let statusColor: string;
-    if (isDone) {
+    if (isProgress) {
+      status = `Скачивание · ${dl.layer} · ${percent}% · нажми чтобы прервать`;
+      statusColor = palette.light.chanterelle;
+    } else if (isOutdated) {
+      status = "Обновление доступно — нажми чтобы скачать";
+      statusColor = palette.light.caution;
+    } else if (isDone) {
       status = "Скачано · нажми чтобы удалить";
       statusColor = palette.light.forest;
-    } else if (isProgress) {
-      status = `Скачивание · ${dl.layer} · ${percent}%`;
-      statusColor = palette.light.chanterelle;
     } else {
       status = `${formatMb(item.total_size_bytes)} · ${item.layers.length} слоёв`;
       statusColor = palette.light.inkDim;

@@ -12,6 +12,7 @@ import {
   topSpeciesForForestType,
   type SpeciesForTree,
 } from "../../services/affinity";
+import { speciesNameRu } from "../../services/speciesCatalog";
 
 export type ForestFeatureProps = {
   dominant_species?: string | null;
@@ -116,7 +117,7 @@ export function ForestPopup({ visible, feature, onClose }: Props) {
                 {topSpecies.map((sp, i) => (
                   <View key={sp.slug} style={styles.speciesRow}>
                     <Text style={styles.speciesIdx}>{i + 1}.</Text>
-                    <Text style={styles.speciesName}>{sp.slug}</Text>
+                    <Text style={styles.speciesName}>{speciesNameRu(sp.slug)}</Text>
                     <Text style={styles.speciesAffinity}>
                       {sp.affinity.toFixed(2)}
                     </Text>

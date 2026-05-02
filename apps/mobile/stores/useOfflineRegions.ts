@@ -7,6 +7,8 @@ import {
   listDownloadedSlugs,
   downloadRegion as fsDownloadRegion,
   deleteRegion as fsDeleteRegion,
+  cancelDownload as fsCancelDownload,
+  getInstalledVersion,
 } from "../services/regions";
 
 type DownloadState = {
@@ -18,6 +20,8 @@ type DownloadState = {
 type OfflineRegionsState = {
   available: Region[]; // от API /api/mobile/regions
   downloaded: Set<string>; // slugs
+  /** Slugs которые скачаны со старой manifest_version (server обновился). */
+  outdated: Set<string>;
   inProgress: Record<string, DownloadState>; // slug -> current layer download
   manifestVersion: string;
   error: string | null;
@@ -25,12 +29,14 @@ type OfflineRegionsState = {
 
   refresh: () => Promise<void>;
   startDownload: (slug: string) => Promise<DownloadResult>;
+  cancel: (slug: string) => Promise<void>;
   remove: (slug: string) => Promise<void>;
 };
 
 export const useOfflineRegions = create<OfflineRegionsState>((set, get) => ({
   available: [],
   downloaded: new Set(),
+  outdated: new Set(),
   inProgress: {},
   manifestVersion: "",
   error: null,
@@ -43,10 +49,21 @@ export const useOfflineRegions = create<OfflineRegionsState>((set, get) => ({
         fetchRegions(),
         listDownloadedSlugs(),
       ]);
+      // Detect outdated: regions which we have локально, но
+      // manifest_version отличается от server'ского.
+      const outdated = new Set<string>();
+      for (const slug of downloaded) {
+        const installed = await getInstalledVersion(slug);
+        const remote = resp.regions.find((r) => r.slug === slug)?.manifest_version;
+        if (installed && remote && installed !== remote) {
+          outdated.add(slug);
+        }
+      }
       set({
         available: resp.regions,
         manifestVersion: resp.version,
         downloaded,
+        outdated,
         loading: false,
       });
     } catch (err) {
@@ -97,10 +114,10 @@ export const useOfflineRegions = create<OfflineRegionsState>((set, get) => ({
     delete next[slug];
 
     if (result.kind === "ok") {
-      set({
-        inProgress: next,
-        downloaded: new Set([...get().downloaded, slug]),
-      });
+      const downloaded = new Set([...get().downloaded, slug]);
+      const outdated = new Set(get().outdated);
+      outdated.delete(slug);
+      set({ inProgress: next, downloaded, outdated });
     } else {
       set({
         inProgress: next,
@@ -113,10 +130,19 @@ export const useOfflineRegions = create<OfflineRegionsState>((set, get) => ({
     return result;
   },
 
+  cancel: async (slug) => {
+    await fsCancelDownload(slug);
+    const next = { ...get().inProgress };
+    delete next[slug];
+    set({ inProgress: next });
+  },
+
   remove: async (slug) => {
     await fsDeleteRegion(slug);
     const downloaded = new Set(get().downloaded);
     downloaded.delete(slug);
-    set({ downloaded });
+    const outdated = new Set(get().outdated);
+    outdated.delete(slug);
+    set({ downloaded, outdated });
   },
 }));

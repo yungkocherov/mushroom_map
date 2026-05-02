@@ -117,12 +117,39 @@ async function sha256File(uri: string): Promise<string> {
 }
 
 /**
+ * Cancel-token: vending the active downloadResumable per slug чтобы
+ * cancelAsync() мог быть вызван снаружи. Cancel'нутый file partial
+ * не удаляется expo-file-system, но downloadRegion удаляет .partial
+ * на error/cancel.
+ */
+const inflight = new Map<string, FileSystem.DownloadResumable>();
+
+export function isInflight(slug: string): boolean {
+  return inflight.has(slug);
+}
+
+export async function cancelDownload(slug: string): Promise<void> {
+  const dl = inflight.get(slug);
+  if (!dl) return;
+  try {
+    await dl.cancelAsync();
+  } catch {
+    // already cancelled or finished — ignore
+  }
+  inflight.delete(slug);
+}
+
+/**
  * Download all layer files of a region. Verifies sha256 of each.
  * Records `region.<slug>.installed = manifest_version` in sync_meta on
  * success.
  *
  * onProgress called frequently (~every 256 KB) — debounce in caller if
  * needed for UI re-renders.
+ *
+ * Cancel: вызвать `cancelDownload(slug)` из любого места — текущий
+ * layer.downloadAsync() вернёт null, downloadRegion увидит и вернёт
+ * { kind: 'cancelled' }.
  */
 export async function downloadRegion(
   region: Region,
@@ -135,7 +162,10 @@ export async function downloadRegion(
   });
 
   for (const layer of region.layers) {
-    if (signal?.aborted) return { kind: "cancelled" };
+    if (signal?.aborted) {
+      inflight.delete(region.slug);
+      return { kind: "cancelled" };
+    }
 
     const dst = getLayerLocalUri(region.slug, layer.name);
     const tmp = `${dst}.partial`;
@@ -157,20 +187,30 @@ export async function downloadRegion(
         });
       },
     );
+    inflight.set(region.slug, dl);
 
     let result;
     try {
       result = await dl.downloadAsync();
     } catch (err) {
+      inflight.delete(region.slug);
+      // expo-file-system throws при cancelAsync()
+      const msg = err instanceof Error ? err.message : "unknown";
+      if (/cancel|abort/i.test(msg)) {
+        await FileSystem.deleteAsync(tmp, { idempotent: true });
+        return { kind: "cancelled" };
+      }
       return {
         kind: "error",
-        message: `download ${layer.name}: ${err instanceof Error ? err.message : "unknown"}`,
+        message: `download ${layer.name}: ${msg}`,
       };
     }
     if (!result || !result.uri) {
-      return { kind: "error", message: `${layer.name}: no result.uri` };
+      inflight.delete(region.slug);
+      return { kind: "cancelled" };
     }
     if (signal?.aborted) {
+      inflight.delete(region.slug);
       await FileSystem.deleteAsync(tmp, { idempotent: true });
       return { kind: "cancelled" };
     }
@@ -204,6 +244,7 @@ export async function downloadRegion(
   }
 
   await recordRegionInstalled(region.slug, region.manifest_version);
+  inflight.delete(region.slug);
   return { kind: "ok" };
 }
 
