@@ -52,6 +52,13 @@ export function ForestLoadingOverlay({ mapRef }: Props) {
   const [proj, setProj] = useState(0);
   const [attachTick, setAttachTick] = useState(0);
   const rafRef = useRef<number | null>(null);
+  // Отложенный show: per-tile setTimeout, чтобы fast (cached) loads
+  // не успели мелькнуть shimmer'ом. Если tile loaded в течение
+  // SHIMMER_DELAY_MS — таймер cancel'ится и shimmer не появляется.
+  const SHIMMER_DELAY_MS = 200;
+  const showTimers = useRef<globalThis.Map<string, ReturnType<typeof setTimeout>>>(
+    new globalThis.Map(),
+  );
 
   useEffect(() => {
     const map = mapRef.current;
@@ -60,25 +67,41 @@ export function ForestLoadingOverlay({ mapRef }: Props) {
       return () => cancelAnimationFrame(id);
     }
 
-    const updatePending = (e: TileLikeEvent, isLoading: boolean) => {
+    const onLoading = (e: TileLikeEvent) => {
       const sid = e.sourceId;
       if (!sid || !FOREST_SOURCES.includes(sid)) return;
       const c = e.tile?.tileID?.canonical;
       if (!c) return;
       const key = `${sid}/${c.z}/${c.x}/${c.y}`;
+      // Уже шедулед — не дублируем
+      if (showTimers.current.has(key)) return;
+      const timer = setTimeout(() => {
+        showTimers.current.delete(key);
+        setPending((prev) => new globalThis.Map(prev).set(key, { z: c.z, x: c.x, y: c.y }));
+      }, SHIMMER_DELAY_MS);
+      showTimers.current.set(key, timer);
+    };
+
+    const onData = (e: TileLikeEvent) => {
+      const sid = e.sourceId;
+      if (!sid || !FOREST_SOURCES.includes(sid)) return;
+      const c = e.tile?.tileID?.canonical;
+      if (!c) return;
+      const key = `${sid}/${c.z}/${c.x}/${c.y}`;
+      // Cancel pending show если таймер ещё не сработал
+      const t = showTimers.current.get(key);
+      if (t) {
+        clearTimeout(t);
+        showTimers.current.delete(key);
+      }
+      // Удалить из visible pending Set
       setPending((prev) => {
+        if (!prev.has(key)) return prev;
         const next: PendingMap = new globalThis.Map(prev);
-        if (isLoading && e.tile?.state !== "loaded" && e.tile?.state !== "errored") {
-          next.set(key, { z: c.z, x: c.x, y: c.y });
-        } else {
-          next.delete(key);
-        }
+        next.delete(key);
         return next;
       });
     };
-
-    const onLoading = (e: TileLikeEvent) => updatePending(e, true);
-    const onData = (e: TileLikeEvent) => updatePending(e, false);
 
     const onMove = () => {
       if (rafRef.current != null) return;
@@ -89,11 +112,14 @@ export function ForestLoadingOverlay({ mapRef }: Props) {
     };
 
     // Гарантированный safety-net: на map.idle (карта в стабильном
-    // состоянии, ничего не грузится) очищаем весь pending Set. Без
-    // этого pending мог залипать когда pmtiles plugin не доставлял
-    // 'data'-event для тайла (cached path), и shimmer оставался над
-    // реально-загруженным forest'ом.
-    const onIdle = () => setPending(new globalThis.Map());
+    // состоянии, ничего не грузится) очищаем весь pending Set + все
+    // pending-show таймеры. Без этого pending мог залипать когда
+    // pmtiles plugin не доставлял 'data'-event для тайла (cached path).
+    const onIdle = () => {
+      for (const t of showTimers.current.values()) clearTimeout(t);
+      showTimers.current.clear();
+      setPending(new globalThis.Map());
+    };
 
     map.on("dataloading", onLoading as never);
     map.on("data", onData as never);
@@ -108,6 +134,8 @@ export function ForestLoadingOverlay({ mapRef }: Props) {
       map.off("move", onMove);
       map.off("zoom", onMove);
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      for (const t of showTimers.current.values()) clearTimeout(t);
+      showTimers.current.clear();
     };
   }, [mapRef, attachTick]);
 
