@@ -51,6 +51,9 @@ type TileLikeEvent = MapDataEvent & {
 
 export function ForestLoadingOverlay({ mapRef, ready }: Props) {
   const map = ready ? mapRef.current : null;
+  // debug: видеть что компонент рендерится вообще
+  // eslint-disable-next-line no-console
+  console.log("[forest-overlay] render", { ready, hasMap: !!map });
   const [pending, setPending] = useState<PendingMap>(() => new globalThis.Map());
   // bump'аем при move/zoom — provoke'аем re-projection без хранения координат
   const [proj, setProj] = useState(0);
