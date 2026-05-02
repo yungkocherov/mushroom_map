@@ -16,6 +16,11 @@ dependencies = [
     "pyjwt>=2.8",
     "httpx>=0.27",
     "sentry-sdk[fastapi]>=2.20",
+    # slowapi — per-route rate limiting. Активируется через
+    # RATE_LIMIT_ENABLED=true в .env.prod; в dev/CI no-op (см. rate_limit.py).
+    # Памятная заметка: на single-instance проде in-memory backend ОК.
+    # При горизонтальном scale надо переключать на redis (slowapi[redis]).
+    "slowapi>=0.1.9",
 ]
 
 [project.optional-dependencies]

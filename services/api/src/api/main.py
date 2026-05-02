@@ -1,5 +1,6 @@
 """FastAPI entry point for mushroom-map."""
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,11 +9,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.db import close_pool, get_conn, init_pool
+from api.rate_limit import limiter
 from api.settings import settings
 from api.routes import (
     forest, species, regions, soil, water, terrain, districts, stats,
     auth, user, cabinet, forecast, places, mobile,
 )
+
+
+log = logging.getLogger("api")
 
 
 # Sentry / GlitchTip init. Безопасный no-op если DSN не задан или
@@ -44,11 +49,19 @@ async def lifespan(app: FastAPI):
     close_pool()
 
 
+_PROD_DOCS_OFF = settings.cookie_secure  # cookie_secure=true ≡ prod-env
 app = FastAPI(
     title="mushroom-map API",
     version="0.1.0",
     description="Backend for the mushroom-map interactive service.",
     lifespan=lifespan,
+    # В проде /docs, /redoc, /openapi.json отключены — без этого
+    # `https://api.geobiom.ru/docs` публично перечислял все endpoints,
+    # параметры, Pydantic-модели (mobile sync, cabinet etc). Recon в
+    # один URL. В dev оставляем — удобно при разработке.
+    docs_url=None if _PROD_DOCS_OFF else "/docs",
+    redoc_url=None if _PROD_DOCS_OFF else "/redoc",
+    openapi_url=None if _PROD_DOCS_OFF else "/openapi.json",
 )
 
 app.add_middleware(
@@ -58,6 +71,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Rate limiter регистрируется только когда RATE_LIMIT_ENABLED=true.
+# В dev/CI `limiter` — заглушка с no-op `.limit(...)`, и middleware
+# тоже не подключаем — иначе slowapi импорт станет hard requirement.
+if settings.rate_limit_enabled:
+    from slowapi import _rate_limit_exceeded_handler  # type: ignore[import-not-found]
+    from slowapi.errors import RateLimitExceeded  # type: ignore[import-not-found]
+    from slowapi.middleware import SlowAPIMiddleware  # type: ignore[import-not-found]
+
+    app.state.limiter = limiter
+    app.add_middleware(SlowAPIMiddleware)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.include_router(forest.router, prefix="/api/forest", tags=["forest"])
 app.include_router(soil.router,    prefix="/api/soil",    tags=["soil"])
@@ -97,7 +122,10 @@ def healthz() -> dict[str, str]:
             with conn.cursor() as cur:
                 cur.execute("SELECT 1")
                 cur.fetchone()
-    except Exception as exc:
+    except Exception:
+        # Не светим psycopg-сообщение наружу (DSN parts, socket errors,
+        # constraint names) — пишем подробности в лог, клиенту generic.
+        log.exception("/api/healthz: db unreachable")
         from fastapi import HTTPException
-        raise HTTPException(status_code=503, detail=f"db unreachable: {exc}")
+        raise HTTPException(status_code=503, detail="db unreachable")
     return {"status": "ok", "db": "ok"}

@@ -20,10 +20,16 @@ class Settings(BaseSettings):
     terrain_dir: str = "/terrain"
 
     # ── Auth / JWT ────────────────────────────────────────────────────
-    # jwt_secret — HS256, используется и для access-JWT, и для подписи
-    # короткоживущих OAuth-state/PKCE-cookies. В .env.example указан
+    # jwt_secret — HS256, используется для access-JWT, device-JWT и
+    # peppered SHA-256 хэша refresh-токенов. В .env.example указан
     # placeholder; в dev'е достаточно любой случайной строки.
     jwt_secret: str = _JWT_SECRET_DEFAULT
+    # oauth_state_secret — отдельный секрет для подписи OAuth-state JWT.
+    # Best-practice: ротация JWT_SECRET (compromise leak access-токенов)
+    # не должна автоматически переоткрывать окно для OAuth-CSRF против
+    # текущих логин-сессий. Если пусто — fallback к jwt_secret для
+    # backwards-compat и dev'а.
+    oauth_state_secret: str = ""
     jwt_issuer: str = "mushroom-map"
     # Access-token живёт 15 минут — фронт хранит в памяти, передаёт как
     # Authorization: Bearer. Refresh (30 дней) — в HttpOnly cookie, в БД
@@ -77,11 +83,27 @@ class Settings(BaseSettings):
     sentry_traces_sample_rate: float = 0.1
     git_sha: str = "unknown"
 
+    # ── Rate limiting ─────────────────────────────────────────────────
+    # slowapi-based limiter. По умолчанию OFF — integration-тесты не
+    # должны ловить 429 при 10 refresh-вызовах подряд от одного IP.
+    # В .env.prod выставить RATE_LIMIT_ENABLED=true. См. main.py +
+    # api/rate_limit.py.
+    rate_limit_enabled: bool = False
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.api_cors_origins.split(",") if o.strip()]
+
+    @property
+    def effective_oauth_state_secret(self) -> str:
+        """Реальный секрет для encode/decode_oauth_state. Если оператор
+        не задал отдельный OAUTH_STATE_SECRET — используем jwt_secret
+        (backwards-compat). В проде после первой ротации эти секреты
+        должны разъехаться: см. CLAUDE.md «Pre-prod-deploy checklist» §2.
+        """
+        return self.oauth_state_secret or self.jwt_secret
 
 
 settings = Settings()

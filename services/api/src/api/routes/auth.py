@@ -26,6 +26,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from api.auth import jwt_tokens, refresh as refresh_ops, yandex
 from api.auth.users import upsert_oauth_user
 from api.db import get_conn
+from api.rate_limit import limiter
 from api.settings import settings
 
 
@@ -103,15 +104,19 @@ def _client_meta(request: Request) -> tuple[Optional[str], Optional[str]]:
 # ──────────────────────────────────────────────────────────────────────
 
 @router.get("/yandex/login")
-def yandex_login() -> RedirectResponse:
+@limiter.limit("5/minute")
+def yandex_login(request: Request) -> RedirectResponse:
     """Сгенерировать PKCE + state и редиректнуть на oauth.yandex.ru.
 
     PKCE-verifier хранится в HttpOnly cookie на time-of-flow (10 мин).
-    State JWT несёт ТОЛЬКО nonce — он CSRF-binding'ит callback с этой
-    конкретной попыткой логина. Раньше verifier ходил внутри state и
-    светился в URL/Yandex-логах — это лишало PKCE смысла (RFC 7636 §1:
-    verifier не должен покидать клиент пока не дойдёт до /token).
+    State JWT несёт `nonce` (CSRF binding) + `challenge` — SHA256 от
+    PKCE-verifier'а. На callback мы пересчитываем challenge из cookie
+    и сравниваем со state — это блокирует подмену verifier-cookie
+    атакующим (без challenge в state он мог бы поменять verifier у
+    жертвы и привязать её сессию к своему Yandex-аккаунту).
     """
+    # `request` принимается для slowapi extraction client IP.
+    del request
     if not settings.yandex_client_id or not settings.yandex_client_secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -122,6 +127,9 @@ def yandex_login() -> RedirectResponse:
 
     state_jwt = jwt_tokens.encode_oauth_state({
         "nonce": secrets.token_urlsafe(16),
+        # Bind challenge в state — на callback верифицируем что
+        # cookie-verifier даёт тот же challenge.
+        "challenge": challenge,
     })
     url = yandex.build_authorize_url(state=state_jwt, code_challenge=challenge)
     resp = RedirectResponse(url=url, status_code=302)
@@ -130,6 +138,7 @@ def yandex_login() -> RedirectResponse:
 
 
 @router.get("/yandex/callback")
+@limiter.limit("10/minute")
 def yandex_callback(request: Request) -> RedirectResponse:
     """Обработать редирект с Yandex: code + state -> userinfo -> user + refresh.
 
@@ -154,9 +163,7 @@ def yandex_callback(request: Request) -> RedirectResponse:
         )
 
     try:
-        # State JWT валидируется, но дальше нужен только сам факт что он
-        # наш и не просрочен (CSRF binding к /login сессии).
-        jwt_tokens.decode_oauth_state(state)
+        state_payload = jwt_tokens.decode_oauth_state(state)
     except jwt_tokens.OAuthStateInvalid:
         resp = RedirectResponse(
             url=f"{settings.frontend_auth_error_url}?reason=bad_state",
@@ -173,6 +180,20 @@ def yandex_callback(request: Request) -> RedirectResponse:
             url=f"{settings.frontend_auth_error_url}?reason=missing_pkce",
             status_code=302,
         )
+
+    # Bind verifier из cookie со state'ом из URL: вычисляем challenge
+    # заново и сравниваем с тем что лежит в state. Если кто-то подменил
+    # PKCE-cookie (XSS / cross-subdomain cookie injection) — challenge
+    # не совпадёт, login отвергается. Без этой проверки PKCE-cookie
+    # сама по себе не bound с конкретной /login сессией.
+    expected_challenge = state_payload.get("challenge")
+    if not expected_challenge or yandex.pkce_challenge(verifier) != expected_challenge:
+        resp = RedirectResponse(
+            url=f"{settings.frontend_auth_error_url}?reason=pkce_mismatch",
+            status_code=302,
+        )
+        _clear_pkce_cookie(resp)
+        return resp
 
     try:
         token_resp = yandex.exchange_code(code, verifier)
@@ -215,6 +236,7 @@ def yandex_callback(request: Request) -> RedirectResponse:
 # ──────────────────────────────────────────────────────────────────────
 
 @router.post("/refresh")
+@limiter.limit("10/minute")
 def refresh(request: Request) -> Response:
     """Rotate refresh-cookie -> вернуть новый access_token в JSON.
 
@@ -260,6 +282,7 @@ def refresh(request: Request) -> Response:
 # ──────────────────────────────────────────────────────────────────────
 
 @router.post("/logout")
+@limiter.limit("10/minute")
 def logout(request: Request) -> Response:
     """Отозвать refresh-токен (если есть) и очистить cookie. 204 No Content."""
     raw = request.cookies.get(refresh_ops.REFRESH_COOKIE_NAME)
