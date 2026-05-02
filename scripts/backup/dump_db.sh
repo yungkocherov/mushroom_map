@@ -31,6 +31,14 @@ KEY="db/${DATE_UTC}.sql.gz.age"
 start_ts="$(date +%s)"
 echo "[backup] start ${DATE_UTC} -> ${RCLONE_REMOTE}:${YOS_BUCKET}/${KEY}"
 
+# age recipients: primary (обязательно) + optional backup (paper-key
+# или yubikey-wrapped в физическом сейфе). Backup-recipient закрывает
+# SPOF дев-ноута: любой из двух private-key расшифрует.
+age_args=(-r "$AGE_RECIPIENT")
+if [[ -n "${AGE_RECIPIENT_BACKUP:-}" ]]; then
+    age_args+=(-r "$AGE_RECIPIENT_BACKUP")
+fi
+
 # pipefail catches a failure in any stage. -Z 9 = max compression
 # (slower CPU but smaller upload; net-bound so worth it).
 docker exec -i "$PG_CONTAINER" pg_dump \
@@ -40,7 +48,7 @@ docker exec -i "$PG_CONTAINER" pg_dump \
         -Z 9 \
         --no-owner \
         --no-acl \
-    | age -r "$AGE_RECIPIENT" \
+    | age "${age_args[@]}" \
     | rclone rcat "${RCLONE_REMOTE}:${YOS_BUCKET}/${KEY}"
 
 dur=$(( $(date +%s) - start_ts ))
