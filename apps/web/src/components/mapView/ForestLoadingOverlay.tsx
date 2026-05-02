@@ -58,19 +58,20 @@ export function ForestLoadingOverlay({ mapRef, ready }: Props) {
 
   useEffect(() => {
     if (!map) return;
+    // eslint-disable-next-line no-console
+    console.log("[forest-overlay] listener attached");
 
     const onData = (e: TileLikeEvent) => {
-      const sid = e.sourceId;
-      if (!sid || !FOREST_SOURCES.includes(sid)) return;
-      // debug: видеть что именно прилетает от MapLibre на forest source'ы
+      // debug: ВСЕ data events без фильтра — посмотреть что прилетает
       // eslint-disable-next-line no-console
-      console.log("[forest-overlay]", {
-        sid,
+      console.log("[forest-overlay-all]", {
+        sid: e.sourceId,
         dataType: e.dataType,
         hasTile: !!e.tile,
         tileState: e.tile?.state,
-        zxy: e.tile?.tileID?.canonical,
       });
+      const sid = e.sourceId;
+      if (!sid || !FOREST_SOURCES.includes(sid)) return;
       if (e.dataType !== "source" || !e.tile) return;
       const c = e.tile.tileID?.canonical;
       if (!c) return;
