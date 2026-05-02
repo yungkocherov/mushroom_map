@@ -133,6 +133,38 @@ spike, или откатываться на PWA-стратегию.
 - Нет базовой карты (только paper-фон под выделами; Phase 2)
 - Нет popup'а на тапе по выделу (Phase 2)
 
+## SQLCipher (encrypted local DB)
+
+С Phase 5 (2026-05-03) local SQLite база `geobiom.db` зашифрована
+через **SQLCipher**. Реализация — `@op-engineering/op-sqlite` с флагом
+`sqlcipher: true` в `apps/mobile/package.json` (читается gradle-скриптом
+op-sqlite на билде).
+
+Encryption-key — 32-байтовый random-hex, генерируется при первом
+запуске и кладётся в Android Keystore через `expo-secure-store`
+(см. `services/dbKey.ts`). Если устройство сброшено / Keystore очищен —
+ключ восстановить нельзя, нужно пересоздать БД.
+
+### Что делать после `git pull` миграции
+
+1. `expo prebuild --platform android --clean` — op-sqlite native module
+   подключается через autolinking; clean-rebuild обязателен после
+   первой установки.
+2. `expo run:android` — соберёт APK уже с SQLCipher-вариантом
+   sqlite3.so. Первый run выполнит миграцию старой plain-DB
+   (`migrateLegacyPlainDb`) если она была от Phase 0-4.
+3. Проверить что чтение / запись спотов работает — `Tab «Споты» →
+   FAB «+» → сохранить спот → перезапустить app → спот на месте`.
+
+### Если что-то сломалось
+
+- `adb logcat | grep -E "OP-SQLITE|SQLCipher"` — увидишь сообщения
+  типа `[OP-SQLITE] using sqlcipher.` при старте.
+- `adb shell run-as ru.geobiom.mobile cat databases/geobiom.db | head -c 16` —
+  encrypted DB не должна начинаться с ASCII-magic'и `SQLite format 3`;
+  если начинается — SQLCipher не активирован (проверь
+  `op-sqlite.sqlcipher` в package.json и сделай fresh prebuild).
+
 ## Полезные команды
 
 ```bash
