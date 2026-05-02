@@ -85,10 +85,18 @@ echo "[2/3] tippecanoe → $MBTILES_FILE  (z=$MIN_ZOOM..$MAX_ZOOM)"
 #                         сильно уменьшает кол-во features на низких зумах
 #                         → пользователь видит сплошные массивы пород без дырок
 #   --detect-shared-borders — чистые рёбра полигонов (без двойных линий)
-#   --drop-densest-as-needed — если тайл >500KB, дропает densest features
-#                              пока не влезет (предохранитель от gigant-тайлов)
+#   --no-tile-size-limit — НЕ дропать ничего по размеру тайла. Без
+#                          этого флага tippecanoe выкидывает мелкие
+#                          features на low-zoom когда тайл >500KB, и
+#                          лес выглядит фрагментированно «листочками»
+#                          вместо сплошного массива. С --coalesce
+#                          совместно: мелочь сначала сливается в
+#                          соседей с теми же properties, остаётся
+#                          компактный набор. На z=5-8 тайлы могут быть
+#                          1-3MB — ОК для PMTiles HTTP Range.
 #   --extend-zooms-if-still-dropping — поднимает MAX_ZOOM если все ещё
-#                                       дропаем на нём (нам не нужно, но
+#                                       дропаем на нём (с --no-tile-
+#                                       size-limit не сработает, но
 #                                       безопасно)
 #   --simplification=10 --simplify-only-low-zooms — Дугласа-Пеккера на
 #                       промежуточных зумах, maxzoom оставляем pristine
@@ -102,7 +110,7 @@ MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/$OUT_DIR:/data" klokantech/tippeca
         --maximum-zoom="$MAX_ZOOM" \
         --coalesce \
         --detect-shared-borders \
-        --drop-densest-as-needed \
+        --no-tile-size-limit \
         --extend-zooms-if-still-dropping \
         --simplification=10 \
         --simplify-only-low-zooms \
