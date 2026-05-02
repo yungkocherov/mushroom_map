@@ -50,6 +50,10 @@ export const AuthContext = createContext<AuthState | null>(null);
 const RENEW_MARGIN_SECONDS = 60;
 const MIN_RENEW_DELAY_MS = 10_000;
 
+/** Backoff на сетевые ошибки в hydrate. 401 от authRefresh — definitive
+ *  unauth, сюда не попадает. */
+const HYDRATE_RETRY_DELAYS_MS = [1_000, 5_000, 30_000];
+
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
@@ -62,6 +66,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   tokenRef.current = accessToken;
 
   const renewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Generation counter: каждый logout/unmount инкрементирует. Любой
+  // pending hydrate сверяет свою захваченную generation перед setState
+  // и тихо выходит, если устарел. Ловит race: logout → in-flight refresh
+  // resolves → setState возвращает старого юзера.
+  const generationRef = useRef(0);
 
   const scheduleRenew = useCallback((expiresInSeconds: number) => {
     if (renewTimer.current) clearTimeout(renewTimer.current);
@@ -78,26 +89,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // hydrate вызывается из useEffect и из таймера. Держим в ref, чтобы не
   // собирать замыкание с устаревшим scheduleRenew.
-  const hydrateRef = useRef<(() => Promise<void>) | null>(null);
+  const hydrateRef = useRef<((retryIdx?: number) => Promise<void>) | null>(null);
 
-  const hydrate = useCallback(async () => {
+  const hydrate = useCallback(async (retryIdx = 0): Promise<void> => {
+    const myGen = generationRef.current;
     try {
       const refreshed = await authRefresh();
+      if (generationRef.current !== myGen) return;
       if (!refreshed) {
+        // 401 от сервера — пользователь просто не залогинен. Не ретраим.
         setStatus("unauth");
         setUser(null);
         setAccessToken(null);
         return;
       }
-      // Получили свежий access — дёргаем /me.
       const me = await fetchMe(refreshed.access_token);
+      if (generationRef.current !== myGen) return;
       setAccessToken(refreshed.access_token);
       setUser(me);
       setStatus("authenticated");
       scheduleRenew(refreshed.expires_in);
     } catch {
-      // Любая сетевая/сервовая ошибка — показываем как unauth. Фронт
-      // в этом состоянии всё ещё работоспособен, просто без кабинета.
+      if (generationRef.current !== myGen) return;
+      // Сетевая ошибка / 5xx. Не дёргаем unauth сразу — на flaky-сети
+      // это привело бы к тихому logout'у через 15 мин. Backoff-ретраи;
+      // до первой удачи или истечения списка задержек оставляем
+      // текущий status как есть (loading при первом вызове).
+      const nextDelay = HYDRATE_RETRY_DELAYS_MS[retryIdx];
+      if (nextDelay !== undefined) {
+        if (retryTimer.current) clearTimeout(retryTimer.current);
+        retryTimer.current = setTimeout(() => {
+          void hydrateRef.current?.(retryIdx + 1);
+        }, nextDelay);
+        return;
+      }
+      // Все ретраи исчерпаны — мягко уходим в unauth.
       setStatus("unauth");
       setUser(null);
       setAccessToken(null);
@@ -109,7 +135,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void hydrate();
     return () => {
+      // Снимаем pending hydrate / renew, если AuthProvider размонтировался
+      // (HMR / маршрут-смена в крайнем случае).
+      generationRef.current += 1;
       if (renewTimer.current) clearTimeout(renewTimer.current);
+      if (retryTimer.current) clearTimeout(retryTimer.current);
     };
   }, [hydrate]);
 
@@ -118,10 +148,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    // Инвалидируем все pending hydrate'ы и таймеры ДО network-запроса —
+    // если authLogout() висит на медленной сети, юзер уже не должен
+    // увидеть «свои» данные при resolved'ом старом hydrate'е.
+    generationRef.current += 1;
+    if (renewTimer.current) clearTimeout(renewTimer.current);
+    if (retryTimer.current) clearTimeout(retryTimer.current);
     try {
       await authLogout();
     } finally {
-      if (renewTimer.current) clearTimeout(renewTimer.current);
+      // Очистить SW-кэш приватных API-ответов. Иначе следующий юзер на
+      // том же устройстве получит из кеша споты предыдущего.
+      if (typeof window !== "undefined" && "caches" in window) {
+        try {
+          await caches.delete("mushroom-api");
+        } catch {
+          // best-effort; private-mode и другие edge'ы не падают.
+        }
+      }
       setStatus("unauth");
       setUser(null);
       setAccessToken(null);

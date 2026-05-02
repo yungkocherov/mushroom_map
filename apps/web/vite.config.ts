@@ -50,7 +50,17 @@ export default defineConfig({
         // настроим точнее когда появятся /api/species/:slug + /api/stats/*.
         runtimeCaching: [
           {
-            urlPattern: /\/api\//,
+            // Приватные эндпоинты (auth + user-owned data) НЕ кешируем
+            // в SW: иначе следующий пользователь на устройстве, открыв
+            // /spots до hydrate'а, увидит закешированные споты предыдущего.
+            // Public read-эндпоинты (forest/at, species/list, ...) — кешируем
+            // ниже под NetworkFirst.
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith("/api/") &&
+              !url.pathname.startsWith("/api/auth/") &&
+              !url.pathname.startsWith("/api/user/") &&
+              !url.pathname.startsWith("/api/cabinet/") &&
+              !url.pathname.startsWith("/api/mobile/"),
             handler: "NetworkFirst",
             options: {
               cacheName: "mushroom-api",

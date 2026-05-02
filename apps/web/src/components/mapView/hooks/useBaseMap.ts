@@ -31,21 +31,36 @@ export function useBaseMap(
     if (applied.current === baseMap) return;
 
     let cancelled = false;
+    let fired = false;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
 
     const apply = (style: StyleSpecification) => {
       if (cancelled) return;
       m.setStyle(style, { diff: false });
       applied.current = baseMap;
 
+      const fireOnce = () => {
+        if (cancelled || fired) return;
+        fired = true;
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        onAfterApply(baseMap);
+      };
+
       const poll = () => {
-        if (cancelled) return;
+        if (cancelled || fired) return;
         if (m.isStyleLoaded()) {
-          onAfterApply(baseMap);
+          fireOnce();
         } else {
           requestAnimationFrame(poll);
         }
       };
       requestAnimationFrame(poll);
+
+      // Hard timeout: на flaky-CDN basemap-style может не дойти до
+      // isStyleLoaded() в разумный срок. После 5с считаем «и так сойдёт» —
+      // карта уже отрисовала старый стиль; re-add layers лучше с задержкой,
+      // чем не сделать вообще (вечный RAF-poll крутится, батарея садится).
+      fallbackTimer = setTimeout(fireOnce, 5000);
     };
 
     if (baseMap === "scheme") {
@@ -56,6 +71,9 @@ export function useBaseMap(
       apply(baseMap === "satellite" ? SATELLITE_STYLE : INLINE_STYLE);
     }
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+    };
   }, [baseMap, mapRef, onAfterApply]);
 }
