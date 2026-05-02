@@ -116,9 +116,29 @@ MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/$OUT_DIR:/data" klokantech/tippeca
         "/data/forest.geojsonl"
 
 t2=$(date +%s)
-echo "[3/3] pmtiles convert → $PMTILES_FILE"
+TMP_PMTILES="$OUT_DIR/forest.pmtiles.tmp"
+echo "[3/3] pmtiles convert → $TMP_PMTILES (atomic rename после verify)"
 MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/$OUT_DIR:/data" protomaps/go-pmtiles \
-    convert "/data/forest.mbtiles" "/data/forest.pmtiles" --force
+    convert "/data/forest.mbtiles" "/data/forest.pmtiles.tmp" --force
+
+# Atomic rename: convert мог упасть в середине → старый forest.pmtiles
+# остаётся валидным. Без atomic'а Caddy раздавал бы корраптный/zero-byte
+# файл с `Cache-Control: immutable, max-age=86400` — кешировался у юзеров
+# на сутки. Verify через `pmtiles show` (parseable header).
+if [[ ! -s "$TMP_PMTILES" ]]; then
+    echo "ERROR: $TMP_PMTILES пустой или отсутствует — convert провалился" >&2
+    rm -f "$TMP_PMTILES"
+    exit 1
+fi
+
+if ! MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/$OUT_DIR:/data" protomaps/go-pmtiles \
+        show "/data/forest.pmtiles.tmp" >/dev/null 2>&1; then
+    echo "ERROR: $TMP_PMTILES не парсится — pmtiles show упал" >&2
+    rm -f "$TMP_PMTILES"
+    exit 1
+fi
+
+mv -f "$TMP_PMTILES" "$PMTILES_FILE"
 
 t3=$(date +%s)
 size=$(du -h "$PMTILES_FILE" | cut -f1)

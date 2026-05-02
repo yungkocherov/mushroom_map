@@ -30,6 +30,13 @@ if settings.sentry_dsn:
             # request body может содержать координаты сохранённых spot'ов
             # — это персональные данные с точки зрения 152-ФЗ.
             send_default_pii=False,
+            # send_default_pii=False подавляет body, но НЕ локальные
+            # переменные в стактрейсе. Без этого `log.exception(...)` в
+            # mobile.py:277 / cabinet.py / etc тащил `change` (lat/lon/note)
+            # в GlitchTip через сериализацию stack-frame'ов. Глобально
+            # отключаем locals capture; контекст добавляем явно через
+            # `extra=` в log-вызовах.
+            include_local_variables=False,
         )
     except ImportError:
         # sentry-sdk не в образе — продолжаем без observability,

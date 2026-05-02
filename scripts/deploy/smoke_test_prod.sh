@@ -57,6 +57,33 @@ check "api healthz+db" "$PROTO://$API_HOST/api/healthz"                     200
 check "species search" "$PROTO://$API_HOST/api/species?q=боровик"           200
 check "tiles HEAD"     "$PROTO://$API_HOST/tiles/forest.pmtiles"            200 HEAD
 
+# Negative checks: GlitchTip и Umami compose-overlay'и заявляют что
+# биндятся только на 127.0.0.1 ([Caddyfile:144-146] комментарий).
+# Если кто-то перенастроил overlay на 0.0.0.0 — публично доступный
+# админ-интерфейс. Лучше ловить это smoke'ом, чем по факту утечки.
+# Проверяем оба порта; ожидаем connection refused / timeout (не 200).
+check_loopback_only() {
+    local desc="$1" url="$2"
+    local code
+    code=$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 3 \
+                "$url" 2>/dev/null || echo 000)
+    # 000 = network error (refused / timed out / no host) — то что мы хотим.
+    if [[ "$code" == "000" ]]; then
+        printf "  OK    [%s] %-22s %s\n" "$code" "$desc" "$url"
+    else
+        printf "  FAIL  [%s ≠ 000] %-18s %s — порт публично доступен\n" \
+            "$code" "$desc" "$url" >&2
+        fail=1
+    fi
+}
+
+# Эти проверки делаем только против публичного host'а — на tailnet
+# 127.0.0.1 = сам узел, проверка бессмысленна.
+if [[ "$HOST" == *.* ]]; then
+    check_loopback_only "glitchtip leak"  "http://$HOST:8001/"
+    check_loopback_only "umami leak"      "http://$HOST:3000/"
+fi
+
 if (( fail )); then
     echo "[smoke] FAIL"
     exit 1
