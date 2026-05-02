@@ -50,13 +50,30 @@ vk_photos_report*.html
 .claude/
 .superpowers/
 
-# Env / secrets
+# Env / secrets / private keys
 .env
 *.env.local
+*.env.prod
+*.pem
+*.age
+id_rsa
+id_rsa.pub
+*.key
+*.p12
+.cloudflare/
+
+# Mobile signing / build outputs
+*.apk
+*.aab
+*.keystore
+*.jks
+apps/mobile/android/build/
+apps/mobile/android/.gradle/
+apps/mobile/android/app/build/
+apps/mobile/.expo/
 
 # IDE / OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
-*.env.prod
