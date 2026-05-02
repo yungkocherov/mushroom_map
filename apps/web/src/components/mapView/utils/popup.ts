@@ -4,6 +4,18 @@ import type {
   WaterDistanceResponse,
   TerrainAtResponse,
 } from "@mushroom-map/types";
+import { escapeHtml } from "../../../lib/escapeHtml";
+
+/**
+ * SECURITY: попап строится HTML-строкой (MapLibre `setHTML`), значит
+ * любая backend-string внутри `${...}` обязана пройти через `escapeHtml`.
+ * Без этого OSM-mapper'у достаточно вписать в `name` гипотетического
+ * объекта `<img src=x onerror=...>` — клик пользователя около этой точки
+ * выполнит JS в контексте geobiom.ru и сольёт access-token. Числа
+ * (lat/lon, distance_m, площадь, бонитет, проценты) escape'ить не надо.
+ * Если переписываем попап на `setDOMContent`/React — это правило теряет
+ * силу, но пока — обязательно.
+ */
 
 const FOREST_NAMES: Record<string, string> = {
   pine: "Сосновый лес",
@@ -64,8 +76,9 @@ const WATER_KIND_LABEL: Record<string, string> = {
 function buildWaterHtml(water: WaterDistanceResponse | null): string {
   if (!water || !water.nearest) return "";
   const n = water.nearest;
-  const label = WATER_KIND_LABEL[n.kind] ?? n.kind;
-  const named = n.name ? ` «${n.name}»` : "";
+  // n.kind, n.name из gazetteer/water_zone/wetland — backend-controlled.
+  const label = escapeHtml(WATER_KIND_LABEL[n.kind] ?? n.kind);
+  const named = n.name ? ` «${escapeHtml(n.name)}»` : "";
   // Покажем все три источника если они разные — даёт понимание контекста
   const bs = water.by_source;
   const detailBits: string[] = [];
@@ -92,8 +105,12 @@ function buildTerrainHtml(t: TerrainAtResponse | null): string {
 function buildSoilHtml(soil: SoilAtResponse | null): string {
   if (!soil || !soil.polygon) return "";
   const p = soil.polygon;
-  const accomp = [p.soil1, p.soil2, p.soil3].filter(Boolean).map(s => s!.descript);
-  const parent = p.parent1?.name;
+  // descript / parent.name — текст из EGRPR soil-db (backend), escape обязателен.
+  const accomp = [p.soil1, p.soil2, p.soil3]
+    .filter(Boolean)
+    .map((s) => escapeHtml(s!.descript));
+  const parent = p.parent1?.name ? escapeHtml(p.parent1.name) : "";
+  const soil0Descript = escapeHtml(p.soil0.descript);
   const profile = soil.profile_nearest;
   const profileBits: string[] = [];
   if (profile) {
@@ -104,7 +121,7 @@ function buildSoilHtml(soil: SoilAtResponse | null): string {
   return `
     <div style="margin-top:8px;padding-top:6px;border-top:1px solid #eee">
       <div style="font-size:11px;color:#888;margin-bottom:3px">Почва</div>
-      <div style="font-size:12px;color:#333">${p.soil0.descript}</div>
+      <div style="font-size:12px;color:#333">${soil0Descript}</div>
       ${accomp.length ? `<div style="font-size:10px;color:#888;margin-top:1px">+ ${accomp.join("; ")}</div>` : ""}
       ${parent ? `<div style="font-size:10px;color:#888;margin-top:1px">Порода: ${parent}</div>` : ""}
       ${profileBits.length ? `<div style="font-size:10px;color:#666;margin-top:2px">${profileBits.join(" · ")}</div>` : ""}
@@ -187,7 +204,9 @@ export function buildPopupHtml(
   }
 
   const f = data.forest;
-  const forestName = FOREST_NAMES[f.dominant_species] ?? f.dominant_species;
+  // FOREST_NAMES — статический справочник, безопасный; fallback ?? f.dominant_species
+  // тащит raw backend-slug, поэтому общий escape после resolve.
+  const forestName = escapeHtml(FOREST_NAMES[f.dominant_species] ?? f.dominant_species);
   const areaStr = f.area_m2 ? `${(f.area_m2 / 10_000).toFixed(1)} га` : "";
   const curMonth = new Date().getMonth() + 1;
 
@@ -197,7 +216,7 @@ export function buildPopupHtml(
   // композиция пород в %% (нет в данных). Эти поля не помогают грибнику.
   const metaBits: string[] = [];
   if (f.age_group != null)
-    metaBits.push(f.age_group);
+    metaBits.push(escapeHtml(f.age_group));
   if (f.bonitet != null && f.bonitet >= 1 && f.bonitet <= 5)
     metaBits.push(`бонитет ${ROMAN[f.bonitet]}`);
   const metaStr = metaBits.join(" · ");
@@ -218,13 +237,17 @@ export function buildPopupHtml(
       const aff = s.affinity ? Math.round(s.affinity * 100) : 0;
       // Имя — ссылка на детальную страницу /species/:slug. Полный
       // переход (full nav) приемлем — это уход с карты на контент.
+      // name_ru / name_lat — backend-controlled (species table), escape обязателен.
+      // slug — ASCII по контракту, но encodeURIComponent + escapeHtml на всякий.
+      const nameRu = escapeHtml(s.name_ru);
+      const nameLat = s.name_lat ? escapeHtml(s.name_lat) : "";
       const nameCell = s.slug
-        ? `<a href="/species/${encodeURIComponent(s.slug)}" style="${style};text-decoration:none;border-bottom:1px dotted currentColor">${s.name_ru}</a>`
-        : s.name_ru;
+        ? `<a href="/species/${encodeURIComponent(s.slug)}" style="${style};text-decoration:none;border-bottom:1px dotted currentColor">${nameRu}</a>`
+        : nameRu;
       return `<tr class="sp-row" data-p="${isPriority ? 1 : 0}" data-s="${inSeason ? 1 : 0}"
           style="display:${isPriority ? "table-row" : "none"}">
         <td style="${style};padding:2px 6px 2px 0">${nameCell}</td>
-        <td style="color:#aaa;font-size:10px;padding:2px 6px 2px 0;font-style:italic">${s.name_lat ?? ""}</td>
+        <td style="color:#aaa;font-size:10px;padding:2px 6px 2px 0;font-style:italic">${nameLat}</td>
         <td style="font-size:10px;color:#555;padding:2px 6px 2px 0;white-space:nowrap">${months}</td>
         <td style="font-size:10px;color:#888;padding:2px 0">${aff}%</td>
       </tr>`;
