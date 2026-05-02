@@ -46,7 +46,17 @@ interface Props {
   mapRef: React.MutableRefObject<MapLibreMap | null>;
 }
 
+/**
+ * Временно отключено: shimmer мерцал на zoom transitions для уже-кешированных
+ * тайлов (pmtiles cache hit + MVT decode = 200-500ms даже без сети).
+ * Вернуться когда придумаем как отличать «реально-медленный fetch» от
+ * «zoom-transition»: возможно через map.getSource(...).loaded() polling
+ * либо tracking time-since-zoomend.
+ */
+const SHIMMER_ENABLED = false;
+
 export function ForestLoadingOverlay({ mapRef }: Props) {
+  if (!SHIMMER_ENABLED) return null;
   const [pending, setPending] = useState<PendingMap>(() => new globalThis.Map());
   // bumpаем при move/zoom — re-projection без хранения pixel-coords
   const [proj, setProj] = useState(0);
