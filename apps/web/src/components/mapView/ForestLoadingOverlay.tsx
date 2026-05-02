@@ -53,9 +53,11 @@ export function ForestLoadingOverlay({ mapRef }: Props) {
   const [attachTick, setAttachTick] = useState(0);
   const rafRef = useRef<number | null>(null);
   // Отложенный show: per-tile setTimeout, чтобы fast (cached) loads
-  // не успели мелькнуть shimmer'ом. Если tile loaded в течение
-  // SHIMMER_DELAY_MS — таймер cancel'ится и shimmer не появляется.
-  const SHIMMER_DELAY_MS = 200;
+  // не успели мелькнуть shimmer'ом. Cache-hit'ы и zoom transitions
+  // обычно укладываются в 400-500ms (Range fetch + MVT decode +
+  // polygon prep). Свежие тайлы с прода — секунды. 600ms — компромисс:
+  // быстрые операции тихие, медленные показывают shimmer.
+  const SHIMMER_DELAY_MS = 600;
   const showTimers = useRef<globalThis.Map<string, ReturnType<typeof setTimeout>>>(
     new globalThis.Map(),
   );
