@@ -6,20 +6,52 @@ import { TILES_BASE } from "../utils/api";
 import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
 
 export const FOREST_PMTILES_URL = `pmtiles://${TILES_BASE}/forest.pmtiles`;
+export const FOREST_LO_PMTILES_URL = `pmtiles://${TILES_BASE}/forest_lo.pmtiles`;
 
+/**
+ * Forest состоит из ДВУХ pmtiles-источников и ДВУХ layer'ов:
+ *
+ *   forest-lo (z=5..7):  forest_lo.pmtiles, ~MB, same-species union'ы
+ *                        внутри породы → крупные блобы. Цвета те же что
+ *                        и full forest. Грузится в 10-30× быстрее на
+ *                        обзорных зумах.
+ *   forest    (z=8..13): forest.pmtiles, 737MB. Реальные вы́делы
+ *                        Рослесхоза, каждый со своими границами +
+ *                        properties.
+ *
+ * При z=7.x → z=8.0 happens layer swap. MapLibre layer.minzoom inclusive,
+ * .maxzoom exclusive — 7.99 рисует только forest-lo, 8.0 только forest.
+ *
+ * setForestVisibility переключает оба layer'а синхронно.
+ */
 export function addForestLayer(m: Map): void {
   if (m.getLayer("forest-fill")) return;
   try {
     if (!m.getSource("forest")) {
       m.addSource("forest", { type: "vector", url: FOREST_PMTILES_URL });
     }
+    if (!m.getSource("forest_lo")) {
+      m.addSource("forest_lo", { type: "vector", url: FOREST_LO_PMTILES_URL });
+    }
     const beforeId = findFirstSymbolLayerId(m);
+    m.addLayer(
+      {
+        id: "forest-lo-fill",
+        type: "fill",
+        source: "forest_lo",
+        "source-layer": "forest_lo",
+        maxzoom: 8,
+        paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
+      },
+      beforeId,
+    );
     m.addLayer(
       {
         id: "forest-fill",
         type: "fill",
         source: "forest",
         "source-layer": "forest",
+        minzoom: 8,
         paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
       },
       beforeId,
@@ -31,6 +63,7 @@ export function addForestLayer(m: Map): void {
 }
 
 export function setForestVisibility(m: Map, visible: boolean): void {
-  if (m.getLayer("forest-fill"))
-    m.setLayoutProperty("forest-fill", "visibility", visible ? "visible" : "none");
+  const visibility = visible ? "visible" : "none";
+  if (m.getLayer("forest-fill")) m.setLayoutProperty("forest-fill", "visibility", visibility);
+  if (m.getLayer("forest-lo-fill")) m.setLayoutProperty("forest-lo-fill", "visibility", visibility);
 }

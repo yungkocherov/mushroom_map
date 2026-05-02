@@ -1,0 +1,31 @@
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  overflow: hidden;
+}
+
+.shimmer {
+  position: absolute;
+  background: linear-gradient(
+    115deg,
+    rgba(220, 220, 220, 0.25) 0%,
+    rgba(180, 180, 180, 0.5) 50%,
+    rgba(220, 220, 220, 0.25) 100%
+  );
+  background-size: 200% 100%;
+  animation: forest-shimmer 1.4s linear infinite;
+  /* мягкая граница — без агрессивного разделения тайлов */
+  outline: 1px solid rgba(0, 0, 0, 0.04);
+  outline-offset: -1px;
+}
+
+@keyframes forest-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}

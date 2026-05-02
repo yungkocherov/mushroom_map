@@ -17,6 +17,7 @@ import { LayerGrid } from "./mapView/LayerGrid";
 import { MapOverlays } from "./mapView/MapOverlays";
 import { CursorReadout } from "./mapView/CursorReadout";
 import { SpeciesFilterBadge } from "./mapView/SpeciesFilterBadge";
+import { ForestLoadingOverlay } from "./mapView/ForestLoadingOverlay";
 
 import {
   useLayerVisibility,
@@ -90,6 +91,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
 
       <Legend />
       <CursorReadout mapRef={map} />
+      <ForestLoadingOverlay mapRef={map} ready={mapReady} />
       <MapOverlays />
       <SpeciesFilterBadge />
     </div>

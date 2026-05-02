@@ -116,24 +116,26 @@ export function useMapLayers(
     }
   }, [visible, loaded, mapRef, ready, setLoaded, setVisible, setErrorMsg]);
 
+  // forestColorMode + speciesFilter применяются и к forest-fill (z>=8), и
+  // к forest-lo-fill (z<=7) — оба должны выглядеть одинаково при переключении.
+  // forest_lo не имеет полей bonitet/age_group → в этих режимах layer
+  // упадёт в "default" цвет (`#9e9e9e`); приемлемый visual fallback.
   useEffect(() => {
     const m = mapRef.current;
-    if (!m || !m.getLayer("forest-fill")) return;
-    m.setPaintProperty("forest-fill", "fill-color", paintForMode(forestColorMode));
+    if (!m) return;
+    const color = paintForMode(forestColorMode);
+    if (m.getLayer("forest-fill")) m.setPaintProperty("forest-fill", "fill-color", color);
+    if (m.getLayer("forest-lo-fill")) m.setPaintProperty("forest-lo-fill", "fill-color", color);
   }, [forestColorMode, mapRef, ready]);
 
   useEffect(() => {
     const m = mapRef.current;
-    if (!m || !m.getLayer("forest-fill")) return;
-    if (!speciesFilter) {
-      m.setFilter("forest-fill", null);
-    } else {
-      m.setFilter("forest-fill", [
-        "in",
-        ["get", "dominant_species"],
-        ["literal", speciesFilter],
-      ]);
-    }
+    if (!m) return;
+    const filter = speciesFilter
+      ? ["in", ["get", "dominant_species"], ["literal", speciesFilter]] as never
+      : null;
+    if (m.getLayer("forest-fill")) m.setFilter("forest-fill", filter);
+    if (m.getLayer("forest-lo-fill")) m.setFilter("forest-lo-fill", filter);
   }, [speciesFilter, mapRef, ready]);
 
   const reapplyAll = useCallback(() => {
@@ -153,14 +155,14 @@ export function useMapLayers(
       entry.setVisibility(m, visible[entry.id]);
     });
 
-    if (m.getLayer("forest-fill")) {
-      m.setPaintProperty("forest-fill", "fill-color", paintForMode(forestColorMode));
-      if (speciesFilter) {
-        m.setFilter("forest-fill", [
-          "in",
-          ["get", "dominant_species"],
-          ["literal", speciesFilter],
-        ]);
+    const color = paintForMode(forestColorMode);
+    const filter = speciesFilter
+      ? ["in", ["get", "dominant_species"], ["literal", speciesFilter]] as never
+      : null;
+    for (const id of ["forest-fill", "forest-lo-fill"]) {
+      if (m.getLayer(id)) {
+        m.setPaintProperty(id, "fill-color", color);
+        if (filter) m.setFilter(id, filter);
       }
     }
   }, [mapRef, loaded, visible, forestColorMode, speciesFilter]);
