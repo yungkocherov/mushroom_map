@@ -80,11 +80,12 @@ echo "[2/3] tippecanoe → $MBTILES_FILE  (z=$MIN_ZOOM..$MAX_ZOOM)"
 # Tippecanoe v1.24.1 (klokantech/tippecanoe). Флаги:
 #   -l forest           — layer name (matches frontend forestStyle.ts source-layer)
 #   --read-parallel     — параллельное чтение line-delimited GeoJSON
-#   --coalesce          — склеивает смежные features с одинаковыми
-#                         properties (dominant_species + bonitet + age_group),
-#                         сильно уменьшает кол-во features на низких зумах
-#                         → пользователь видит сплошные массивы пород без дырок
 #   --detect-shared-borders — чистые рёбра полигонов (без двойных линий)
+#   (--coalesce НАМЕРЕННО НЕ используется: tippecanoe сливал соседние
+#    same-species вы́делы в один MVT-feature, и при отзумивании вы́делы
+#    «исчезали» в общую заливку, теряя свои границы и идентичность.
+#    Без --coalesce каждый из 1.68M вы́делов сохраняется как отдельная
+#    feature на всех зумах z=8-13. Файл крупнее, но детализация честная.)
 #   --no-tile-size-limit — НЕ дропать ничего по размеру тайла. Без
 #                          этого флага tippecanoe выкидывает мелкие
 #                          features на low-zoom когда тайл >500KB, и
@@ -108,7 +109,6 @@ MSYS_NO_PATHCONV=1 docker run --rm -v "$(pwd)/$OUT_DIR:/data" klokantech/tippeca
         -l forest \
         --minimum-zoom="$MIN_ZOOM" \
         --maximum-zoom="$MAX_ZOOM" \
-        --coalesce \
         --detect-shared-borders \
         --no-tile-size-limit \
         --extend-zooms-if-still-dropping \
