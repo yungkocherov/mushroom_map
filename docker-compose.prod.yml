@@ -58,6 +58,14 @@ services:
       DATABASE_URL:                  postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       API_CORS_ORIGINS:              ${API_CORS_ORIGINS}
       JWT_SECRET:                    ${JWT_SECRET}
+      # Отдельный ключ для подписи OAuth state-JWT (PR-W2a). Если не
+      # задан — settings.effective_oauth_state_secret фолбекнётся на
+      # JWT_SECRET, поведение остаётся валидным (но слабее).
+      OAUTH_STATE_SECRET:            ${OAUTH_STATE_SECRET:-}
+      # slowapi rate limiting (PR-W2a). False (default) → NoLimiter stub,
+      # лимиты не применяются. True активирует @limiter.limit() на
+      # /api/auth/* и /api/places/search.
+      RATE_LIMIT_ENABLED:            ${RATE_LIMIT_ENABLED:-false}
       COOKIE_SECURE:                 ${COOKIE_SECURE:-true}
       YANDEX_CLIENT_ID:              ${YANDEX_CLIENT_ID}
       YANDEX_CLIENT_SECRET:          ${YANDEX_CLIENT_SECRET}
