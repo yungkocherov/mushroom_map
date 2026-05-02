@@ -1,0 +1,23 @@
+# Dependabot config — следит за SHA-pinned GitHub Actions и предлагает PR'ы
+# с обновлением SHA при выходе нового релиза.
+#
+# Без этого SHA-pin (см. .github/workflows/*.yml) превращается в форму
+# "застрял на старой версии навсегда". С этим — каждую неделю PR с
+# актуальным SHA, который можно ревьюить и мержить руками.
+#
+# Расширения: package-ecosystem: npm / pip / docker — добавим в
+# отдельных PR'ах когда дойдём до lockfile'ов (см. plan PR-W5b).
+
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    commit-message:
+      prefix: "chore(deps)"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+      - "github-actions"
