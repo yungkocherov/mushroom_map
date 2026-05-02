@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Asset } from "expo-asset";
 import {
   MapView,
@@ -20,16 +20,27 @@ import {
 import { getLayerLocalUri } from "../../services/regions";
 import { buildMapStyle, type ForestSource } from "./style";
 import { ForestPopup, type ForestFeatureProps } from "./ForestPopup";
+import { SaveSpotSheet } from "../SaveSpotSheet";
 
 const TEST_ASSET = require("../../assets/forest-luzhsky.pmtiles");
+// basemap-lo-low.pmtiles генерится `pipelines/build_basemap.py`. Если
+// отсутствует на момент билда — require() падает, поэтому try/optional.
+let BASEMAP_ASSET: number | null = null;
+try {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  BASEMAP_ASSET = require("../../assets/basemap-lo-low.pmtiles");
+} catch {
+  BASEMAP_ASSET = null;
+}
 const LUZHSKY_CENTER: [number, number] = [29.85, 58.74];
 
 export function SpikeMap() {
   const [bundledUri, setBundledUri] = useState<string | null>(null);
+  const [basemapUri, setBasemapUri] = useState<string | null>(null);
   const [assetError, setAssetError] = useState<string | null>(null);
   const [popupFeature, setPopupFeature] = useState<ForestFeatureProps | null>(null);
+  const [saveSpotOpen, setSaveSpotOpen] = useState(false);
   const cameraRef = useRef<CameraRef>(null);
-  const mapRef = useRef<unknown>(null);
 
   const fix = useUserLocation((s) => s.fix);
   const followMode = useUserLocation((s) => s.followMode);
@@ -54,6 +65,14 @@ export function SpikeMap() {
         // — inner-URL обязан иметь file:// префикс. expo-asset.localUri
         // и так возвращает file:///..., поэтому prepend в style.ts.
         setBundledUri(asset.localUri);
+
+        if (BASEMAP_ASSET != null) {
+          const basemap = Asset.fromModule(BASEMAP_ASSET);
+          await basemap.downloadAsync();
+          if (!cancelled && basemap.localUri) {
+            setBasemapUri(basemap.localUri);
+          }
+        }
       } catch (err) {
         setAssetError(err instanceof Error ? err.message : "asset-error");
       }
@@ -96,8 +115,10 @@ export function SpikeMap() {
   }, [downloaded, bundledUri]);
 
   const style = useMemo(
-    () => (sources.length > 0 ? buildMapStyle(sources) : null),
-    [sources],
+    () => (sources.length > 0 || basemapUri
+      ? buildMapStyle({ forests: sources, basemapPmtilesUri: basemapUri })
+      : null),
+    [sources, basemapUri],
   );
 
   if (assetError) {
@@ -180,6 +201,21 @@ export function SpikeMap() {
         onClose={() => setPopupFeature(null)}
       />
 
+      <SaveSpotSheet
+        visible={saveSpotOpen}
+        onClose={() => setSaveSpotOpen(false)}
+      />
+
+      <Pressable
+        style={[
+          styles.fab,
+          !fix && styles.fabDisabled,
+        ]}
+        onPress={() => fix && setSaveSpotOpen(true)}
+      >
+        <Text style={styles.fabPlus}>+</Text>
+      </Pressable>
+
       <View style={styles.statusOverlay} pointerEvents="none">
         <Text style={styles.statusText}>
           GPS: {permission === "granted" ? "✓" : permission}
@@ -239,5 +275,29 @@ const styles = StyleSheet.create({
     color: palette.light.danger,
     fontSize: fontSize.sm,
     marginTop: spacing[2],
+  },
+  fab: {
+    position: "absolute",
+    right: spacing[4],
+    bottom: spacing[5],
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: palette.light.chanterelle,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: palette.light.ink,
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  fabDisabled: {
+    opacity: 0.4,
+  },
+  fabPlus: {
+    color: palette.light.paper,
+    fontSize: 32,
+    lineHeight: 36,
   },
 });

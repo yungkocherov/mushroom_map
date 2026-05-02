@@ -21,6 +21,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="regions" options={{ headerShown: true }} />
+        <Stack.Screen name="spot/[uuid]" options={{ headerShown: true }} />
       </Stack>
     </GestureHandlerRootView>
   );

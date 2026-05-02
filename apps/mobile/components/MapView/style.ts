@@ -1,12 +1,13 @@
 import { palette } from "@mushroom-map/tokens/native";
 
 /**
- * Phase 2 map style. Multi-source: один vector source per downloaded
- * region (forest-{slug}). Когда юзер ничего не скачал — fallback на
- * bundled `forest-luzhsky.pmtiles` placeholder (Phase 0 spike).
+ * Phase 2 map style. Multi-source: optional basemap-lo + один vector
+ * source per downloaded region (forest-{slug}). Background paper
+ * рисуется до basemap'а (если он есть) и forest layer'а.
  *
- * Phase 2.3 (basemap pipeline) добавит ещё `basemap` source снизу
- * (paper фон сейчас выступает как placeholder под выделами).
+ * basemap собирается через `pipelines/build_basemap.py` (planetiler
+ * с OpenMapTiles schema). Без basemap'а — paper-фон + forest как в
+ * Phase 0/1.
  */
 
 const SPECIES_COLOR_MATCH = [
@@ -43,12 +44,132 @@ export type ForestSource = {
   pmtilesFileUri: string;
 };
 
+export type StyleInput = {
+  forests: ForestSource[];
+  /** OpenMapTiles-schema basemap (planetiler output). Optional. */
+  basemapPmtilesUri?: string | null;
+};
+
 /**
- * Build style.json для текущего набора forest sources. Если пусто —
- * рисуется только paper-фон (юзер увидит пустой экран и поймёт что
- * нужно скачать регион).
+ * Layers OpenMapTiles schema, которые мы рисуем (subset, optimized for
+ * forest-day use case): water, waterway, transportation, place,
+ * boundary, landcover. Pruning'ом стараемся не перегружать карту:
+ * урбанистика / housenumbers / poi скрыты (грибнику не нужны
+ * магазины и mailboxes).
  */
-export function buildMapStyle(sources: ForestSource[]): Style {
+function buildBasemapLayers(): unknown[] {
+  return [
+    {
+      id: "basemap-water",
+      type: "fill",
+      source: "basemap",
+      "source-layer": "water",
+      paint: {
+        "fill-color": "#bcd1cc",
+      },
+    },
+    {
+      id: "basemap-landcover",
+      type: "fill",
+      source: "basemap",
+      "source-layer": "landcover",
+      filter: ["in", ["get", "class"], ["literal", ["wood", "forest", "scrub", "grass", "park"]]],
+      paint: {
+        "fill-color": "#dde6d2",
+        "fill-opacity": 0.6,
+      },
+    },
+    {
+      id: "basemap-waterway",
+      type: "line",
+      source: "basemap",
+      "source-layer": "waterway",
+      minzoom: 9,
+      paint: {
+        "line-color": "#7a9bb0",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 9, 0.5, 14, 1.5],
+      },
+    },
+    {
+      id: "basemap-roads",
+      type: "line",
+      source: "basemap",
+      "source-layer": "transportation",
+      minzoom: 8,
+      filter: [
+        "in",
+        ["get", "class"],
+        ["literal", ["motorway", "trunk", "primary", "secondary", "tertiary", "minor", "service", "track"]],
+      ],
+      paint: {
+        "line-color": [
+          "match",
+          ["get", "class"],
+          "motorway", "#a86b0f",
+          "trunk", "#a86b0f",
+          "primary", "#c08020",
+          "#7a7a70",
+        ],
+        "line-width": [
+          "interpolate", ["linear"], ["zoom"],
+          8, 0.4,
+          12, 1.2,
+          14, 2.4,
+        ],
+      },
+    },
+    {
+      id: "basemap-boundary",
+      type: "line",
+      source: "basemap",
+      "source-layer": "boundary",
+      filter: ["<=", ["get", "admin_level"], 6],
+      paint: {
+        "line-color": "#aaa295",
+        "line-width": 0.6,
+        "line-dasharray": [3, 2],
+      },
+    },
+    {
+      id: "basemap-place-names",
+      type: "symbol",
+      source: "basemap",
+      "source-layer": "place",
+      minzoom: 7,
+      filter: ["in", ["get", "class"], ["literal", ["city", "town", "village", "hamlet"]]],
+      layout: {
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": [
+          "match",
+          ["get", "class"],
+          "city", 14,
+          "town", 12,
+          "village", 11,
+          "hamlet", 10,
+          11,
+        ],
+        "text-anchor": "center",
+      },
+      paint: {
+        "text-color": "#20241e",
+        "text-halo-color": "#f5f1e6",
+        "text-halo-width": 1.5,
+      },
+    },
+  ];
+}
+
+/**
+ * Build style.json для текущего набора forest sources + (опц.) basemap.
+ * Если пусто и нет basemap'а — рисуется только paper-фон.
+ */
+export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
+  // Backward-compat: array → treat as forests-only
+  const normalized: StyleInput = Array.isArray(input)
+    ? { forests: input }
+    : input;
+
   const mapSources: Record<string, unknown> = {};
   const layers: unknown[] = [
     {
@@ -60,7 +181,15 @@ export function buildMapStyle(sources: ForestSource[]): Style {
     },
   ];
 
-  for (const src of sources) {
+  if (normalized.basemapPmtilesUri) {
+    mapSources.basemap = {
+      type: "vector",
+      url: `pmtiles://${normalized.basemapPmtilesUri}`,
+    };
+    layers.push(...buildBasemapLayers());
+  }
+
+  for (const src of normalized.forests) {
     mapSources[src.id] = {
       type: "vector",
       url: `pmtiles://${src.pmtilesFileUri}`,
@@ -73,7 +202,7 @@ export function buildMapStyle(sources: ForestSource[]): Style {
       minzoom: 8,
       paint: {
         "fill-color": SPECIES_COLOR_MATCH as unknown as string,
-        "fill-opacity": 0.85,
+        "fill-opacity": 0.7,
         "fill-outline-color": palette.light.forestDeep,
       },
     });
@@ -87,9 +216,7 @@ export function buildMapStyle(sources: ForestSource[]): Style {
 }
 
 /**
- * Backward-compat alias для Phase 0 single-source spike. Удалить
- * после того как SpikeMap полностью переедет на multi-source.
- *
+ * Backward-compat alias для Phase 0 single-source spike.
  * @deprecated use buildMapStyle()
  */
 export function buildSpikeStyle(forestPmtilesUri: string): Style {
