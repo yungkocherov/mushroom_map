@@ -39,8 +39,15 @@ fail=0
 check() {
     local desc="$1" url="$2" expect_status="${3:-200}" method="${4:-GET}"
     local code
-    code=$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 15 \
-                -X "$method" "$url" 2>/dev/null || echo 000)
+    # `-X HEAD` ломает curl в неожиданных местах (тело тянется как при GET,
+    # %{http_code} собирается криво); канонический способ HEAD — `-I`.
+    if [[ "$method" == "HEAD" ]]; then
+        code=$(curl -ksSI -o /dev/null -w '%{http_code}' --max-time 15 \
+                    "$url" 2>/dev/null || echo 000)
+    else
+        code=$(curl -ksS -o /dev/null -w '%{http_code}' --max-time 15 \
+                    -X "$method" "$url" 2>/dev/null || echo 000)
+    fi
     if [[ "$code" == "$expect_status" ]]; then
         printf "  OK    [%s] %-22s %s\n" "$code" "$desc" "$url"
     else
@@ -51,10 +58,14 @@ check() {
 
 echo "[smoke] target: $PROTO://$HOST (api: $API_HOST)"
 
+# species search: q-параметр URL-encoded — bash literal с UTF-8 байтами
+# улетит как mojibake через caddy/uvicorn и даст 400. `boletus` (slug
+# внутри name_lat) триггерит ту же кодопаду в БД и проверяет тот же
+# контракт.
 check "frontend SPA"   "$PROTO://$HOST/"                                    200
 check "api health"     "$PROTO://$API_HOST/health"                          200
 check "api healthz+db" "$PROTO://$API_HOST/api/healthz"                     200
-check "species search" "$PROTO://$API_HOST/api/species?q=боровик"           200
+check "species search" "$PROTO://$API_HOST/api/species/?q=boletus"          200
 check "tiles HEAD"     "$PROTO://$API_HOST/tiles/forest.pmtiles"            200 HEAD
 
 # Negative checks: GlitchTip и Umami compose-overlay'и заявляют что
@@ -79,7 +90,11 @@ check_loopback_only() {
 
 # Эти проверки делаем только против публичного host'а — на tailnet
 # 127.0.0.1 = сам узел, проверка бессмысленна.
-if [[ "$HOST" == *.* ]]; then
+# Также скипаем если observability-стек ещё не задеплоен — connection
+# refused на 8001/3000 возвращает 000 ровно как «всё хорошо», но это
+# false positive (скан не должен сообщать «безопасно» если сервиса
+# просто нет). Активируется через SMOKE_OBS=1.
+if [[ "$HOST" == *.* && "${SMOKE_OBS:-0}" == "1" ]]; then
     check_loopback_only "glitchtip leak"  "http://$HOST:8001/"
     check_loopback_only "umami leak"      "http://$HOST:3000/"
 fi
