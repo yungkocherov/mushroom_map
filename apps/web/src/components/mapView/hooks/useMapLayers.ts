@@ -60,12 +60,16 @@ export function useMapLayers(
       }
     });
 
-    async function lazyAdd(m: Map, entry: LayerEntry) {
+    async function lazyAdd(capturedMap: Map, entry: LayerEntry) {
       inFlightRef.current.add(entry.id);
       let mustReleaseInFlight = true;
       try {
         if (entry.pmtiles) {
           const resp = await fetch(`${TILES_BASE}/${entry.pmtiles}`, { method: "HEAD" });
+          // Карту могли пересоздать (HMR / route swap) пока мы ждали HEAD;
+          // не трогаем устаревший instance — это валилось ошибками при
+          // basemap-switch'ах на flaky-сети.
+          if (mapRef.current !== capturedMap) return;
           if (!resp.ok) {
             setErrorMsg(entry.missingMsg ?? `Слой "${entry.id}" недоступен`);
             setTimeout(() => setErrorMsg(null), 5000);
@@ -78,24 +82,27 @@ export function useMapLayers(
         // immediately hiding is fine; but skipping the work when not wanted is cleaner.
         const doAdd = () => {
           try {
+            if (mapRef.current !== capturedMap) return;
             const stillWanted = useLayerVisibility.getState().visible[entry.id];
-            entry.add(m);
+            entry.add(capturedMap);
             setLoaded(entry.id, true);
-            entry.setVisibility(m, stillWanted);
+            entry.setVisibility(capturedMap, stillWanted);
           } finally {
             inFlightRef.current.delete(entry.id);
           }
         };
-        if (m.isStyleLoaded()) {
+        if (capturedMap.isStyleLoaded()) {
           doAdd();
         } else {
-          m.once("idle", doAdd);
+          capturedMap.once("idle", doAdd);
         }
         mustReleaseInFlight = false; // doAdd will release it
       } catch {
-        setErrorMsg(`Не удалось проверить ${entry.pmtiles ?? entry.id}`);
-        setTimeout(() => setErrorMsg(null), 4000);
-        setVisible(entry.id, false);
+        if (mapRef.current === capturedMap) {
+          setErrorMsg(`Не удалось проверить ${entry.pmtiles ?? entry.id}`);
+          setTimeout(() => setErrorMsg(null), 4000);
+          setVisible(entry.id, false);
+        }
       } finally {
         if (mustReleaseInFlight) inFlightRef.current.delete(entry.id);
       }
