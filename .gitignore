@@ -54,6 +54,16 @@ vk_photos_report*.html
 .env
 *.env.local
 
+# Mobile build artifacts + signing
+apps/mobile/android/app/build/
+apps/mobile/android/.gradle/
+apps/mobile/android/build/
+apps/mobile/android/local.properties
+*.keystore
+*.jks
+*.apk
+*.aab
+
 # IDE / OS
 .vscode/
 .idea/
