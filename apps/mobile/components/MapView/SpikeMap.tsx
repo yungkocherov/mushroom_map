@@ -251,13 +251,11 @@ export function SpikeMap() {
       />
 
       <Pressable
-        style={[
-          styles.fab,
-          !fix && styles.fabDisabled,
-        ]}
+        style={styles.fab}
         onPress={() => {
-          if (!fix) return;
-          setSaveSpotCoords(null); // FAB → SaveSpotSheet возьмёт GPS fix
+          // FAB всегда активен. Если GPS-фикса нет, sheet всё равно
+          // откроется — внутри есть UI «нажми длительно на карту».
+          setSaveSpotCoords(null);
           setSaveSpotOpen(true);
         }}
       >

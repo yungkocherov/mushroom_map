@@ -1,37 +1,30 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
-import {
+import BottomSheet, {
   BottomSheetBackdrop,
-  BottomSheetModal,
   BottomSheetScrollView,
   BottomSheetTextInput,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
+import {
+  TREE_TAGS,
+  MUSHROOM_TAGS,
+  BERRY_TAGS,
+  type SpotTag,
+} from "@mushroom-map/types";
 import { useUserLocation } from "../stores/useUserLocation";
 import { useSpots } from "../stores/useSpots";
 
 const RATING_LABELS = ["плохое", "скучное", "норм", "хорошее", "отличное"];
 
-const POPULAR_TAGS = [
-  "boletus-edulis",
-  "leccinum-scabrum",
-  "leccinum-aurantiacum",
-  "cantharellus-cibarius",
-  "imleria-badia",
-  "lactarius-deliciosus",
-  "russula",
-] as const;
-
-const TAG_RU: Record<string, string> = {
-  "boletus-edulis": "Белый",
-  "leccinum-scabrum": "Подберёзовик",
-  "leccinum-aurantiacum": "Подосиновик",
-  "cantharellus-cibarius": "Лисичка",
-  "imleria-badia": "Польский",
-  "lactarius-deliciosus": "Рыжик",
-  russula: "Сыроежка",
-};
+// Группы для рендера (заголовки + tag-list). Совпадают с web SaveSpotModal:
+// деревья → грибы → ягоды.
+const TAG_GROUPS: Array<{ title: string; tags: SpotTag[] }> = [
+  { title: "Деревья", tags: TREE_TAGS },
+  { title: "Грибы", tags: MUSHROOM_TAGS },
+  { title: "Ягоды", tags: BERRY_TAGS },
+];
 
 type Props = {
   visible: boolean;
@@ -46,7 +39,7 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   // Берём явные координаты (long-press на карте) или fallback на GPS.
   const effectiveCoords = coords ?? (fix ? { lat: fix.lat, lon: fix.lon } : null);
 
-  const sheetRef = useRef<BottomSheetModal>(null);
+  const sheetRef = useRef<BottomSheet>(null);
 
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
@@ -54,17 +47,19 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   const [tags, setTags] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 
-  // Контролируем present/dismiss извне через `visible`-prop —
-  // SpikeMap пока остаётся single-source-of-truth открытости.
+  // Управление через ref-методы (snapToIndex / close). `index` prop у
+  // BottomSheet не всегда реагирует на изменение из родителя — особенно
+  // при close из onPress кнопки внутри sheet'а. Императивный API
+  // надёжнее.
   useEffect(() => {
     if (visible) {
       setName("");
       setNote("");
       setRating(4);
       setTags(new Set());
-      sheetRef.current?.present();
+      sheetRef.current?.snapToIndex(0);
     } else {
-      sheetRef.current?.dismiss();
+      sheetRef.current?.close();
     }
   }, [visible]);
 
@@ -114,10 +109,12 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   };
 
   return (
-    <BottomSheetModal
+    <BottomSheet
       ref={sheetRef}
+      index={-1}
       snapPoints={snapPoints}
-      onDismiss={onClose}
+      enablePanDownToClose
+      onClose={onClose}
       backdropComponent={renderBackdrop}
       backgroundStyle={styles.sheetBg}
       handleIndicatorStyle={styles.handle}
@@ -187,28 +184,32 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
         </View>
         <Text style={styles.ratingLabel}>{RATING_LABELS[rating - 1]}</Text>
 
-        <Text style={styles.label}>Что нашёл</Text>
-        <View style={styles.tagsRow}>
-          {POPULAR_TAGS.map((slug) => (
-            <Pressable
-              key={slug}
-              style={[
-                styles.tagChip,
-                tags.has(slug) && styles.tagChipActive,
-              ]}
-              onPress={() => toggleTag(slug)}
-            >
-              <Text
-                style={[
-                  styles.tagChipText,
-                  tags.has(slug) && styles.tagChipTextActive,
-                ]}
-              >
-                {TAG_RU[slug] ?? slug}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        {TAG_GROUPS.map((group) => (
+          <View key={group.title}>
+            <Text style={styles.label}>{group.title}</Text>
+            <View style={styles.tagsRow}>
+              {group.tags.map((tag) => (
+                <Pressable
+                  key={tag.slug}
+                  style={[
+                    styles.tagChip,
+                    tags.has(tag.slug) && styles.tagChipActive,
+                  ]}
+                  onPress={() => toggleTag(tag.slug)}
+                >
+                  <Text
+                    style={[
+                      styles.tagChipText,
+                      tags.has(tag.slug) && styles.tagChipTextActive,
+                    ]}
+                  >
+                    {tag.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        ))}
 
         <View style={styles.actions}>
           <Pressable style={styles.btnSecondary} onPress={onClose}>
@@ -228,7 +229,7 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
           </Pressable>
         </View>
       </BottomSheetScrollView>
-    </BottomSheetModal>
+    </BottomSheet>
   );
 }
 

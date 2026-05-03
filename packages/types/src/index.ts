@@ -19,3 +19,4 @@ export * from "./places";
 export * from "./stats";
 export * from "./auth";
 export * from "./cabinet";
+export * from "./spotTags";

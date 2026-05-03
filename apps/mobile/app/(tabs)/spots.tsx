@@ -11,17 +11,8 @@ import { useRouter } from "expo-router";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
 import { useSpots } from "../../stores/useSpots";
 import { useUserLocation } from "../../stores/useUserLocation";
+import { tagLabel } from "@mushroom-map/types";
 import type { LocalSpot } from "../../services/spotsRepo";
-
-const TAG_RU: Record<string, string> = {
-  "boletus-edulis": "Белый",
-  "leccinum-scabrum": "Подберёзовик",
-  "leccinum-aurantiacum": "Подосиновик",
-  "cantharellus-cibarius": "Лисичка",
-  "imleria-badia": "Польский",
-  "lactarius-deliciosus": "Рыжик",
-  russula: "Сыроежка",
-};
 
 const RATING_DOT: Record<number, string> = {
   1: palette.light.danger,
@@ -53,7 +44,7 @@ function formatDistance(meters: number): string {
 
 function formatTagsLine(tags: string[]): string {
   if (tags.length === 0) return "";
-  return tags.map((t) => TAG_RU[t] ?? t).slice(0, 3).join(" · ");
+  return tags.map(tagLabel).slice(0, 3).join(" · ");
 }
 
 type SpotWithDistance = LocalSpot & { distanceMeters: number | null };

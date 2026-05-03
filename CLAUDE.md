@@ -33,9 +33,9 @@ forecast-репо не пишем — это двусторонний контр
   `docs/mobile-app-2026-05.md` секции «Phase 0 progress». `tsc
   --noEmit` зелёный.
 - **Phase 1 foundation** — bottom tabs (Карта/Споты/Виды/Настройки),
-  SQLite (`expo-sqlite`, **NOT encrypted** в v0 — TODO до Phase 5
-  release: op-sqlite или quick-sqlite + SQLCipher), `spotsRepo.ts`,
-  API client с `Authorization: Bearer device_token`, Yandex OAuth PKCE.
+  SQLite (`@op-engineering/op-sqlite` с SQLCipher с Phase 5 = 2026-05-04;
+  до этого `expo-sqlite` plain), `spotsRepo.ts`, API client с
+  `Authorization: Bearer device_token`, Yandex OAuth PKCE.
 - **Phase 2** (essentially done) — per-district pmtiles pipeline +
   download manager + popup на выделе + basemap. Migration 032
   (`admin_area.slug`), `pipelines/build_district_tiles.py` (auto-cluster
@@ -57,10 +57,34 @@ forecast-репо не пишем — это двусторонний контр
   flow (welcome / GPS permission / regions), species catalog tab
   с filters + detail screen, NetworkBanner (NetInfo + animated
   slide-in при offline + pending-spots indicator).
-- **Phase 5 prep** outstanding: gorhom/bottom-sheet вместо Modal,
-  production keystore (signed APK), SQLCipher через op-sqlite,
-  real app icon + splash design, RuStore submission, bundled
-  forest-luzhsky placeholder removal.
+- **Phase 5 prep** (mostly done 2026-05-04):
+  - ✅ gorhom/bottom-sheet вместо Modal в SaveSpotSheet (BottomSheet
+    с императивным API через `snapToIndex`/`close` ref-методы; index-prop
+    при изменении из родителя на complex-картах не всегда триггерит
+    snap-to-close, ref надёжнее).
+  - ✅ SQLCipher через `@op-engineering/op-sqlite` v15. Encryption key —
+    32-байтовый random в Android Keystore через `expo-secure-store`.
+    Adapter в `services/db.ts` сохраняет API expo-sqlite. Миграция
+    legacy plain DB (`migrateLegacyPlainDb`) one-shot копирует данные
+    при первом cold-start после апгрейда.
+  - ✅ bundled `forest-luzhsky.pmtiles` placeholder удалён (-40 МБ APK).
+    Online режим через api.geobiom.ru покрывает «нет скачанных регионов».
+  - ✅ production keystore tooling: `apps/mobile/scripts/generate-release-keystore.sh`
+    + Expo config-plugin `apps/mobile/plugins/with-release-signing.js`
+    идемпотентно патчит build.gradle после prebuild. Документ
+    `apps/mobile/docs/release-signing.md` + RuStore чек-лист
+    `apps/mobile/docs/rustore-submission.md`.
+  - ✅ brand-icon + adaptive + splash через PIL-скрипт
+    `apps/mobile/scripts/generate-icons.py` (paper-фон + green
+    mushroom-cap, реплика web-icon.svg).
+  - ✅ tags словарь шарится через `@mushroom-map/types/spotTags` —
+    единый source-of-truth для web (SaveSpotModal/SpotDetailPage/
+    CabinetSpotsPage) и mobile (SaveSpotSheet, spots list, spot detail).
+    11 деревьев + 13 грибов + 5 ягод. `tagLabel(slug)` → русское имя.
+  - 🟡 Outstanding: bundled glyphs PBF для basemap labels (mobile сейчас
+    без подписей городов/рек), реальный keystore generation + бэкап
+    (manual у автора), RuStore submission (manual + ИП регистрация
+    в RuStore Developer Console).
 - **Backend дельта:**
   - Миграция `db/migrations/031_user_spot_client_uuid.sql` —
     `client_uuid UUID UNIQUE` (partial), `client_updated_at`,

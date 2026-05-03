@@ -12,19 +12,10 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Magnetometer } from "expo-sensors";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
+import { tagLabel } from "@mushroom-map/types";
 import { useSpots } from "../../stores/useSpots";
 import { useUserLocation } from "../../stores/useUserLocation";
 import type { LocalSpot } from "../../services/spotsRepo";
-
-const TAG_RU: Record<string, string> = {
-  "boletus-edulis": "Белый",
-  "leccinum-scabrum": "Подберёзовик",
-  "leccinum-aurantiacum": "Подосиновик",
-  "cantharellus-cibarius": "Лисичка",
-  "imleria-badia": "Польский",
-  "lactarius-deliciosus": "Рыжик",
-  russula: "Сыроежка",
-};
 
 const RATING_DOT: Record<number, string> = {
   1: palette.light.danger,
@@ -240,7 +231,7 @@ export default function SpotDetailScreen() {
             {spot.tags.map((slug) => (
               <View key={slug} style={styles.tagChip}>
                 <Text style={styles.tagChipText}>
-                  {TAG_RU[slug] ?? slug}
+                  {tagLabel(slug)}
                 </Text>
               </View>
             ))}
