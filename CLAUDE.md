@@ -267,11 +267,29 @@ npm run dev                        # репо-root: workspace @mushroom-map/web
 # Migrations
 .venv/Scripts/python.exe db/migrate.py
 
-# Re-ingest Rosleshoz vydels (takes ~15-30 min for ~1M polygons)
+# ─── Rosleshoz/FGIS forest data — TWO pipelines ─────────────────────────
+#
+# 1) NEW (2026-05-04): bulk-скрап через ФГИС API endpoint'ы
+#    attributesinfo + boundingbox + WMS GetFeatureInfo. 100% покрытие
+#    выделов ЛО (~96k выделов в одном object_id-блоке). См.
+#    pipelines/scrape_fgislk_attrinfo.py + memory/reference_fgislk_api.md.
+#    ВКЛЮЧИ AdGuard split-tunnel exclusion для pub.fgislk.gov.ru
+#    + pub5.fgislk.gov.ru (или выключи VPN полностью) — RU IP обязателен.
+.venv/Scripts/python.exe pipelines/scrape_fgislk_attrinfo.py \
+  --start 109022831 --end 109118831 --workers 30
+#    Output: data/rosleshoz/fgislk_attrinfo.geojson (~95k features)
+#    Resume-friendly: progress в data/rosleshoz/fgislk_attrinfo_progress.db
+#
+# 2) DEPRECATED (но всё ещё в репо до cleanup'а): MVT-скрап через
+#    pub5.fgislk.gov.ru/plk/gwc-01/geowebcache/. Возвращает ~70% выделов
+#    (server-side rendering rules выкидывают мелкие/низкоприоритетные).
+#    Не использовать для новых ingest'ов.
+#
+# Re-ingest GeoJSON в forest_polygon (~15-30 min для ~95k полигонов)
 .venv/Scripts/python.exe -u pipelines/ingest_forest.py \
   --source rosleshoz --region lenoblast \
-  --rosleshoz-file data/rosleshoz/fgislk_vydels_karelian.geojson \
-  --rosleshoz-version fgislk-karelian-2026 \
+  --rosleshoz-file data/rosleshoz/fgislk_attrinfo.geojson \
+  --rosleshoz-version fgislk-attrinfo-2026-05 \
   --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
 
 # Rebuild forest.pmtiles after ingest (needs DATABASE_URL env var, NOT --dsn).
@@ -288,10 +306,10 @@ DATABASE_URL="postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map" \
 .venv/Scripts/python.exe -u pipelines/build_terrain.py --step all
 .venv/Scripts/python.exe -u pipelines/build_hillshade_tiles.py
 
-# Re-extract geojson from cached FGIS LK vector tiles
-.venv/Scripts/python.exe -u pipelines/fgislk_tiles_to_geojson.py \
-  --in data/rosleshoz/fgislk_tiles \
-  --out data/rosleshoz/fgislk_vydels.geojson
+# DEPRECATED MVT extract (см. выше: используй scrape_fgislk_attrinfo вместо)
+# .venv/Scripts/python.exe -u pipelines/fgislk_tiles_to_geojson.py \
+#   --in data/rosleshoz/fgislk_tiles \
+#   --out data/rosleshoz/fgislk_vydels.geojson
 
 # Districts (admin_level=6) of LO from OSM Overpass. Populates admin_area
 # and rewrites region.geometry via ST_Union of districts.

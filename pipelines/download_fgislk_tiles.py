@@ -1,4 +1,17 @@
 """
+**DEPRECATED 2026-05-04** — заменён на `pipelines/scrape_fgislk_attrinfo.py`.
+
+Старый MVT-pipeline отдавал ~70% выделов (server-side rendering rules
+на тайлах выкидывают мелкие/низкоприоритетные полигоны). Новый flow
+через `attributesinfo` + `boundingbox` + WMS GetFeatureInfo даёт 100%.
+Подробности в `memory/reference_fgislk_api.md`.
+
+Этот скрипт оставлен в репо до полного cleanup'а — тайлы могут пригодиться
+для cross-validation, и удаление потребует синхронных правок в
+`fgislk_tiles_to_geojson.py`. Не использовать для новых ingest'ов.
+
+──────────────────────────────────────────────────────────────────────
+
 download_fgislk_tiles: качает MVT-тайлы слоя FOREST_LAYERS:FOREST из ФГИС ЛК
 через публичный GeoWebCache.
 

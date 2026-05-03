@@ -260,9 +260,14 @@ class RosleshozForestSource(ForestSource):
             meta_out["trace_fraction"] = result.trace_fraction
         if self._resolved_id_field and self._resolved_id_field in attrs:
             meta_out["vydel_id"] = attrs[self._resolved_id_field]
-        if (b := attrs.get("bonitet")) is not None:
+        # Бонитет: классическое поле `bonitet` (старый MVT-pipeline) или
+        # `yield_class` (новый attributesinfo-pipeline 2026-05).
+        bonitet_raw = attrs.get("bonitet")
+        if bonitet_raw is None:
+            bonitet_raw = attrs.get("yield_class")
+        if bonitet_raw is not None:
             try:
-                meta_out["bonitet"] = int(b)
+                meta_out["bonitet"] = int(bonitet_raw)
             except (ValueError, TypeError):
                 pass
         if (ts := attrs.get("timber_stock")) is not None:
@@ -275,6 +280,23 @@ class RosleshozForestSource(ForestSource):
                 pass
         if (ag := attrs.get("age_group")) is not None:
             meta_out["age_group"] = str(ag)
+        # Новые поля (attributesinfo pipeline 2026-05).
+        if (td := attrs.get("taxation_date")) is not None:
+            meta_out["taxation_date"] = str(td)
+        if (sq := attrs.get("square")) is not None:
+            try:
+                meta_out["square_ha"] = float(sq)
+            except (ValueError, TypeError):
+                pass
+        if (ev := attrs.get("event")) is not None:
+            meta_out["planned_event"] = str(ev)
+        if (qn := attrs.get("forest_quarter_number")) is not None:
+            meta_out["forest_quarter"] = str(qn)
+        if (oid := attrs.get("object_id")) is not None:
+            try:
+                meta_out["fgislk_object_id"] = int(oid)
+            except (ValueError, TypeError):
+                pass
 
         return NormalizedForestPolygon(
             source=self.source_code,

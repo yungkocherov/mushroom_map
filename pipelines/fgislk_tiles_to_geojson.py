@@ -1,4 +1,10 @@
 """
+**DEPRECATED 2026-05-04** — заменён на `pipelines/scrape_fgislk_attrinfo.py`
+(см. `memory/reference_fgislk_api.md`). MVT-тайлы дают subset ~70%
+выделов и упрощённые геометрии. Не использовать для новых ingest'ов.
+
+──────────────────────────────────────────────────────────────────────
+
 fgislk_tiles_to_geojson: превращает скачанные MVT-тайлы ФГИС ЛК в один GeoJSON
 с лесотаксационными выделами (TAXATION_PIECE_PVS).
 
