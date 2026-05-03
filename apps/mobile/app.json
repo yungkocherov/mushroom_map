@@ -35,6 +35,7 @@
       "expo-asset",
       "expo-font",
       "@maplibre/maplibre-react-native",
+      "./plugins/with-release-signing",
       [
         "expo-build-properties",
         {

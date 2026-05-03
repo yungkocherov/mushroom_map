@@ -63,24 +63,25 @@ npm install --workspaces --include-workspace-root
 hoists большую часть в `node_modules` корня, native pods/aar — в
 workspace-локальном).
 
-## Тестовые тайлы для spike
+## Тайлы леса
 
-Spike читает `apps/mobile/assets/forest-luzhsky.pmtiles` — клипнутую
-по bbox Лужского района копию forest.pmtiles. Файл в `.gitignore`
-(большой). Сгенерировать локально:
+С Phase 5 (2026-05-03) bundled `forest-luzhsky.pmtiles` placeholder
+**удалён**. Источники forest-выделов теперь:
 
-```bash
-# из репо-root, при docker compose up -d db
-.venv/Scripts/python.exe -u scripts/clip_pmtiles_to_district.py \
-  --district luzhsky \
-  --in data/tiles/forest.pmtiles \
-  --out apps/mobile/assets/forest-luzhsky.pmtiles
-```
+1. **Скачанные районы** (per-district pmtiles в FileSystem.documentDirectory)
+   — основной режим offline. Onboarding заставляет скачать минимум
+   один регион при первом запуске.
+2. **Online через api.geobiom.ru** (forest.pmtiles + forest_lo.pmtiles
+   через HTTP Range) — fallback когда нет скачанных регионов и есть
+   интернет.
+3. **Offline без скачанного региона** — лес не показывается, только
+   paper-фон + basemap. UI status-overlay показывает «offline · нет
+   региона». В нормальном flow эта ветка недостижима благодаря
+   onboarding'у.
 
-(Скрипт `scripts/clip_pmtiles_to_district.py` — будет добавлен в Phase 0
-вместе с реальной интеграцией. Пока — обходной путь: взять
-`data/tiles/forest.pmtiles` целиком, но осторожно — он 302 МБ, APK не
-соберётся.)
+Базовая карта (`assets/basemap-lo-low.pmtiles`, 12 МБ z0-10) **остаётся
+bundled** — генерируется через `pipelines/build_basemap.py` и тащится
+в APK как fallback offline.
 
 ## Запуск
 
@@ -131,6 +132,38 @@ spike, или откатываться на PWA-стратегию.
 - Нет каталога видов / прогноза (Phase 4)
 - Нет базовой карты (только paper-фон под выделами; Phase 2)
 - Нет popup'а на тапе по выделу (Phase 2)
+
+## SQLCipher (encrypted local DB)
+
+С Phase 5 (2026-05-03) local SQLite база `geobiom.db` зашифрована
+через **SQLCipher**. Реализация — `@op-engineering/op-sqlite` с флагом
+`sqlcipher: true` в `apps/mobile/package.json` (читается gradle-скриптом
+op-sqlite на билде).
+
+Encryption-key — 32-байтовый random-hex, генерируется при первом
+запуске и кладётся в Android Keystore через `expo-secure-store`
+(см. `services/dbKey.ts`). Если устройство сброшено / Keystore очищен —
+ключ восстановить нельзя, нужно пересоздать БД.
+
+### Что делать после `git pull` миграции
+
+1. `expo prebuild --platform android --clean` — op-sqlite native module
+   подключается через autolinking; clean-rebuild обязателен после
+   первой установки.
+2. `expo run:android` — соберёт APK уже с SQLCipher-вариантом
+   sqlite3.so. Первый run выполнит миграцию старой plain-DB
+   (`migrateLegacyPlainDb`) если она была от Phase 0-4.
+3. Проверить что чтение / запись спотов работает — `Tab «Споты» →
+   FAB «+» → сохранить спот → перезапустить app → спот на месте`.
+
+### Если что-то сломалось
+
+- `adb logcat | grep -E "OP-SQLITE|SQLCipher"` — увидишь сообщения
+  типа `[OP-SQLITE] using sqlcipher.` при старте.
+- `adb shell run-as ru.geobiom.mobile cat databases/geobiom.db | head -c 16` —
+  encrypted DB не должна начинаться с ASCII-magic'и `SQLite format 3`;
+  если начинается — SQLCipher не активирован (проверь
+  `op-sqlite.sqlcipher` в package.json и сделай fresh prebuild).
 
 ## Полезные команды
 

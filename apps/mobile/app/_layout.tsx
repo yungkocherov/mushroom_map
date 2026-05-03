@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Stack, useRouter, useSegments } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { startSyncListener, syncSpots } from "../services/sync";
 import { preloadCatalog } from "../services/speciesCatalog";
 import { useSpots } from "../stores/useSpots";
@@ -41,17 +42,19 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="dark" />
-      <View style={{ flex: 1 }}>
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="onboarding" />
-          <Stack.Screen name="regions" options={{ headerShown: true }} />
-          <Stack.Screen name="spot/[uuid]" options={{ headerShown: true }} />
-          <Stack.Screen name="species/[slug]" options={{ headerShown: true }} />
-        </Stack>
-        <NetworkBanner />
-      </View>
+      <BottomSheetModalProvider>
+        <StatusBar style="dark" />
+        <View style={{ flex: 1 }}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="onboarding" />
+            <Stack.Screen name="regions" options={{ headerShown: true }} />
+            <Stack.Screen name="spot/[uuid]" options={{ headerShown: true }} />
+            <Stack.Screen name="species/[slug]" options={{ headerShown: true }} />
+          </Stack>
+          <NetworkBanner />
+        </View>
+      </BottomSheetModalProvider>
     </GestureHandlerRootView>
   );
 }

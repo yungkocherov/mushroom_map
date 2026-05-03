@@ -25,7 +25,6 @@ import { buildMapStyle, type ForestSource } from "./style";
 import { ForestPopup, type ForestFeatureProps } from "./ForestPopup";
 import { SaveSpotSheet } from "../SaveSpotSheet";
 
-const TEST_ASSET = require("../../assets/forest-luzhsky.pmtiles");
 // basemap-lo-low.pmtiles генерится `pipelines/build_basemap.py`. Если
 // отсутствует на момент билда — require() падает, поэтому try/optional.
 let BASEMAP_ASSET: number | null = null;
@@ -42,14 +41,15 @@ function tilesStatusLabel(
   downloadedCount: number,
   online: boolean,
 ): string {
-  if (sources.length === 0) return "—";
+  if (sources.length === 0) {
+    return online ? "—" : "offline · нет региона";
+  }
   if (downloadedCount > 0) return `${sources.length} regions`;
-  if (online && sources[0]?.id === "forest-remote") return "online";
-  return "(spike)";
+  if (online) return "online";
+  return "—";
 }
 
 export function SpikeMap() {
-  const [bundledUri, setBundledUri] = useState<string | null>(null);
   const [basemapUri, setBasemapUri] = useState<string | null>(null);
   const [assetError, setAssetError] = useState<string | null>(null);
   const [popupFeature, setPopupFeature] = useState<ForestFeatureProps | null>(null);
@@ -67,31 +67,19 @@ export function SpikeMap() {
   const online = useNetwork((s) => s.online);
 
   useEffect(() => {
+    if (BASEMAP_ASSET == null) return;
     let cancelled = false;
     (async () => {
       try {
-        const asset = Asset.fromModule(TEST_ASSET);
-        await asset.downloadAsync();
-        if (cancelled) return;
-        if (!asset.localUri) {
-          setAssetError("PMTiles asset has no localUri after download");
-          return;
-        }
-        // MapLibre Native PMTiles handler ждёт URL вида
-        //   pmtiles://file:///data/user/0/<pkg>/cache/<asset>.pmtiles
-        // — inner-URL обязан иметь file:// префикс. expo-asset.localUri
-        // и так возвращает file:///..., поэтому prepend в style.ts.
-        setBundledUri(asset.localUri);
-
-        if (BASEMAP_ASSET != null) {
-          const basemap = Asset.fromModule(BASEMAP_ASSET);
-          await basemap.downloadAsync();
-          if (!cancelled && basemap.localUri) {
-            setBasemapUri(basemap.localUri);
-          }
+        const basemap = Asset.fromModule(BASEMAP_ASSET);
+        await basemap.downloadAsync();
+        if (!cancelled && basemap.localUri) {
+          setBasemapUri(basemap.localUri);
         }
       } catch (err) {
-        setAssetError(err instanceof Error ? err.message : "asset-error");
+        // Базмап-ассет опционален — без него остаётся paper-фон, не
+        // блокируем карту. Логируем но не падаем.
+        setAssetError(err instanceof Error ? err.message : "basemap-asset-error");
       }
     })();
     return () => {
@@ -118,10 +106,12 @@ export function SpikeMap() {
 
   // Приоритет источников forest-выделов:
   //   1. Скачанные районы (per-district) — самое быстрое, работает offline
-  //   2. Online + не скачано → remote forest.pmtiles через HTTP Range
-  //      (как на сайте; нативный pmtiles plugin умеет https://)
-  //   3. Bundled placeholder (только Лужский район) — fallback offline
-  //      без скачанных регионов
+  //   2. Online + не скачано → remote forest.pmtiles + forest_lo через
+  //      HTTP Range (как на сайте; нативный pmtiles plugin умеет https://)
+  //   3. Offline без скачанных районов → лес не показывается. Onboarding
+  //      forces скачать минимум один регион при первом старте, так что
+  //      в нормальном flow эта ветка не достигается. Если юзер всё-таки
+  //      окажется тут — увидит paper-фон + basemap, статус «нет региона».
   const sources = useMemo<ForestSource[]>(() => {
     if (downloaded.size > 0) {
       return Array.from(downloaded).map((slug) => ({
@@ -145,36 +135,25 @@ export function SpikeMap() {
         },
       ];
     }
-    if (bundledUri) {
-      return [{ id: "forest", pmtilesFileUri: bundledUri }];
-    }
     return [];
-  }, [downloaded, online, bundledUri]);
+  }, [downloaded, online]);
 
+  // Style рисуется всегда — даже при пустых sources даёт paper-фон, чтоб
+  // не блокировать UI «вечным спиннером» если basemap-asset медленно
+  // распаковывается на холодном старте.
   const style = useMemo(
-    () => (sources.length > 0 || basemapUri
-      ? buildMapStyle({ forests: sources, basemapPmtilesUri: basemapUri })
-      : null),
+    () => buildMapStyle({ forests: sources, basemapPmtilesUri: basemapUri }),
     [sources, basemapUri],
   );
 
-  if (assetError) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>Tile asset error: {assetError}</Text>
-        <Text style={styles.hint}>
-          Положи forest-luzhsky.pmtiles в apps/mobile/assets/ перед запуском
-          spike (см. README).
-        </Text>
-      </View>
-    );
-  }
-
-  if (!style) {
+  // basemap-asset ещё может распаковываться при первом запуске — показываем
+  // короткий спиннер пока ни sources, ни basemap не готовы. После первого
+  // distill'а basemapUri / любая загруженная region разблокируют карту.
+  if (sources.length === 0 && !basemapUri && !assetError) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={palette.light.chanterelle} />
-        <Text style={styles.hint}>Распаковываю тайлы…</Text>
+        <Text style={styles.hint}>Готовлю карту…</Text>
       </View>
     );
   }
