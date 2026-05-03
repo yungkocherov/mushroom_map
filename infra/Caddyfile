@@ -89,6 +89,17 @@
 		header Cache-Control "public, max-age=86400, immutable"
 	}
 
+	# Glyphs (PBF-шрифты для MapLibre symbol-layer'ов). Static файлы
+	# из bind-mount /srv/mushroom-map/glyphs на VM — туда заливает
+	# scripts/deploy/sync_glyphs_to_vm.sh. Mobile-карта запрашивает их
+	# когда есть интернет; offline-bundled — Phase 6.
+	handle /glyphs/* {
+		root * /srv/mushroom-map
+		file_server
+		header Cache-Control "public, max-age=2592000, immutable"
+		header Access-Control-Allow-Origin "*"
+	}
+
 	# Все API-вызовы.
 	handle /api/* {
 		reverse_proxy api:8000 {

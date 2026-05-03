@@ -64,14 +64,23 @@ export type StyleInput = {
 };
 
 /**
+ * URL для PBF-glyphs (sdf-шрифты для symbol-layer'ов). С Phase 5
+ * (2026-05-04) хостится на api.geobiom.ru/glyphs/, online-only.
+ * Offline-bundled — Phase 6.
+ *
+ * Если шрифт указан в `text-font`, MapLibre Native сделает HTTPS-запрос
+ * к этому URL с подставленными {fontstack} и {range}. Без glyphs
+ * symbol-слои тихо не рендерятся (но карта работает).
+ */
+export const BASEMAP_GLYPHS_URL =
+  "https://api.geobiom.ru/glyphs/{fontstack}/{range}.pbf";
+
+/**
  * Layers OpenMapTiles schema, которые мы рисуем (subset, optimized for
  * forest-day use case): water, waterway, transportation, boundary,
- * landcover. Pruning'ом стараемся не перегружать карту: урбанистика /
+ * landcover, place (символьный — города/посёлки), water_name (озёра/
+ * реки). Pruning'ом стараемся не перегружать карту: урбанистика /
  * housenumbers / poi скрыты (грибнику не нужны магазины и mailboxes).
- *
- * Symbol-слои (place-names) ОТКЛЮЧЕНЫ в v0 — для них нужен bundled
- * `glyphs` PBF-pack, иначе MapLibre Native шлёт fetch на empty URL и
- * выдаёт `[HTTP] Unable to parse resourceUrl`. Bundled-шрифты — Phase 5.
  */
 function buildBasemapLayers(): unknown[] {
   return [
@@ -144,6 +153,68 @@ function buildBasemapLayers(): unknown[] {
         "line-color": "#aaa295",
         "line-width": 0.6,
         "line-dasharray": [3, 2],
+      },
+    },
+    // Подписи населённых пунктов. OpenMapTiles schema → place. У OMT-данных
+    // обычно `name:ru` для русских названий, fallback на `name`.
+    {
+      id: "basemap-place-city",
+      type: "symbol",
+      source: "basemap",
+      "source-layer": "place",
+      filter: ["in", ["get", "class"], ["literal", ["city", "town"]]],
+      minzoom: 6,
+      layout: {
+        "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],
+        "text-font": ["Noto Sans Bold"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 6, 11, 12, 16],
+        "text-anchor": "center",
+        "text-padding": 4,
+      },
+      paint: {
+        "text-color": "#3a3a36",
+        "text-halo-color": "#f5f1e6",
+        "text-halo-width": 1.6,
+      },
+    },
+    {
+      id: "basemap-place-village",
+      type: "symbol",
+      source: "basemap",
+      "source-layer": "place",
+      filter: ["in", ["get", "class"], ["literal", ["village", "hamlet", "suburb"]]],
+      minzoom: 9,
+      layout: {
+        "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 9, 10, 14, 13],
+        "text-anchor": "center",
+        "text-padding": 3,
+      },
+      paint: {
+        "text-color": "#5a5a52",
+        "text-halo-color": "#f5f1e6",
+        "text-halo-width": 1.4,
+      },
+    },
+    // Подписи водоёмов (озёра/реки) если в OMT-extract'е есть water_name.
+    {
+      id: "basemap-water-name",
+      type: "symbol",
+      source: "basemap",
+      "source-layer": "water_name",
+      minzoom: 8,
+      layout: {
+        "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],
+        "text-font": ["Noto Sans Italic"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 8, 10, 13, 12],
+        "text-anchor": "center",
+        "text-padding": 3,
+      },
+      paint: {
+        "text-color": "#456b80",
+        "text-halo-color": "#f5f1e6",
+        "text-halo-width": 1.2,
       },
     },
   ];
@@ -224,6 +295,10 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
     version: 8,
     sources: mapSources,
     layers,
+    // Glyphs URL нужен только если в стиле есть symbol-layer'ы — у нас
+    // basemap-place-* и basemap-water-name. Безопасно ставить всегда:
+    // MapLibre Native не дёргает URL пока не нужен render symbol'а.
+    glyphs: BASEMAP_GLYPHS_URL,
   };
 }
 

@@ -42,6 +42,7 @@ data/oopt/
 data/osm/
 data/soil/
 data/backups/
+data/glyphs/
 
 # VK report outputs (regenerable)
 vk_photos_report*.html

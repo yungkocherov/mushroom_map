@@ -113,6 +113,10 @@ services:
       # Статический фронт. Раздаётся блоком {$CADDY_WEB_HOST} в Caddyfile.
       # Заливается через .github/workflows/deploy-web.yml (rsync на VM).
       - ${WEB_HOST_PATH:-/srv/web}:/srv/web:ro
+      # PBF-glyphs для MapLibre symbol-layer'ов (mobile basemap labels).
+      # Раздаются handle /glyphs/* в Caddyfile из /srv/mushroom-map/glyphs.
+      # Заливаются через scripts/deploy/sync_glyphs_to_vm.sh.
+      - ${GLYPHS_HOST_PATH:-/srv/mushroom-map/glyphs}:/srv/mushroom-map/glyphs:ro
       - caddy_data:/data
       - caddy_config:/config
 
