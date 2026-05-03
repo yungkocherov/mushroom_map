@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Magnetometer } from "expo-sensors";
+import * as Linking from "expo-linking";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
 import { tagLabel } from "@mushroom-map/types";
 import { useSpots } from "../../stores/useSpots";
@@ -131,6 +132,72 @@ export default function SpotDetailScreen() {
   const distance = fix
     ? haversineMeters(fix.lat, fix.lon, spot.lat, spot.lon)
     : null;
+
+  /**
+   * Запустить навигатор. Пробуем native-deeplink → fallback на web.
+   * Yandex.Maps: yandexmaps://maps.yandex.ru/?rtext=src~dst&rtt=auto.
+   *   Когда GPS-фикса нет, передаём только destination — Yandex
+   *   сам попросит «откуда» при открытии.
+   * 2GIS:  dgis://2gis.ru/routeSearch/rsType/car/to/lon,lat
+   * Google: https://www.google.com/maps/dir/?api=1&destination=lat,lon
+   */
+  const openInNavigator = async (
+    app: "yandex" | "twogis" | "google",
+  ) => {
+    if (!spot) return;
+    const dst = `${spot.lat},${spot.lon}`;
+    let nativeUrl = "";
+    let webUrl = "";
+    switch (app) {
+      case "yandex": {
+        const rtext = fix
+          ? `${fix.lat},${fix.lon}~${dst}`
+          : `~${dst}`;
+        nativeUrl = `yandexmaps://maps.yandex.ru/?rtext=${rtext}&rtt=auto`;
+        webUrl = `https://yandex.ru/maps/?rtext=${encodeURIComponent(rtext)}&rtt=auto`;
+        break;
+      }
+      case "twogis": {
+        nativeUrl = `dgis://2gis.ru/routeSearch/rsType/car/to/${spot.lon},${spot.lat}`;
+        webUrl = `https://2gis.ru/directions/points/${spot.lon}%2C${spot.lat}`;
+        break;
+      }
+      case "google": {
+        webUrl = `https://www.google.com/maps/dir/?api=1&destination=${dst}&travelmode=driving`;
+        nativeUrl = webUrl;
+        break;
+      }
+    }
+    // canOpenURL на Android 11+ требует <queries> в манифесте — без
+    // декларации возвращает false даже если приложение установлено.
+    // Поэтому идём в лоб: пробуем native, на любой ошибке fall-back на
+    // web (любой Android 100% откроет https://).
+    try {
+      if (nativeUrl !== webUrl) {
+        try {
+          await Linking.openURL(nativeUrl);
+          return;
+        } catch {
+          // app не установлено или схема не зарегистрирована
+        }
+      }
+      await Linking.openURL(webUrl);
+    } catch (err) {
+      Alert.alert(
+        "Не удалось открыть",
+        err instanceof Error ? err.message : "navigator-failed",
+      );
+    }
+  };
+
+  const onRoute = () => {
+    Alert.alert("Маршрут", "Открыть в:", [
+      { text: "Яндекс.Карты", onPress: () => openInNavigator("yandex") },
+      { text: "2ГИС", onPress: () => openInNavigator("twogis") },
+      { text: "Google Maps", onPress: () => openInNavigator("google") },
+      { text: "Отмена", style: "cancel" },
+    ]);
+  };
 
   const onDelete = () => {
     Alert.alert(
@@ -259,6 +326,10 @@ export default function SpotDetailScreen() {
           </View>
         </View>
       ) : null}
+
+      <Pressable style={styles.routeBtn} onPress={onRoute}>
+        <Text style={styles.routeBtnText}>Проложить маршрут</Text>
+      </Pressable>
 
       <Pressable style={styles.deleteBtn} onPress={onDelete}>
         <Text style={styles.deleteBtnText}>Удалить спот</Text>
@@ -405,8 +476,19 @@ const styles = StyleSheet.create({
     color: palette.light.paper,
     fontSize: fontSize.sm,
   },
-  deleteBtn: {
+  routeBtn: {
     marginTop: spacing[5],
+    padding: spacing[4],
+    borderRadius: radius.md,
+    backgroundColor: palette.light.chanterelle,
+    alignItems: "center",
+  },
+  routeBtnText: {
+    color: palette.light.paper,
+    fontSize: fontSize.body,
+  },
+  deleteBtn: {
+    marginTop: spacing[3],
     padding: spacing[4],
     borderRadius: radius.md,
     borderWidth: 1,
