@@ -1,5 +1,6 @@
 import * as Crypto from "expo-crypto";
 import { getDb } from "./db";
+import { deleteSpotPhotosDir } from "./spotPhotos";
 
 export type LocalSpot = {
   client_uuid: string;
@@ -10,25 +11,37 @@ export type LocalSpot = {
   note: string | null;
   rating: number | null;
   tags: string[];
+  /** Имена файлов внутри documentDirectory/spot-photos/{client_uuid}/ */
+  photos: string[];
   created_at: number;
   updated_at: number;
   deleted_at: number | null;
   sync_state: "pending" | "synced" | "conflict";
 };
 
-type Row = Omit<LocalSpot, "tags"> & { tags: string };
+type Row = Omit<LocalSpot, "tags" | "photos"> & {
+  tags: string;
+  photos: string | null;
+};
+
+function parseStringArray(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed.filter((t): t is string => typeof t === "string");
+    }
+  } catch {
+    // fall through
+  }
+  return [];
+}
 
 function rowToSpot(row: Row): LocalSpot {
-  let tags: string[] = [];
-  try {
-    const parsed = JSON.parse(row.tags);
-    if (Array.isArray(parsed)) tags = parsed.filter((t) => typeof t === "string");
-  } catch {
-    tags = [];
-  }
   return {
     ...row,
-    tags,
+    tags: parseStringArray(row.tags),
+    photos: parseStringArray(row.photos),
   };
 }
 
@@ -39,6 +52,13 @@ export type CreateSpotInput = {
   note?: string | null;
   rating?: number | null;
   tags?: string[];
+  photos?: string[];
+  /**
+   * Если задан — будет использован как client_uuid вместо случайного.
+   * Полезно для случаев когда uuid нужен ДО save'а (например, фото
+   * сохраняются в spot-photos/{uuid}/ ещё до создания строки).
+   */
+  client_uuid?: string;
 };
 
 function randomUuid(): string {
@@ -48,13 +68,15 @@ function randomUuid(): string {
 export async function createSpot(input: CreateSpotInput): Promise<LocalSpot> {
   const db = await getDb();
   const now = Date.now();
-  const uuid = randomUuid();
+  const uuid = input.client_uuid ?? randomUuid();
   const tagsJson = JSON.stringify(input.tags ?? []);
 
+  const photosJson = JSON.stringify(input.photos ?? []);
   await db.runAsync(
     `INSERT INTO local_spot
-      (client_uuid, lat, lon, name, note, rating, tags, created_at, updated_at, sync_state)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      (client_uuid, lat, lon, name, note, rating, tags, photos,
+       created_at, updated_at, sync_state)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
     [
       uuid,
       input.lat,
@@ -63,6 +85,7 @@ export async function createSpot(input: CreateSpotInput): Promise<LocalSpot> {
       input.note ?? null,
       input.rating ?? null,
       tagsJson,
+      photosJson,
       now,
       now,
     ],
@@ -101,18 +124,25 @@ export async function updateSpot(input: UpdateSpotInput): Promise<LocalSpot> {
   const now = Date.now();
   const sets: string[] = [];
   const values: (string | number | null)[] = [];
-  const map: Record<keyof CreateSpotInput, string> = {
+  // client_uuid не апдейтится (PK).
+  type UpdatableField = Exclude<keyof CreateSpotInput, "client_uuid">;
+  const map: Record<UpdatableField, string> = {
     lat: "lat",
     lon: "lon",
     name: "name",
     note: "note",
     rating: "rating",
     tags: "tags",
+    photos: "photos",
   };
-  for (const k of Object.keys(map) as (keyof CreateSpotInput)[]) {
+  for (const k of Object.keys(map) as UpdatableField[]) {
     if (input[k] !== undefined) {
       sets.push(`${map[k]} = ?`);
-      values.push(k === "tags" ? JSON.stringify(input.tags ?? []) : (input[k] as never));
+      if (k === "tags" || k === "photos") {
+        values.push(JSON.stringify((input[k] as string[] | undefined) ?? []));
+      } else {
+        values.push(input[k] as never);
+      }
     }
   }
   if (sets.length === 0) {
@@ -141,6 +171,10 @@ export async function softDeleteSpot(uuid: string): Promise<void> {
     "UPDATE local_spot SET deleted_at = ?, updated_at = ?, sync_state = 'pending' WHERE client_uuid = ?",
     [now, now, uuid],
   );
+  // Best-effort: чистим папку с фото. Если sync с сервером ещё не
+  // прошёл и фото там — это поведение мы примем как acceptable: фото
+  // лежат локально и будут потеряны (server-side photos sync — Phase 6+).
+  await deleteSpotPhotosDir(uuid);
 }
 
 export async function listPendingForSync(): Promise<LocalSpot[]> {

@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS local_spot (
   note        TEXT,
   rating      INTEGER CHECK (rating IS NULL OR rating BETWEEN 1 AND 5),
   tags        TEXT    NOT NULL DEFAULT '[]',
+  photos      TEXT    NOT NULL DEFAULT '[]',
   created_at  INTEGER NOT NULL,
   updated_at  INTEGER NOT NULL,
   deleted_at  INTEGER,
@@ -95,13 +96,39 @@ function wrap(rawDb: OpDB): CompatDb {
   };
 }
 
+const SCHEMA_VERSION = 2;
+
+/**
+ * v1 → v2 (2026-05-04): добавлена колонка `photos` (JSON-массив имён
+ * файлов внутри documentDirectory/spot-photos/{uuid}/). Существующие
+ * строки получат '[]' через DEFAULT в ALTER TABLE.
+ */
 async function migrate(db: CompatDb): Promise<void> {
+  // SCHEMA_V1 идемпотентен — IF NOT EXISTS защищает свежий запуск.
   await db.execAsync(SCHEMA_V1);
+
+  let version = 0;
   const row = await db.getFirstAsync<{ version: number }>(
     "SELECT version FROM schema_version LIMIT 1",
   );
   if (!row) {
     await db.runAsync("INSERT INTO schema_version (version) VALUES (1)");
+    version = 1;
+  } else {
+    version = row.version;
+  }
+
+  if (version < 2) {
+    // SQLite ADD COLUMN не падает если колонка уже есть → проверим.
+    const cols = await db.getAllAsync<{ name: string }>(
+      "PRAGMA table_info(local_spot)",
+    );
+    if (!cols.some((c) => c.name === "photos")) {
+      await db.runAsync(
+        "ALTER TABLE local_spot ADD COLUMN photos TEXT NOT NULL DEFAULT '[]'",
+      );
+    }
+    await db.runAsync("UPDATE schema_version SET version = ?", [2]);
   }
 }
 
@@ -144,8 +171,17 @@ async function migrateLegacyPlainDb(encryptionKey: string): Promise<void> {
     // ATTACH-stmt с '' as KEY означает no-encryption.
     await newDb.execute(`ATTACH DATABASE ? AS plain KEY ''`, [legacyPath]);
     // Скопировать таблицы (только те которые могут содержать данные).
+    // Explicit columns — у legacy plain нет колонки photos (v2-only),
+    // SELECT * сломал бы схему-INSERT. На v2-only DB '[]' добавляется
+    // через DEFAULT.
     await newDb.execute(
-      `INSERT OR IGNORE INTO local_spot SELECT * FROM plain.local_spot`,
+      `INSERT OR IGNORE INTO local_spot
+        (client_uuid, server_id, lat, lon, name, note, rating, tags,
+         created_at, updated_at, deleted_at, sync_state)
+       SELECT
+        client_uuid, server_id, lat, lon, name, note, rating, tags,
+        created_at, updated_at, deleted_at, sync_state
+       FROM plain.local_spot`,
     );
     await newDb.execute(
       `INSERT OR IGNORE INTO sync_meta SELECT * FROM plain.sync_meta`,

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Alert, Pressable, StyleSheet, Text, View } from "react-native";
+import { Alert, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
   BottomSheetTextInput,
   type BottomSheetBackdropProps,
 } from "@gorhom/bottom-sheet";
+import * as Crypto from "expo-crypto";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
 import {
   TREE_TAGS,
@@ -15,6 +16,11 @@ import {
 } from "@mushroom-map/types";
 import { useUserLocation } from "../stores/useUserLocation";
 import { useSpots } from "../stores/useSpots";
+import {
+  pickAndStorePhoto,
+  photoUri,
+  deletePhotoFile,
+} from "../services/spotPhotos";
 
 const RATING_LABELS = ["плохое", "скучное", "норм", "хорошее", "отличное"];
 
@@ -45,6 +51,12 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   const [note, setNote] = useState("");
   const [rating, setRating] = useState(4);
   const [tags, setTags] = useState<Set<string>>(new Set());
+  const [photos, setPhotos] = useState<string[]>([]);
+  // UUID черновика. Фото сохраняются по этому UUID до createSpot —
+  // если юзер отменяет, они "осиротевают" в documentDirectory; не
+  // критично (≤1 МБ на каждый), всё равно при удалении app они уйдут.
+  // Cleanup отменённых черновиков — Phase 6 если станет проблемой.
+  const [draftUuid, setDraftUuid] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Управление через ref-методы (snapToIndex / close). `index` prop у
@@ -57,6 +69,8 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
       setNote("");
       setRating(4);
       setTags(new Set());
+      setPhotos([]);
+      setDraftUuid(Crypto.randomUUID());
       sheetRef.current?.snapToIndex(0);
     } else {
       sheetRef.current?.close();
@@ -85,6 +99,22 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
     setTags(next);
   };
 
+  const onAddPhoto = async (source: "camera" | "library") => {
+    if (!draftUuid) return;
+    try {
+      const filename = await pickAndStorePhoto(draftUuid, source);
+      if (filename) setPhotos((p) => [...p, filename]);
+    } catch (err) {
+      Alert.alert("Ошибка", err instanceof Error ? err.message : "photo-failed");
+    }
+  };
+
+  const onRemovePhoto = async (filename: string) => {
+    if (!draftUuid) return;
+    setPhotos((p) => p.filter((f) => f !== filename));
+    await deletePhotoFile(draftUuid, filename);
+  };
+
   const onSave = async () => {
     if (!effectiveCoords) {
       Alert.alert("Нет координат", "Подожди GPS-фикса или коснись карты длительно.");
@@ -93,12 +123,14 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
     setBusy(true);
     try {
       await add({
+        client_uuid: draftUuid ?? undefined,
         lat: effectiveCoords.lat,
         lon: effectiveCoords.lon,
         name: name.trim() || null,
         note: note.trim() || null,
         rating,
         tags: Array.from(tags),
+        photos,
       });
       onClose();
     } catch (err) {
@@ -183,6 +215,42 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
           ))}
         </View>
         <Text style={styles.ratingLabel}>{RATING_LABELS[rating - 1]}</Text>
+
+        <Text style={styles.label}>Фото</Text>
+        <View style={styles.photosRow}>
+          {photos.map((filename) =>
+            draftUuid ? (
+              <Pressable
+                key={filename}
+                onLongPress={() => onRemovePhoto(filename)}
+              >
+                <Image
+                  source={{ uri: photoUri(draftUuid, filename) }}
+                  style={styles.photoThumb}
+                />
+              </Pressable>
+            ) : null,
+          )}
+          <Pressable
+            style={styles.photoAddBtn}
+            onPress={() => onAddPhoto("camera")}
+          >
+            <Text style={styles.photoAddIcon}>📷</Text>
+            <Text style={styles.photoAddText}>Камера</Text>
+          </Pressable>
+          <Pressable
+            style={styles.photoAddBtn}
+            onPress={() => onAddPhoto("library")}
+          >
+            <Text style={styles.photoAddIcon}>🖼</Text>
+            <Text style={styles.photoAddText}>Галерея</Text>
+          </Pressable>
+        </View>
+        {photos.length > 0 ? (
+          <Text style={styles.photoHint}>
+            долгое нажатие на превью — удалить
+          </Text>
+        ) : null}
 
         {TAG_GROUPS.map((group) => (
           <View key={group.title}>
@@ -317,6 +385,40 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing[2],
+  },
+  photosRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing[2],
+  },
+  photoThumb: {
+    width: 76,
+    height: 76,
+    borderRadius: radius.sm,
+    backgroundColor: palette.light.paperRise,
+  },
+  photoAddBtn: {
+    width: 76,
+    height: 76,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: palette.light.rule,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: palette.light.paperRise,
+  },
+  photoAddIcon: {
+    fontSize: fontSize.h2,
+  },
+  photoAddText: {
+    fontSize: fontSize.xs,
+    color: palette.light.inkDim,
+  },
+  photoHint: {
+    fontSize: fontSize.xs,
+    color: palette.light.inkDim,
+    marginTop: spacing[1],
   },
   tagChip: {
     paddingVertical: spacing[2],

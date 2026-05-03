@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Animated,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +17,7 @@ import { tagLabel } from "@mushroom-map/types";
 import { useSpots } from "../../stores/useSpots";
 import { useUserLocation } from "../../stores/useUserLocation";
 import type { LocalSpot } from "../../services/spotsRepo";
+import { photoUri } from "../../services/spotPhotos";
 
 const RATING_DOT: Record<number, string> = {
   1: palette.light.danger,
@@ -217,6 +219,25 @@ export default function SpotDetailScreen() {
         />
       </View>
 
+      {spot.photos.length > 0 ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Фото</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.photosScroll}
+          >
+            {spot.photos.map((filename) => (
+              <Image
+                key={filename}
+                source={{ uri: photoUri(spot.client_uuid, filename) }}
+                style={styles.photoLarge}
+              />
+            ))}
+          </ScrollView>
+        </View>
+      ) : null}
+
       {spot.note ? (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Заметка</Text>
@@ -363,6 +384,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: spacing[2],
+  },
+  photosScroll: {
+    gap: spacing[2],
+    paddingRight: spacing[5],
+  },
+  photoLarge: {
+    width: 200,
+    height: 200,
+    borderRadius: radius.md,
+    backgroundColor: palette.light.paperRise,
   },
   tagChip: {
     paddingVertical: spacing[2],
