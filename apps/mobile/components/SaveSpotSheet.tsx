@@ -271,7 +271,7 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
                       tags.has(tag.slug) && styles.tagChipTextActive,
                     ]}
                   >
-                    {tag.label}
+                    {tag.icon} {tag.label}
                   </Text>
                 </Pressable>
               ))}

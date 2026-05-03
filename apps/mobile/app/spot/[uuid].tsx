@@ -14,7 +14,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { Magnetometer } from "expo-sensors";
 import * as Linking from "expo-linking";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
-import { tagLabel } from "@mushroom-map/types";
+import { tagLabel, tagIcon } from "@mushroom-map/types";
 import { useSpots } from "../../stores/useSpots";
 import { useUserLocation } from "../../stores/useUserLocation";
 import type { LocalSpot } from "../../services/spotsRepo";
@@ -319,7 +319,7 @@ export default function SpotDetailScreen() {
             {spot.tags.map((slug) => (
               <View key={slug} style={styles.tagChip}>
                 <Text style={styles.tagChipText}>
-                  {tagLabel(slug)}
+                  {tagIcon(slug)} {tagLabel(slug)}
                 </Text>
               </View>
             ))}

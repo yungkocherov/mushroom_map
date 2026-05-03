@@ -2,7 +2,7 @@
  * Словарь тэгов для user_spot — группированный по «деревья» / «грибы» /
  * «ягоды». Source-of-truth для:
  *   - web: SaveSpotModal, SpotDetailPage, CabinetSpotsPage
- *   - mobile: SaveSpotSheet
+ *   - mobile: SaveSpotSheet, SpotDetailPage
  *   - бэкенд использует только slug'и (no validation на сервере, словарь
  *     живёт во фронтах)
  *
@@ -11,49 +11,56 @@
  * можно было автоматически сводить «места с белыми» с моделью прогноза.
  * Деревья — компактный список доминирующих пород ЛО, slug'и из
  * `geodata.dominant_species` enum'а.
+ *
+ * `icon` — emoji для quick visual recognition. Без отдельных SVG-pack'ов:
+ * unicode emoji уже доступны на любом современном Android/iOS, занимают
+ * 0 байт в bundle. Семантически это всё ещё «иллюстрация», для grass-roots
+ * UI этого хватает; кастомные SVG-иконки имеет смысл вводить только
+ * когда появится design-pass.
  */
 
 export interface SpotTag {
   slug: string;
   label: string;
+  icon: string;
 }
 
 export const TREE_TAGS: SpotTag[] = [
-  { slug: "pine",   label: "Сосна" },
-  { slug: "spruce", label: "Ель" },
-  { slug: "birch",  label: "Берёза" },
-  { slug: "aspen",  label: "Осина" },
-  { slug: "oak",    label: "Дуб" },
-  { slug: "alder",  label: "Ольха" },
-  { slug: "fir",    label: "Пихта" },
-  { slug: "larch",  label: "Лиственница" },
-  { slug: "linden", label: "Липа" },
-  { slug: "maple",  label: "Клён" },
-  { slug: "willow", label: "Ива" },
+  { slug: "pine",   label: "Сосна",       icon: "🌲" },
+  { slug: "spruce", label: "Ель",         icon: "🎄" },
+  { slug: "birch",  label: "Берёза",      icon: "🪵" },
+  { slug: "aspen",  label: "Осина",       icon: "🍂" },
+  { slug: "oak",    label: "Дуб",         icon: "🌳" },
+  { slug: "alder",  label: "Ольха",       icon: "🌿" },
+  { slug: "fir",    label: "Пихта",       icon: "🌲" },
+  { slug: "larch",  label: "Лиственница", icon: "🌲" },
+  { slug: "linden", label: "Липа",        icon: "🌳" },
+  { slug: "maple",  label: "Клён",        icon: "🍁" },
+  { slug: "willow", label: "Ива",         icon: "🌿" },
 ];
 
 export const MUSHROOM_TAGS: SpotTag[] = [
-  { slug: "boletus-edulis",          label: "Белый" },
-  { slug: "leccinum-aurantiacum",    label: "Подосиновик" },
-  { slug: "leccinum-scabrum",        label: "Подберёзовик" },
-  { slug: "cantharellus-cibarius",   label: "Лисичка" },
-  { slug: "xerocomus-subtomentosus", label: "Моховик" },
-  { slug: "lactarius-deliciosus",    label: "Рыжик" },
-  { slug: "lactarius-resimus",       label: "Груздь белый" },
-  { slug: "lactarius-torminosus",    label: "Волнушка" },
-  { slug: "armillaria-mellea",       label: "Опёнок" },
-  { slug: "morchella-esculenta",     label: "Сморчок" },
-  { slug: "russula-vesca",           label: "Сыроежка" },
-  { slug: "pleurotus-ostreatus",     label: "Вёшенка" },
-  { slug: "amanita-muscaria",        label: "Мухомор" },
+  { slug: "boletus-edulis",          label: "Белый",        icon: "🍄" },
+  { slug: "leccinum-aurantiacum",    label: "Подосиновик",  icon: "🍄" },
+  { slug: "leccinum-scabrum",        label: "Подберёзовик", icon: "🍄" },
+  { slug: "cantharellus-cibarius",   label: "Лисичка",      icon: "🌽" },
+  { slug: "xerocomus-subtomentosus", label: "Моховик",      icon: "🍄" },
+  { slug: "lactarius-deliciosus",    label: "Рыжик",        icon: "🍄" },
+  { slug: "lactarius-resimus",       label: "Груздь белый", icon: "🍄" },
+  { slug: "lactarius-torminosus",    label: "Волнушка",     icon: "🍄" },
+  { slug: "armillaria-mellea",       label: "Опёнок",       icon: "🍄" },
+  { slug: "morchella-esculenta",     label: "Сморчок",      icon: "🌱" },
+  { slug: "russula-vesca",           label: "Сыроежка",     icon: "🍄" },
+  { slug: "pleurotus-ostreatus",     label: "Вёшенка",      icon: "🍄" },
+  { slug: "amanita-muscaria",        label: "Мухомор",      icon: "🍄" },
 ];
 
 export const BERRY_TAGS: SpotTag[] = [
-  { slug: "blueberry",   label: "Черника" },
-  { slug: "cloudberry",  label: "Морошка" },
-  { slug: "cranberry",   label: "Клюква" },
-  { slug: "lingonberry", label: "Брусника" },
-  { slug: "raspberry",   label: "Малина" },
+  { slug: "blueberry",   label: "Черника",  icon: "🫐" },
+  { slug: "cloudberry",  label: "Морошка",  icon: "🟠" },
+  { slug: "cranberry",   label: "Клюква",   icon: "🔴" },
+  { slug: "lingonberry", label: "Брусника", icon: "🍒" },
+  { slug: "raspberry",   label: "Малина",   icon: "🍇" },
 ];
 
 export const ALL_TAGS: SpotTag[] = [
@@ -63,7 +70,12 @@ export const ALL_TAGS: SpotTag[] = [
 ];
 
 const LABEL_BY_SLUG = new Map(ALL_TAGS.map((t) => [t.slug, t.label]));
+const ICON_BY_SLUG = new Map(ALL_TAGS.map((t) => [t.slug, t.icon]));
 
 export function tagLabel(slug: string): string {
   return LABEL_BY_SLUG.get(slug) ?? slug;
+}
+
+export function tagIcon(slug: string): string {
+  return ICON_BY_SLUG.get(slug) ?? "·";
 }
