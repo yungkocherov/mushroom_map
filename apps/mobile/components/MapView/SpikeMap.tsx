@@ -23,6 +23,7 @@ import { getLayerLocalUri } from "../../services/regions";
 import { getApiBaseUrl } from "../../services/api";
 import { buildMapStyle, type ForestSource } from "./style";
 import { ForestPopup, type ForestFeatureProps } from "./ForestPopup";
+import { VkHeatmapLayer } from "./VkHeatmapLayer";
 import { SaveSpotSheet } from "../SaveSpotSheet";
 
 // basemap-lo-low.pmtiles генерится `pipelines/build_basemap.py`. Если
@@ -55,6 +56,7 @@ export function SpikeMap() {
   const [popupFeature, setPopupFeature] = useState<ForestFeatureProps | null>(null);
   const [saveSpotOpen, setSaveSpotOpen] = useState(false);
   const [saveSpotCoords, setSaveSpotCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [heatmapOn, setHeatmapOn] = useState(false);
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapViewRef>(null);
 
@@ -210,6 +212,7 @@ export function SpikeMap() {
           showsUserHeadingIndicator
           androidRenderMode="compass"
         />
+        <VkHeatmapLayer visible={heatmapOn} />
         {fix ? (
           <ShapeSource
             id="user-fix"
@@ -249,6 +252,20 @@ export function SpikeMap() {
           setSaveSpotCoords(null);
         }}
       />
+
+      <Pressable
+        style={[styles.heatChip, heatmapOn && styles.heatChipActive]}
+        onPress={() => setHeatmapOn((v) => !v)}
+      >
+        <Text
+          style={[
+            styles.heatChipText,
+            heatmapOn && styles.heatChipTextActive,
+          ]}
+        >
+          {heatmapOn ? "VK тепло ✓" : "VK тепло"}
+        </Text>
+      </Pressable>
 
       <Pressable
         style={styles.fab}
@@ -340,6 +357,28 @@ const styles = StyleSheet.create({
   },
   fabDisabled: {
     opacity: 0.4,
+  },
+  heatChip: {
+    position: "absolute",
+    right: spacing[4],
+    bottom: spacing[5] + 64 + spacing[2],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: 16,
+    backgroundColor: "rgba(245, 241, 230, 0.9)",
+    borderWidth: 1,
+    borderColor: palette.light.rule,
+  },
+  heatChipActive: {
+    backgroundColor: palette.light.chanterelle,
+    borderColor: palette.light.chanterelle,
+  },
+  heatChipText: {
+    color: palette.light.ink,
+    fontSize: fontSize.sm,
+  },
+  heatChipTextActive: {
+    color: palette.light.paper,
   },
   fabPlus: {
     color: palette.light.paper,

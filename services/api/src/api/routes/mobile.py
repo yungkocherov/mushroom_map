@@ -189,6 +189,65 @@ def list_regions() -> RegionsResponse:
 
 
 # ──────────────────────────────────────────────────────────────────────
+# /vk/heatmap
+# ──────────────────────────────────────────────────────────────────────
+
+
+class VkHeatmapPoint(BaseModel):
+    lat: float
+    lon: float
+    weight: int  # количество vk-постов с фото грибов в этом районе
+    name: str    # name_ru района
+
+
+class VkHeatmapResponse(BaseModel):
+    """Centroid'ы 18 районов LO с весом = количество классифицированных
+    VK-постов (photo_species IS NOT NULL). Mobile рендерит как heatmap-
+    layer (graduated по weight).
+    """
+    points: list[VkHeatmapPoint]
+    max_weight: int  # для нормализации интенсивности на клиенте
+
+
+@router.get("/vk/heatmap", response_model=VkHeatmapResponse)
+def vk_heatmap() -> VkHeatmapResponse:
+    """Aggregate counts → district centroids. Без авторизации (публично):
+    тот же массив, что render'ится на web в district choropleth, просто
+    в point-form для мобильного MapLibre heatmap-layer.
+
+    Учитываем только посты с photo_species IS NOT NULL — иначе шкала
+    забивается необработанными постами и прячет реальные «грибные»
+    районы. Нет attempt'а фильтровать по конкретным видам — это будет
+    /vk/heatmap?species=... в Phase 6+.
+    """
+    sql = """
+        SELECT
+            a.name_ru,
+            ST_Y(ST_PointOnSurface(a.geometry)) AS lat,
+            ST_X(ST_PointOnSurface(a.geometry)) AS lon,
+            COUNT(p.id) AS weight
+        FROM admin_area a
+        LEFT JOIN vk_post p
+          ON p.district_admin_area_id = a.id
+         AND p.photo_species IS NOT NULL
+        WHERE a.level = 6
+        GROUP BY a.id, a.name_ru, a.geometry
+        ORDER BY weight DESC
+    """
+    points: list[VkHeatmapPoint] = []
+    max_weight = 0
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(sql)
+        for name, lat, lon, weight in cur.fetchall():
+            w = int(weight or 0)
+            max_weight = max(max_weight, w)
+            points.append(
+                VkHeatmapPoint(name=name, lat=lat, lon=lon, weight=w)
+            )
+    return VkHeatmapResponse(points=points, max_weight=max_weight)
+
+
+# ──────────────────────────────────────────────────────────────────────
 # /spots/sync
 # ──────────────────────────────────────────────────────────────────────
 
