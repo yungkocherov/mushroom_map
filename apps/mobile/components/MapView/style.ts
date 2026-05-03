@@ -206,19 +206,17 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
       "source-layer": src.sourceLayer ?? "forest",
       paint: {
         "fill-color": SPECIES_COLOR_MATCH as unknown as string,
-        // forest_lo используется как bridge при zoom transitions:
-        // primary на z<=8 (0.5), затухает к z=10 (0.15) когда forest
-        // tile detail доминирует. forest layer всегда 0.5.
-        "fill-opacity": isLowZoom
-          ? ["interpolate", ["linear"], ["zoom"], 5, 0.5, 8, 0.5, 10, 0.15]
-          : 0.5,
+        "fill-opacity": 0.5,
         "fill-outline-color": "rgba(0,0,0,0)",
       },
     };
+    // Hard cutoff на z=9 — без overlap'а forest_lo + forest.
+    // MapLibre maxzoom = exclusive, minzoom = inclusive.
+    // forest_lo: maxzoom 9 (видим z=5-8). forest: minzoom 9 (видим z>=9).
     if (src.minzoom !== undefined) layer.minzoom = src.minzoom;
-    else if (!isLowZoom) layer.minzoom = 8;
-    // maxzoom: lo-zoom без maxzoom = overzoom z=8 тайла на z=9+
+    else if (!isLowZoom) layer.minzoom = 9;
     if (src.maxzoom !== undefined) layer.maxzoom = src.maxzoom;
+    else if (isLowZoom) layer.maxzoom = 9;
     layers.push(layer);
   }
 

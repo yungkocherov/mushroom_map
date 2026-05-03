@@ -36,29 +36,19 @@ export function addForestLayer(m: Map): void {
       m.addSource("forest_lo", { type: "vector", url: FOREST_LO_PMTILES_URL });
     }
     const beforeId = findFirstSymbolLayerId(m);
+    // Hard cutoff на z=9 — никакого overlap'а forest_lo + forest.
+    // MapLibre `maxzoom` — exclusive (layer прячется при zoom >= maxzoom),
+    // `minzoom` — inclusive (layer показывается при zoom >= minzoom).
+    // Так z<9 = только forest_lo; z>=9 = только forest. Resulting opacity
+    // фиксированная 0.5 (приходит из FOREST_LAYER_PAINT_COLOR).
     m.addLayer(
       {
         id: "forest-lo-fill",
         type: "fill",
         source: "forest_lo",
         "source-layer": "forest_lo",
-        // Без maxzoom — MapLibre overzoom'ит z=8 тайлы forest_lo для
-        // z=9+, обеспечивая continuous bridge под детальный forest.
-        // Opacity ramp: 0.5 на z<=8 (forest_lo primary, forest минзум 8
-        // только-только начинает рисоваться); fade до 0.15 к z=10+
-        // (forest detail dominate'ит, forest_lo только закрывает gap'ы
-        // во время load'а forest тайлов на zoom transition'ах).
-        paint: {
-          ...FOREST_LAYER_PAINT_COLOR,
-          "fill-opacity": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            5, 0.5,
-            8, 0.5,
-            10, 0.15,
-          ],
-        } as unknown as maplibregl.FillLayerSpecification["paint"],
+        maxzoom: 9,
+        paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
       },
       beforeId,
     );
@@ -68,7 +58,7 @@ export function addForestLayer(m: Map): void {
         type: "fill",
         source: "forest",
         "source-layer": "forest",
-        minzoom: 8,
+        minzoom: 9,
         paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
       },
       beforeId,

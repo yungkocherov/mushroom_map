@@ -130,15 +130,14 @@ export function SpikeMap() {
       }));
     }
     if (online) {
-      // Online mode: оба слоя remote через HTTP Range. forest_lo для z=5-8,
-      // forest для z=8-13. На z=8 оба активны — forest рисуется поверх
-      // (добавлен после lo).
+      // Online mode: hard cutoff на z=9. forest_lo для z=5-8 (aggregated),
+      // forest для z>=9 (per-vydel detail). minzoom/maxzoom выставляются
+      // в style.ts builder'е — никакого overlap'а на boundary.
       return [
         {
           id: "forest-remote-lo",
           pmtilesFileUri: `${getApiBaseUrl()}/tiles/forest_lo.pmtiles`,
           sourceLayer: "forest_lo",
-          // Без maxzoom — overzoom z=8 тайлов на z>=9 как continuous bridge
         },
         {
           id: "forest-remote",
