@@ -12,6 +12,9 @@ scrape_fgislk_attrinfo: bulk-скрейпер выделов ЛО через Ф�
   - Для каждого object_id в диапазоне:
       a) GET attributesinfo  -> JSON с properties
       b) Если payload пустой или number не начинается с region_prefix - skip
+         (default = "47:" — весь субъект ЛО, любой кадастровый район;
+          раньше фильтр был слишком узкий "47:15:" — отбрасывал данные
+          из других кадастровых районов ЛО, см. memory project_fgislk_47x14)
       c) GET boundingbox     -> bbox EPSG:3857 (rectangle)
       d) POST WMS GetFeatureInfo в центр bbox -> Polygon EPSG:3857
       e) Reproject Polygon в EPSG:4326, save в GeoJSON
@@ -344,7 +347,12 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("--start", type=int, default=109_022_831)
     p.add_argument("--end", type=int, default=109_118_831)
-    p.add_argument("--region-prefix", default="47:15:")
+    # 2026-05-04: было `47:15:` — но это всего ОДИН кадастровый район ЛО.
+    # Фактически ЛО имеет несколько cadastral-районов (47:01, 47:02, …, 47:14,
+    # 47:15, …) — субъект `47` целиком. Меняем default на `47:` — забираем
+    # все кадастровые районы ЛО, не только 15-й. Было 82k выделов / 2400 км²
+    # после первого прогона; ожидаем ×10..×20 после расширения фильтра.
+    p.add_argument("--region-prefix", default="47:")
     p.add_argument("--workers", type=int, default=20)
     p.add_argument("--out", default="data/rosleshoz/fgislk_attrinfo.geojson")
     p.add_argument("--progress-db", default="data/rosleshoz/fgislk_attrinfo_progress.db")
