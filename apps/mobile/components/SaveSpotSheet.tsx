@@ -235,14 +235,12 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
             style={styles.photoAddBtn}
             onPress={() => onAddPhoto("camera")}
           >
-            <Text style={styles.photoAddIcon}>📷</Text>
             <Text style={styles.photoAddText}>Камера</Text>
           </Pressable>
           <Pressable
             style={styles.photoAddBtn}
             onPress={() => onAddPhoto("library")}
           >
-            <Text style={styles.photoAddIcon}>🖼</Text>
             <Text style={styles.photoAddText}>Галерея</Text>
           </Pressable>
         </View>
@@ -271,7 +269,7 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
                       tags.has(tag.slug) && styles.tagChipTextActive,
                     ]}
                   >
-                    {tag.icon} {tag.label}
+                    {tag.label}
                   </Text>
                 </Pressable>
               ))}
@@ -408,12 +406,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: palette.light.paperRise,
   },
-  photoAddIcon: {
-    fontSize: fontSize.h2,
-  },
   photoAddText: {
-    fontSize: fontSize.xs,
-    color: palette.light.inkDim,
+    fontSize: fontSize.sm,
+    color: palette.light.ink,
+    fontWeight: "500",
   },
   photoHint: {
     fontSize: fontSize.xs,

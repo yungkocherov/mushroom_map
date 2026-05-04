@@ -13,7 +13,7 @@ import { useRouter } from "expo-router";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
 import { useSpots } from "../../stores/useSpots";
 import { useUserLocation } from "../../stores/useUserLocation";
-import { tagIcon, tagLabel } from "@mushroom-map/types";
+import { tagLabel } from "@mushroom-map/types";
 import type { LocalSpot } from "../../services/spotsRepo";
 
 const RATING_DOT: Record<number, string> = {
@@ -160,7 +160,7 @@ export default function SpotsScreen() {
               ? `${formatDistance(item.distanceMeters)} от тебя · `
               : "GPS не определён · "}
             {new Date(item.created_at).toLocaleDateString("ru-RU")}
-            {item.sync_state !== "synced" ? "  ↻" : ""}
+            {item.sync_state !== "synced" ? "  · не отправлено" : ""}
           </Text>
         </View>
       </Pressable>
@@ -223,7 +223,7 @@ export default function SpotsScreen() {
                 onPress={() => toggleTag(slug)}
               >
                 <Text style={[styles.tagChipText, active && styles.tagChipTextActive]}>
-                  {tagIcon(slug)} {tagLabel(slug)}
+                  {tagLabel(slug)}
                 </Text>
               </Pressable>
             );
