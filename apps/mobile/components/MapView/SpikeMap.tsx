@@ -11,6 +11,7 @@ import {
   UserLocation,
 } from "@maplibre/maplibre-react-native";
 
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
 import { useUserLocation } from "../../stores/useUserLocation";
 import { useOfflineRegions } from "../../stores/useOfflineRegions";
@@ -201,19 +202,14 @@ export function SpikeMap() {
   const recenterToFix = () => {
     if (!fix || !cameraRef.current) return;
     setFollowMode(true);
+    // Зум поднимаем до 15 — для лесного use-case'а это уже видно
+    // выделы крупно. Анимация плавная (700мс).
     cameraRef.current.setCamera({
       centerCoordinate: [fix.lon, fix.lat],
-      zoomLevel: 14,
-      animationDuration: 500,
+      zoomLevel: 15,
+      animationDuration: 700,
     });
   };
-
-  const gpsLabel = (() => {
-    if (permission === "granted") return "GPS";
-    if (permission === "denied") return "GPS не разрешён";
-    if (permission === "undetermined") return "GPS не запрошен";
-    return "GPS";
-  })();
 
   return (
     <View style={styles.flex}>
@@ -222,6 +218,8 @@ export function SpikeMap() {
         style={styles.flex}
         mapStyle={style as object}
         compassEnabled
+        compassViewPosition={3}
+        compassViewMargins={{ x: 16, y: 144 }}
         attributionEnabled={false}
         onLongPress={(feature) => {
           // Long-press где угодно на карте → открыть SaveSpotSheet с
@@ -330,61 +328,78 @@ export function SpikeMap() {
         })}
       </View>
 
-      {/* Status overlay top-right: collapsed по умолчанию,
-          раскрывается тапом по бэйджу. */}
-      <Pressable
-        style={[styles.statusOverlay, statusExpanded && styles.statusOverlayExpanded]}
-        onPress={() => setStatusExpanded((v) => !v)}
-      >
-        {statusExpanded ? (
-          <>
-            <Text style={styles.statusText}>
-              {gpsLabel}: {permission === "granted" ? "ок" : "—"}
-            </Text>
-            {fix ? (
-              <Text style={styles.statusText}>
-                {fix.lat.toFixed(5)}, {fix.lon.toFixed(5)} · ±
-                {fix.accuracy != null ? Math.round(fix.accuracy) : "?"} м
-              </Text>
-            ) : (
-              <Text style={styles.statusText}>ожидание фикса…</Text>
-            )}
-            <Text style={styles.statusText}>
-              тайлы: {tilesStatusLabel(sources, downloaded.size, online)}
-            </Text>
-            {error ? <Text style={styles.errorOverlay}>{error}</Text> : null}
-            <Text style={styles.statusHint}>тап — свернуть</Text>
-          </>
-        ) : (
-          <Text style={styles.statusBadgeText}>
-            {fix ? `±${fix.accuracy != null ? Math.round(fix.accuracy) : "?"} м` : gpsLabel}
-          </Text>
-        )}
-      </Pressable>
-
-      {/* Кнопка «центрировать на мне». Активна только если есть GPS-фикс. */}
-      {fix ? (
+      {/* Status overlay top-right: collapsed = бэйдж «ГПС», expanded =
+          панель с координатами/тайлами. Скрывается когда открыт
+          SaveSpotSheet (чтобы не мешать форме). */}
+      {!saveSpotOpen ? (
         <Pressable
-          style={[styles.gpsBtn, followMode && styles.gpsBtnActive]}
-          onPress={recenterToFix}
+          style={[styles.statusOverlay, statusExpanded && styles.statusOverlayExpanded]}
+          onPress={() => setStatusExpanded((v) => !v)}
         >
-          <Text style={[styles.gpsBtnText, followMode && styles.gpsBtnTextActive]}>
-            на меня
-          </Text>
+          {statusExpanded ? (
+            <>
+              <Text style={styles.statusText}>
+                {permission === "granted"
+                  ? "ГПС: ок"
+                  : permission === "denied"
+                    ? "ГПС не разрешён"
+                    : "ГПС не запрошен"}
+              </Text>
+              {fix ? (
+                <Text style={styles.statusText}>
+                  {fix.lat.toFixed(5)}, {fix.lon.toFixed(5)} · ±
+                  {fix.accuracy != null ? Math.round(fix.accuracy) : "?"} м
+                </Text>
+              ) : (
+                <Text style={styles.statusText}>ожидание фикса…</Text>
+              )}
+              <Text style={styles.statusText}>
+                тайлы: {tilesStatusLabel(sources, downloaded.size, online)}
+              </Text>
+              {error ? <Text style={styles.errorOverlay}>{error}</Text> : null}
+              <Text style={styles.statusHint}>тап — свернуть</Text>
+            </>
+          ) : (
+            <Text style={styles.statusBadgeText}>ГПС</Text>
+          )}
         </Pressable>
       ) : null}
 
-      <View style={styles.bottomLeftBtns}>
-        <Pressable style={styles.pillBtn} onPress={() => setSearchOpen(true)}>
-          <Text style={styles.pillBtnText}>Поиск</Text>
+      {/* Кнопка «центрировать на мне» в стиле Google Maps —
+          круглая иконка-цель. Активна только если есть GPS-фикс
+          и не открыт SaveSpotSheet. Цвет иконки меняется при
+          включённом follow-mode. */}
+      {fix && !saveSpotOpen ? (
+        <Pressable
+          style={styles.gpsCircleBtn}
+          onPress={recenterToFix}
+          accessibilityLabel="Центрировать на моём положении"
+        >
+          <MaterialIcons
+            name={followMode ? "my-location" : "near-me"}
+            size={22}
+            color={followMode ? palette.light.chanterelle : palette.light.ink}
+          />
         </Pressable>
-        <Pressable style={styles.pillBtn} onPress={() => setLayerSheetOpen(true)}>
-          <Text style={styles.pillBtnText}>Слои</Text>
-        </Pressable>
-        <Pressable style={styles.pillBtn} onPress={() => setLegendOpen(true)}>
-          <Text style={styles.pillBtnText}>Легенда</Text>
-        </Pressable>
-      </View>
+      ) : null}
+
+      {!saveSpotOpen ? (
+        <View style={styles.bottomLeftBtns}>
+          <Pressable
+            style={[styles.pillBtn, styles.iconPill]}
+            onPress={() => setSearchOpen(true)}
+            accessibilityLabel="Поиск"
+          >
+            <Ionicons name="search" size={20} color={palette.light.ink} />
+          </Pressable>
+          <Pressable style={styles.pillBtn} onPress={() => setLayerSheetOpen(true)}>
+            <Text style={styles.pillBtnText}>Слои</Text>
+          </Pressable>
+          <Pressable style={styles.pillBtn} onPress={() => setLegendOpen(true)}>
+            <Text style={styles.pillBtnText}>Легенда</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <Legend
         visible={legendOpen}
@@ -494,14 +509,18 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     marginTop: spacing[2],
   },
-  gpsBtn: {
+  // Круглая Google-Maps-style кнопка центрирования (40x40), всегда
+  // одна позиция (bottom-right), цвет иконки меняется по followMode.
+  gpsCircleBtn: {
     position: "absolute",
     right: spacing[4],
     bottom: spacing[5],
-    paddingHorizontal: spacing[4],
-    paddingVertical: spacing[3],
-    borderRadius: radius.pill,
-    backgroundColor: "rgba(245, 241, 230, 0.95)",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: palette.light.paper,
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
     borderColor: palette.light.rule,
     shadowColor: palette.light.ink,
@@ -509,18 +528,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowRadius: 4,
     elevation: 3,
-  },
-  gpsBtnActive: {
-    backgroundColor: palette.light.chanterelle,
-    borderColor: palette.light.chanterelle,
-  },
-  gpsBtnText: {
-    color: palette.light.ink,
-    fontSize: fontSize.sm,
-    fontWeight: "500",
-  },
-  gpsBtnTextActive: {
-    color: palette.light.paper,
   },
   bottomLeftBtns: {
     position: "absolute",
@@ -536,6 +543,14 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(245, 241, 230, 0.95)",
     borderWidth: 1,
     borderColor: palette.light.rule,
+  },
+  // Icon-only pill: квадратнее (44×40 примерно), без horizontal-padding.
+  iconPill: {
+    width: 40,
+    height: 40,
+    paddingHorizontal: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   pillBtnText: {
     color: palette.light.ink,
