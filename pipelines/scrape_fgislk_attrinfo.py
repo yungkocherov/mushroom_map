@@ -285,6 +285,12 @@ def fetch_polygon(bbox_3857: tuple[float, float, float, float]) -> dict | None:
     half = max((xmax - xmin), (ymax - ymin)) / 2 + 1.0
     bbox = f"{cx - half},{cy - half},{cx + half},{cy + half}"
 
+    # ВАЖНО: WIDTH/HEIGHT влияет на server-side scale-dependent rendering
+    # rules в Geoserver. На малом canvas (101×101) layer TAXATION_PIECE
+    # отдавал 0 features для половины выделов — Geoserver скрывал «мелкие
+    # детали» при coarse scale. Эмпирически cutoff между 128 и 192;
+    # ставим 512 c хорошим запасом. Skipped → bandwidth тот же (мы получаем
+    # JSON, не PNG), CPU-стоимость на сервере близкая (~140-170ms).
     body = urllib.parse.urlencode({
         "SERVICE": "WMS",
         "VERSION": "1.3.0",
@@ -295,12 +301,12 @@ def fetch_polygon(bbox_3857: tuple[float, float, float, float]) -> dict | None:
         "LAYERS": QUERY_LAYERS,
         "INFO_FORMAT": "application/json",
         "FEATURE_COUNT": "1",
-        "I": "50",
-        "J": "50",
+        "I": "256",
+        "J": "256",
         "CRS": "EPSG:3857",
         "STYLES": "",
-        "WIDTH": "101",
-        "HEIGHT": "101",
+        "WIDTH": "512",
+        "HEIGHT": "512",
         "BBOX": bbox,
     }).encode("utf-8")
     obj = http_post_json(
