@@ -17,7 +17,7 @@ import { requestLocationPermission } from "../services/location";
 
 const { width } = Dimensions.get("window");
 
-type SlideId = "welcome" | "gps" | "regions";
+type SlideId = "welcome" | "gps" | "save" | "regions";
 
 const SLIDES: { id: SlideId; title: string; lead: string; cta: string }[] = [
   {
@@ -35,10 +35,17 @@ const SLIDES: { id: SlideId; title: string; lead: string; cta: string }[] = [
     cta: "Разрешить",
   },
   {
+    id: "save",
+    title: "Как сохранить спот",
+    lead:
+      "Зажми палец на любой точке карты — откроется форма с координатами, рейтингом, тегами деревьев и грибов, заметкой и фото. Кнопок «плюс» нет: вся карта одна большая кнопка для долгого нажатия.",
+    cta: "Понятно",
+  },
+  {
     id: "regions",
     title: "Скачай район",
     lead:
-      "Чтобы карта работала в лесу без сети, скачай интересующие тебя районы. Можно прямо сейчас или потом из Settings → Регионы.",
+      "Чтобы карта работала в лесу без сети, скачай интересующие тебя районы. Можно прямо сейчас или потом из Настроек, раздел «Регионы».",
     cta: "Открыть регионы",
   },
 ];
@@ -55,8 +62,8 @@ export default function OnboardingScreen() {
       const status = await requestLocationPermission();
       if (status !== "granted") {
         Alert.alert(
-          "Permission",
-          "GPS отключён. Можно включить позже через Settings → Apps → Geobiom → Permissions.",
+          "Доступ к GPS",
+          "GPS отключён. Можно включить позже в системных настройках: Приложения, Geobiom, Разрешения.",
         );
       }
       setPermission(status);
