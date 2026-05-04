@@ -26,7 +26,7 @@ export default defineConfig({
     react({ include: /\.(mdx|md|jsx|tsx|ts)$/ }),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["icon.svg"],
+      includeAssets: ["favicon-32.png", "apple-touch-icon.png"],
       manifest: {
         name: "Грибная карта Ленинградской области",
         short_name: "Грибная карта",
@@ -39,7 +39,9 @@ export default defineConfig({
         scope: "/",
         categories: ["utilities", "education", "travel"],
         icons: [
-          { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" },
+          { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },
+          { src: "/icon-512.png", sizes: "512x512", type: "image/png", purpose: "any" },
+          { src: "/icon-512-maskable.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
       workbox: {
