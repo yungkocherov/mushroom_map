@@ -81,10 +81,24 @@ forecast-репо не пишем — это двусторонний контр
     единый source-of-truth для web (SaveSpotModal/SpotDetailPage/
     CabinetSpotsPage) и mobile (SaveSpotSheet, spots list, spot detail).
     11 деревьев + 13 грибов + 5 ягод. `tagLabel(slug)` → русское имя.
-  - 🟡 Outstanding: bundled glyphs PBF для basemap labels (mobile сейчас
-    без подписей городов/рек), реальный keystore generation + бэкап
-    (manual у автора), RuStore submission (manual + ИП регистрация
-    в RuStore Developer Console).
+  - ✅ bundled glyphs PBF (2026-05-04) — 18 PBF (Noto Sans Regular/Bold/
+    Italic × 6 ranges, ~1.8 МБ) в `apps/mobile/assets/glyphs/`,
+    `services/glyphs.ts: ensureGlyphsExtracted()` копирует в
+    `documentDirectory/glyphs/` при первом старте (idempotent), потом
+    style получает `file://` glyph-URL. Online fallback
+    (`BASEMAP_GLYPHS_URL_FALLBACK`) — пока extract не прошёл или упал.
+  - 🟡 Outstanding: реальный keystore generation + бэкап (manual у
+    автора), RuStore submission (manual + ИП регистрация в RuStore
+    Developer Console).
+- **Phase 6 (started 2026-05-04):**
+  - ✅ /spots tab — search-input по name+note + tag-chip filter
+    (мульти-AND, чипы только из тегов, реально присутствующих в спотах) +
+    sort toggle расстояние/дата + count-line.
+  - ✅ Spots cluster на карте — `components/MapView/SpotsLayer.tsx`
+    с native MapLibre clustering (`cluster=true`, radius=50,
+    clusterMaxZoomLevel=12). Цвет cluster'а step-by-point_count
+    (chanterelle/forest/ink), индивидуальные точки colored по rating.
+    Tap на cluster → camera-zoom; tap на точку → /spot/[uuid].
 - **Backend дельта:**
   - Миграция `db/migrations/031_user_spot_client_uuid.sql` —
     `client_uuid UUID UNIQUE` (partial), `client_updated_at`,
