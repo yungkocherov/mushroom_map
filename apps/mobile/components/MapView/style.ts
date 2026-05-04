@@ -61,18 +61,24 @@ export type StyleInput = {
   forests: ForestSource[];
   /** OpenMapTiles-schema basemap (planetiler output). Optional. */
   basemapPmtilesUri?: string | null;
+  /**
+   * URL pattern для glyphs (`{fontstack}/{range}.pbf` substituted by
+   * MapLibre). Если null — используется `BASEMAP_GLYPHS_URL_FALLBACK`
+   * (online через api.geobiom.ru). Bundled-glyphs base URI поставляется
+   * через `services/glyphs.ts: ensureGlyphsExtracted()`.
+   */
+  glyphsUrl?: string | null;
 };
 
 /**
- * URL для PBF-glyphs (sdf-шрифты для symbol-layer'ов). С Phase 5
- * (2026-05-04) хостится на api.geobiom.ru/glyphs/, online-only.
- * Offline-bundled — Phase 6.
+ * Fallback online URL для PBF-glyphs (если bundled-extract ещё не
+ * прошёл или недоступен). С Phase 6 (2026-05-04) bundled-PBF в asset'ах,
+ * online остаётся как кросс-проверка и для случая если copy в
+ * documentDirectory упал.
  *
- * Если шрифт указан в `text-font`, MapLibre Native сделает HTTPS-запрос
- * к этому URL с подставленными {fontstack} и {range}. Без glyphs
- * symbol-слои тихо не рендерятся (но карта работает).
+ * Без glyphs symbol-слои тихо не рендерятся (но карта работает).
  */
-export const BASEMAP_GLYPHS_URL =
+export const BASEMAP_GLYPHS_URL_FALLBACK =
   "https://api.geobiom.ru/glyphs/{fontstack}/{range}.pbf";
 
 /**
@@ -298,7 +304,7 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
     // Glyphs URL нужен только если в стиле есть symbol-layer'ы — у нас
     // basemap-place-* и basemap-water-name. Безопасно ставить всегда:
     // MapLibre Native не дёргает URL пока не нужен render symbol'а.
-    glyphs: BASEMAP_GLYPHS_URL,
+    glyphs: normalized.glyphsUrl ?? BASEMAP_GLYPHS_URL_FALLBACK,
   };
 }
 

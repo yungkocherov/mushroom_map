@@ -21,9 +21,11 @@ import {
 } from "../../services/location";
 import { getLayerLocalUri } from "../../services/regions";
 import { getApiBaseUrl } from "../../services/api";
+import { ensureGlyphsExtracted, glyphsUrlPattern } from "../../services/glyphs";
 import { buildMapStyle, type ForestSource } from "./style";
 import { ForestPopup, type ForestFeatureProps } from "./ForestPopup";
 import { VkHeatmapLayer } from "./VkHeatmapLayer";
+import { SpotsLayer } from "./SpotsLayer";
 import { SaveSpotSheet } from "../SaveSpotSheet";
 
 // basemap-lo-low.pmtiles генерится `pipelines/build_basemap.py`. Если
@@ -52,6 +54,7 @@ function tilesStatusLabel(
 
 export function SpikeMap() {
   const [basemapUri, setBasemapUri] = useState<string | null>(null);
+  const [glyphsBaseUri, setGlyphsBaseUri] = useState<string | null>(null);
   const [assetError, setAssetError] = useState<string | null>(null);
   const [popupFeature, setPopupFeature] = useState<ForestFeatureProps | null>(null);
   const [saveSpotOpen, setSaveSpotOpen] = useState(false);
@@ -82,6 +85,27 @@ export function SpikeMap() {
         // Базмап-ассет опционален — без него остаётся paper-фон, не
         // блокируем карту. Логируем но не падаем.
         setAssetError(err instanceof Error ? err.message : "basemap-asset-error");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Bundled glyphs extract — копирует 18 PBF в documentDirectory при первом
+  // запуске (~1.8 МБ, idempotent). После копирования style получает
+  // file:// URL и symbol-слои рендерятся offline. До этого момента
+  // BASEMAP_GLYPHS_URL_FALLBACK (online через api.geobiom.ru) — карта
+  // не блокируется, но при отсутствии сети подписи не появятся.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const base = await ensureGlyphsExtracted();
+        if (!cancelled) setGlyphsBaseUri(base);
+      } catch {
+        // Если copy упал (out-of-space, permissions) — остаёмся на
+        // online fallback. Карта работает, просто labels через сеть.
       }
     })();
     return () => {
@@ -144,8 +168,12 @@ export function SpikeMap() {
   // не блокировать UI «вечным спиннером» если basemap-asset медленно
   // распаковывается на холодном старте.
   const style = useMemo(
-    () => buildMapStyle({ forests: sources, basemapPmtilesUri: basemapUri }),
-    [sources, basemapUri],
+    () => buildMapStyle({
+      forests: sources,
+      basemapPmtilesUri: basemapUri,
+      glyphsUrl: glyphsBaseUri ? glyphsUrlPattern(glyphsBaseUri) : null,
+    }),
+    [sources, basemapUri, glyphsBaseUri],
   );
 
   // basemap-asset ещё может распаковываться при первом запуске — показываем
@@ -213,6 +241,7 @@ export function SpikeMap() {
           androidRenderMode="compass"
         />
         <VkHeatmapLayer visible={heatmapOn} />
+        <SpotsLayer cameraRef={cameraRef} />
         {fix ? (
           <ShapeSource
             id="user-fix"

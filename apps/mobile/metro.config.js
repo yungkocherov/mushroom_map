@@ -22,6 +22,7 @@ config.resolver.unstable_enablePackageExports = true;
 config.resolver.assetExts = [
   ...config.resolver.assetExts,
   'pmtiles',
+  'pbf',
 ];
 
 module.exports = config;
