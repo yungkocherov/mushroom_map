@@ -48,16 +48,13 @@ export function Header() {
 
 function Logo() {
   return (
-    <svg
+    <img
       className={styles.logo}
-      viewBox="0 0 32 32"
-      xmlns="http://www.w3.org/2000/svg"
-      role="img"
+      src="/logo-mark.png"
+      alt=""
+      width={32}
+      height={32}
       aria-hidden="true"
-    >
-      <path d="M16 5 C8 5, 3 11, 3 15.5 C3 16.6, 3.8 17.5, 5 17.5 L27 17.5 C28.2 17.5, 29 16.6, 29 15.5 C29 11, 24 5, 16 5 Z" fill="var(--forest-deep)" />
-      <path d="M9 13 C9.5 12, 10.5 11.5, 11.5 12 M14 10.5 C14.5 10, 15.5 9.8, 16.2 10.2 M19 11 C19.8 10.5, 20.7 10.5, 21.3 11" stroke="var(--paper-rise)" strokeWidth="1.2" strokeLinecap="round" fill="none" opacity="0.55" />
-      <path d="M11.5 17.5 L12.5 26 C12.5 27.1, 13.4 28, 14.5 28 L17.5 28 C18.6 28, 19.5 27.1, 19.5 26 L20.5 17.5 Z" fill="var(--paper)" stroke="var(--forest-deep)" strokeWidth="0.8" />
-    </svg>
+    />
   );
 }
