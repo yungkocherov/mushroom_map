@@ -1,18 +1,7 @@
 /**
- * Цвета и паттерны лесного слоя.
- *
- * Paint-режимы:
- *   1. `FOREST_LAYER_PAINT_PATTERN` — fill-pattern с процедурными текстурами
- *      коры (берёза = белая с штрихами, сосна = бороздки, дуб = кирпичная
- *      кладка и т.д.). Текстуры загружаются через map.addImage() из
- *      `/textures/forest/<slug>.png` на старте карты.
- *   2. `FOREST_LAYER_PAINT_COLOR` — обычная однотонная заливка. Используется
- *      как fallback если текстуры не загрузились.
- *
- * Slug'и синхронизированы с geodata.types.ForestTypeSlug (Python).
+ * Цвета лесного слоя. Slug'и синхронизированы с geodata.types.ForestTypeSlug (Python).
  */
 
-// ─── slug'и пород для загрузки текстур ────────────────────────────────────────
 export const FOREST_TEXTURE_SLUGS = [
   "pine",
   "spruce",
@@ -33,10 +22,7 @@ export const FOREST_TEXTURE_SLUGS = [
 
 export type ForestSlug = (typeof FOREST_TEXTURE_SLUGS)[number];
 
-/** MapLibre image-name для каждого slug'а. */
-export const textureImageId = (slug: string): string => `forest-${slug}`;
-
-// ─── Цвета (fallback без текстур) ────────────────────────────────────────────
+// ─── Цвета ────────────────────────────────────────────────────────────────────
 // Примерно соответствуют усреднённому цвету текстуры коры.
 export const FOREST_COLORS: Record<ForestSlug, string> = {
   pine: "#8b5a34",
@@ -68,35 +54,6 @@ export const FOREST_COLORS: Record<ForestSlug, string> = {
  */
 const FOREST_OPACITY_EXPR = 0.5;
 
-/**
- * Paint через fill-pattern. Требует чтобы `map.addImage("forest-<slug>", ...)`
- * был вызван ДО применения paint'а. Иначе MapLibre тихо не покажет слой.
- */
-export const FOREST_LAYER_PAINT_PATTERN = {
-  "fill-pattern": [
-    "match",
-    ["get", "dominant_species"],
-    "pine", textureImageId("pine"),
-    "spruce", textureImageId("spruce"),
-    "larch", textureImageId("larch"),
-    "fir", textureImageId("fir"),
-    "cedar", textureImageId("cedar"),
-    "birch", textureImageId("birch"),
-    "aspen", textureImageId("aspen"),
-    "alder", textureImageId("alder"),
-    "oak", textureImageId("oak"),
-    "linden", textureImageId("linden"),
-    "maple", textureImageId("maple"),
-    "mixed_coniferous", textureImageId("mixed_coniferous"),
-    "mixed_broadleaved", textureImageId("mixed_broadleaved"),
-    "mixed", textureImageId("mixed"),
-    textureImageId("unknown"),
-  ],
-  "fill-opacity": FOREST_OPACITY_EXPR,
-  "fill-outline-color": "rgba(0,0,0,0)",
-  "fill-antialias": true,
-} as const;
-
 export const FOREST_LAYER_PAINT_COLOR = {
   "fill-color": [
     "match",
@@ -121,9 +78,6 @@ export const FOREST_LAYER_PAINT_COLOR = {
   "fill-outline-color": "rgba(0,0,0,0)",
   "fill-antialias": false,
 } as const;
-
-// Обратная совместимость — старое имя указывает на fallback-вариант
-export const FOREST_LAYER_PAINT = FOREST_LAYER_PAINT_COLOR;
 
 // ─── Режимы раскраски ─────────────────────────────────────────────────────────
 

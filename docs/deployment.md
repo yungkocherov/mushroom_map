@@ -1,6 +1,12 @@
 # Production deployment runbook
 
-Целевая архитектура (бесплатная):
+> **Status: legacy** (2026-04). Описывает первоначальную Cloudflare Pages +
+> Oracle Cloud конфигурацию. Прод мигрировал 2026-04-30 на two-stack
+> (TimeWeb primary + Oracle replica). Актуальное состояние —
+> `CLAUDE.md` §Production стек two-stack. Документ оставлен как
+> исторический референс по шагам Cloudflare/Oracle/Caddy первичного запуска.
+
+Исходная целевая архитектура (бесплатная):
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -58,8 +64,8 @@
    - Env vars:
      - `VITE_API_URL=https://api.<твой-домен>`
      - `VITE_TILES_URL=https://tiles.<твой-домен>` (если PMTiles раздаются
-       через Cloudflare R2 — без неё фронт читает тайлы из API). См.
-       `scripts/deploy/sync_tiles_to_r2.sh` про заливку в bucket.
+       через CDN — без неё фронт читает тайлы из API). На текущем проде
+       тайлы раздаются через Caddy на VM, переменная не задана.
 
 После создания проекта подсмотреть Account ID (правая колонка дашборда,
 8-символьное hex). Это `CF_ACCOUNT_ID` для GitHub Actions.
@@ -127,22 +133,13 @@ ssh ubuntu@<vm-ip> 'bash -s' < scripts/deploy/bootstrap_oracle.sh
 
 ---
 
-## 5. (Опционально) Cloudflare R2 для PMTiles
+## 5. PMTiles на VM
 
-Если хочешь снять нагрузку с VM на отдачу tile-файлов:
+PMTiles раздаются с VM из `/srv/mushroom-map/data/tiles`, Caddy через `/tiles/*`.
+Заливка с локали — `bash scripts/deploy/sync_tiles_to_vm.sh`.
 
-1. Cloudflare Dashboard → R2 → Create bucket → name `mushroom-map-tiles`.
-2. Manage API Tokens → Create API token (Object Read & Write на bucket).
-3. Локально:
-   ```
-   rclone config            # см. scripts/deploy/sync_tiles_to_r2.sh
-   bash scripts/deploy/sync_tiles_to_r2.sh
-   ```
-4. R2 bucket → Settings → Public access → Allow OR Custom domain
-   → tiles.<твой-домен>.
-
-Если R2 пропускаешь — PMTiles остаются на VM в `/srv/mushroom-map/data/tiles`,
-Caddy раздаёт через `/tiles/*`. На MVP-трафике работает нормально.
+(Cloudflare R2 рассматривался как CDN, но был выпилен 2026-04-30 — TSPU
+блокирует R2 SNI для RU-no-VPN юзеров.)
 
 ---
 

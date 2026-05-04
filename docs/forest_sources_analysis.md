@@ -136,15 +136,11 @@ Remote Sensing of Environment.
    - WAF ФГИС режет VPN-диапазоны на `/geoserver/*`, но **не** режет
      `pub5` и `/map_api/*` — нам повезло.
 
-6. **Downloader** [pipelines/download_fgislk_tiles.py](../pipelines/download_fgislk_tiles.py):
-   async httpx с throttling, прогресс-бар, resume, 3 retry.
-
-7. **Конвертер** [pipelines/fgislk_tiles_to_geojson.py](../pipelines/fgislk_tiles_to_geojson.py):
-   декодирует MVT (`mapbox_vector_tile`), пересчитывает пиксельные
-   координаты в EPSG:4326, дедуплицирует выделы по `externalid`,
-   объединяет куски из соседних тайлов через `unary_union`, маппит
-   русские слова («Ель»/«Сосна»/«Берёза»/«Ольха серая (белая)»)
-   в наши slug'и.
+6. **Downloader + конвертер MVT** — удалены 2026-05-04. Заменены на
+   `pipelines/scrape_fgislk_attrinfo.py` (bulk-скрап через ФГИС API
+   attributesinfo + WMS GetFeatureInfo, 100% покрытие выделов вместо
+   ~70% у MVT-flow). См. CLAUDE.md §Common commands и memory
+   `reference_fgislk_api.md`.
 
 ### Ограничения текущего подхода
 

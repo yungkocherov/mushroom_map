@@ -28,7 +28,7 @@ mushroom-map/
 │   │
 │   └── web/               # React + TypeScript + Vite 5 + MapLibre GL
 │
-├── pipelines/             # ETL-скрипты (ingest_*, build_*_tiles, fgislk_tiles_to_geojson)
+├── pipelines/             # ETL-скрипты (scrape_fgislk_attrinfo, ingest_*, build_*_tiles)
 │
 └── docs/
 ```
