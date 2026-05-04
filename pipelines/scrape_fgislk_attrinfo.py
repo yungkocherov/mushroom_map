@@ -271,26 +271,8 @@ def fetch_bbox(object_id: int) -> tuple[float, float, float, float] | None:
     return None
 
 
-def fetch_polygon(bbox_3857: tuple[float, float, float, float]) -> dict | None:
-    """
-    WMS GetFeatureInfo at center pixel of given bbox (EPSG:3857).
-    Returns Polygon geometry as GeoJSON dict (still in EPSG:3857).
-    """
-    xmin, ymin, xmax, ymax = bbox_3857
-    # Сужаем bbox до нашего objectа — тогда click в центр гарантированно
-    # попадёт внутрь полигона. Также увеличиваем bbox чуть-чуть в случае
-    # если bbox был tight и центр пиксель попадает на edge.
-    cx = (xmin + xmax) / 2
-    cy = (ymin + ymax) / 2
-    half = max((xmax - xmin), (ymax - ymin)) / 2 + 1.0
-    bbox = f"{cx - half},{cy - half},{cx + half},{cy + half}"
-
-    # ВАЖНО: WIDTH/HEIGHT влияет на server-side scale-dependent rendering
-    # rules в Geoserver. На малом canvas (101×101) layer TAXATION_PIECE
-    # отдавал 0 features для половины выделов — Geoserver скрывал «мелкие
-    # детали» при coarse scale. Эмпирически cutoff между 128 и 192;
-    # ставим 512 c хорошим запасом. Skipped → bandwidth тот же (мы получаем
-    # JSON, не PNG), CPU-стоимость на сервере близкая (~140-170ms).
+def _wms_query(bbox_str: str, i: int, j: int, w: int = 512) -> dict | None:
+    """Низкоуровневый WMS GetFeatureInfo на заданном bbox + click pixel."""
     body = urllib.parse.urlencode({
         "SERVICE": "WMS",
         "VERSION": "1.3.0",
@@ -301,18 +283,94 @@ def fetch_polygon(bbox_3857: tuple[float, float, float, float]) -> dict | None:
         "LAYERS": QUERY_LAYERS,
         "INFO_FORMAT": "application/json",
         "FEATURE_COUNT": "1",
-        "I": "256",
-        "J": "256",
+        "I": str(i),
+        "J": str(j),
         "CRS": "EPSG:3857",
         "STYLES": "",
-        "WIDTH": "512",
-        "HEIGHT": "512",
-        "BBOX": bbox,
+        "WIDTH": str(w),
+        "HEIGHT": str(w),
+        "BBOX": bbox_str,
     }).encode("utf-8")
-    obj = http_post_json(
+    return http_post_json(
         WMS_URL, body,
         content_type="application/x-www-form-urlencoded; charset=UTF-8",
     )
+
+
+def fetch_polygon_verified(
+    bbox_3857: tuple[float, float, float, float],
+    expected_externalid: str,
+) -> dict | None:
+    """
+    WMS GetFeatureInfo с verify-externalid logic.
+
+    Bbox от boundingbox-endpoint указывает на bbox целевого vydel'а, но
+    irregular shape часто не покрывает bbox CENTER — click туда возвращает
+    геометрию соседнего vydel. Чтобы избежать «подкладки чужой геометрии»
+    под наш cadastral, проверяем `feature.properties.externalid` и при
+    mismatch пробуем альтернативные click-точки внутри bbox.
+
+    Возвращает GeoJSON geometry dict (EPSG:3857) или None если ни одна
+    из click-попыток не совпала по externalid.
+
+    ВАЖНО: WIDTH/HEIGHT влияет на server-side scale-dependent rendering
+    rules в Geoserver. Cutoff между 128-192; ставим 512 с запасом.
+    """
+    xmin, ymin, xmax, ymax = bbox_3857
+    cx = (xmin + xmax) / 2
+    cy = (ymin + ymax) / 2
+    half = max((xmax - xmin), (ymax - ymin)) / 2 + 1.0
+    bbox_str = f"{cx - half},{cy - half},{cx + half},{cy + half}"
+
+    # 9 кандидатов click-pixel: центр + 8 точек 25/50/75% по двум осям.
+    # Для convex polygon чаще всего хватит центра. Для irregular —
+    # один из corners/mid-edges попадёт.
+    W = 512
+    candidates = [
+        (W // 2, W // 2),       # center
+        (W // 4, W // 2),       # left-mid
+        (W * 3 // 4, W // 2),   # right-mid
+        (W // 2, W // 4),       # top-mid
+        (W // 2, W * 3 // 4),   # bottom-mid
+        (W // 4, W // 4),       # tl
+        (W * 3 // 4, W // 4),   # tr
+        (W // 4, W * 3 // 4),   # bl
+        (W * 3 // 4, W * 3 // 4),  # br
+    ]
+
+    for i, j in candidates:
+        obj = _wms_query(bbox_str, i, j, W)
+        if not obj:
+            continue
+        feats = obj.get("features") or []
+        if not feats:
+            continue
+        feat = feats[0]
+        props = feat.get("properties") or {}
+        got_extid = props.get("externalid") or ""
+        geom = feat.get("geometry")
+        if got_extid == expected_externalid and geom:
+            return geom
+
+    # Ни один click не дал совпадения по externalid. Лучше отказаться
+    # чем сохранять wrong-polygon под правильным cadastral'ом
+    # (создавая 21% mismatched data как было до fix'а 2026-05-04).
+    # ID попадёт в status='fail', можно потом доразобраться отдельно.
+    return None
+
+
+def fetch_polygon(bbox_3857: tuple[float, float, float, float]) -> dict | None:
+    """Backward-compat: WMS GetFeatureInfo at center pixel only.
+
+    Используется в smoke-тестах и debug. Production-путь идёт через
+    fetch_polygon_verified() с verify-externalid logic.
+    """
+    xmin, ymin, xmax, ymax = bbox_3857
+    cx = (xmin + xmax) / 2
+    cy = (ymin + ymax) / 2
+    half = max((xmax - xmin), (ymax - ymin)) / 2 + 1.0
+    bbox_str = f"{cx - half},{cy - half},{cx + half},{cy + half}"
+    obj = _wms_query(bbox_str, 256, 256, 512)
     if not obj:
         return None
     feats = obj.get("features") or []
@@ -335,7 +393,7 @@ def process_one(object_id: int, region_prefix: str) -> dict | None:
     bbox = fetch_bbox(object_id)
     if not bbox:
         return None
-    geom_3857 = fetch_polygon(bbox)
+    geom_3857 = fetch_polygon_verified(bbox, cadastral)
     if not geom_3857:
         return None
     coords_4326 = reproject_polygon_3857_to_4326(geom_3857.get("coordinates") or [])
