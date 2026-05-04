@@ -70,6 +70,13 @@ services:
       YANDEX_CLIENT_ID:              ${YANDEX_CLIENT_ID}
       YANDEX_CLIENT_SECRET:          ${YANDEX_CLIENT_SECRET}
       YANDEX_REDIRECT_URI:           ${YANDEX_REDIRECT_URI}
+      # Mobile OAuth (отдельные клиенты, не дублирующие web). Yandex —
+      # тип «Мобильное» (с client_secret). Google — тип Android (без
+      # secret) ИЛИ Web (с secret).
+      YANDEX_MOBILE_CLIENT_ID:       ${YANDEX_MOBILE_CLIENT_ID:-}
+      YANDEX_MOBILE_CLIENT_SECRET:   ${YANDEX_MOBILE_CLIENT_SECRET:-}
+      GOOGLE_MOBILE_CLIENT_ID:       ${GOOGLE_MOBILE_CLIENT_ID:-}
+      GOOGLE_MOBILE_CLIENT_SECRET:   ${GOOGLE_MOBILE_CLIENT_SECRET:-}
       FRONTEND_AUTH_COMPLETE_URL:    ${FRONTEND_AUTH_COMPLETE_URL}
       FRONTEND_AUTH_ERROR_URL:       ${FRONTEND_AUTH_ERROR_URL}
       UVICORN_WORKERS:               ${UVICORN_WORKERS:-2}
