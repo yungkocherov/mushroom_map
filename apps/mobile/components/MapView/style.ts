@@ -11,30 +11,49 @@ import { palette } from "@mushroom-map/tokens/native";
  */
 
 /**
+/**
  * Цвета синхронизированы с web FOREST_COLORS (apps/web/src/lib/forestStyle.ts).
  * Палитра «коры дерева» — pine коричневый, spruce почти-чёрный, birch
  * светло-кремовый, и т.д. Не зелёные тона — это намеренно: на спутник-
  * basemap'е зелёный сливается, кора лучше различима. Также matches
  * tinge web-versii.
  */
+export const SPECIES_COLORS: Record<string, string> = {
+  pine: "#8b5a34",
+  spruce: "#3e2e1c",
+  larch: "#9a4626",
+  fir: "#56564e",
+  cedar: "#5c3a24",
+  birch: "#c8b890",
+  aspen: "#9ea48c",
+  alder: "#6c5844",
+  oak: "#5a3c20",
+  linden: "#a48c72",
+  maple: "#7e5638",
+  mixed_coniferous: "#463a22",
+  mixed_broadleaved: "#a0845a",
+  mixed: "#607244",
+  unknown: "#9e9e9e",
+};
+
 const SPECIES_COLOR_MATCH = [
   "match",
   ["coalesce", ["get", "dominant_species"], "mixed"],
-  "pine", "#8b5a34",
-  "spruce", "#3e2e1c",
-  "larch", "#9a4626",
-  "fir", "#56564e",
-  "cedar", "#5c3a24",
-  "birch", "#c8b890",
-  "aspen", "#9ea48c",
-  "alder", "#6c5844",
-  "oak", "#5a3c20",
-  "linden", "#a48c72",
-  "maple", "#7e5638",
-  "mixed_coniferous", "#463a22",
-  "mixed_broadleaved", "#a0845a",
-  "mixed", "#607244",
-  /* default */ "#9e9e9e",
+  "pine", SPECIES_COLORS.pine,
+  "spruce", SPECIES_COLORS.spruce,
+  "larch", SPECIES_COLORS.larch,
+  "fir", SPECIES_COLORS.fir,
+  "cedar", SPECIES_COLORS.cedar,
+  "birch", SPECIES_COLORS.birch,
+  "aspen", SPECIES_COLORS.aspen,
+  "alder", SPECIES_COLORS.alder,
+  "oak", SPECIES_COLORS.oak,
+  "linden", SPECIES_COLORS.linden,
+  "maple", SPECIES_COLORS.maple,
+  "mixed_coniferous", SPECIES_COLORS.mixed_coniferous,
+  "mixed_broadleaved", SPECIES_COLORS.mixed_broadleaved,
+  "mixed", SPECIES_COLORS.mixed,
+  /* default */ SPECIES_COLORS.unknown,
 ] as const;
 
 type Style = {

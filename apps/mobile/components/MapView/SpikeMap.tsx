@@ -24,6 +24,7 @@ import { getApiBaseUrl } from "../../services/api";
 import { ensureGlyphsExtracted, glyphsUrlPattern } from "../../services/glyphs";
 import { buildMapStyle, type BaseMapMode, type ForestSource } from "./style";
 import { ForestPopup, type ForestFeatureProps } from "./ForestPopup";
+import { Legend } from "./Legend";
 import { SpotsLayer } from "./SpotsLayer";
 import { SaveSpotSheet } from "../SaveSpotSheet";
 
@@ -66,6 +67,7 @@ export function SpikeMap() {
   const [saveSpotCoords, setSaveSpotCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [baseMap, setBaseMap] = useState<BaseMapMode>("scheme");
   const [statusExpanded, setStatusExpanded] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapViewRef>(null);
 
@@ -353,6 +355,12 @@ export function SpikeMap() {
           </Text>
         </Pressable>
       ) : null}
+
+      <Pressable style={styles.legendBtn} onPress={() => setLegendOpen(true)}>
+        <Text style={styles.legendBtnText}>Легенда</Text>
+      </Pressable>
+
+      <Legend visible={legendOpen} onClose={() => setLegendOpen(false)} />
     </View>
   );
 }
@@ -461,5 +469,20 @@ const styles = StyleSheet.create({
   },
   gpsBtnTextActive: {
     color: palette.light.paper,
+  },
+  legendBtn: {
+    position: "absolute",
+    left: spacing[4],
+    bottom: spacing[5],
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(245, 241, 230, 0.95)",
+    borderWidth: 1,
+    borderColor: palette.light.rule,
+  },
+  legendBtnText: {
+    color: palette.light.ink,
+    fontSize: fontSize.sm,
   },
 });
