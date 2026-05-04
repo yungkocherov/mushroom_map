@@ -1,22 +1,23 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
-import { SPECIES_COLORS } from "./style";
+import {
+  AGE_GROUP_COLORS,
+  BONITET_COLORS,
+  SPECIES_COLORS,
+  type ForestColorMode,
+} from "./style";
 
 /**
- * Легенда раскраски forest-fill по dominant_species. Полноэкранный modal
- * с tap-outside-to-close, чтобы не отъедать пиксели у карты постоянной
- * floating-панелью. На карте есть кнопка «Легенда» — она открывает этот
- * modal.
+ * Легенда раскраски forest-fill. Содержание зависит от текущего
+ * forestColorMode из LayerSheet:
+ *   - species: 14 пород коры
+ *   - bonitet: 5 классов бонитета 1..5 + unknown
+ *   - age:     5 возрастных групп Rosleshoz + unknown
  *
- * Slug'и + русские лейблы — те же 14 пород что в web Legend (apps/web/
- * src/components/Legend.tsx + spotTags.ts). 14 «реальных» пород + mixed
- * варианты + unknown. Цвета берутся из SPECIES_COLORS экспортированного
- * из style.ts — single source of truth.
+ * Цвета берутся из *_COLORS, экспортированных из style.ts.
  */
 
-type SpeciesEntry = { slug: keyof typeof SPECIES_COLORS; label: string };
-
-const SPECIES_ORDER: SpeciesEntry[] = [
+const SPECIES_ORDER: Array<{ slug: keyof typeof SPECIES_COLORS; label: string }> = [
   { slug: "pine",              label: "Сосна" },
   { slug: "spruce",            label: "Ель" },
   { slug: "fir",               label: "Пихта" },
@@ -34,12 +35,54 @@ const SPECIES_ORDER: SpeciesEntry[] = [
   { slug: "unknown",           label: "Неизвестно" },
 ];
 
+const BONITET_ORDER: Array<{ color: string; label: string }> = [
+  { color: BONITET_COLORS[1], label: "I — высший" },
+  { color: BONITET_COLORS[2], label: "II" },
+  { color: BONITET_COLORS[3], label: "III" },
+  { color: BONITET_COLORS[4], label: "IV" },
+  { color: BONITET_COLORS[5], label: "V — низший" },
+  { color: BONITET_COLORS.unknown, label: "Нет данных" },
+];
+
+const AGE_ORDER: Array<{ color: string; label: string }> = [
+  { color: AGE_GROUP_COLORS["молодняки"],        label: "Молодняки" },
+  { color: AGE_GROUP_COLORS["средневозрастные"], label: "Средневозрастные" },
+  { color: AGE_GROUP_COLORS["приспевающие"],     label: "Приспевающие" },
+  { color: AGE_GROUP_COLORS["спелые"],           label: "Спелые" },
+  { color: AGE_GROUP_COLORS["перестойные"],      label: "Перестойные" },
+  { color: AGE_GROUP_COLORS.unknown,             label: "Нет данных" },
+];
+
 type Props = {
   visible: boolean;
   onClose: () => void;
+  mode?: ForestColorMode;
 };
 
-export function Legend({ visible, onClose }: Props) {
+export function Legend({ visible, onClose, mode = "species" }: Props) {
+  let title: string;
+  let subtitle: string;
+  let items: Array<{ color: string; label: string }>;
+
+  if (mode === "bonitet") {
+    title = "Бонитет";
+    subtitle =
+      "Класс качества местопроизрастания (I — самый продуктивный, V — самый бедный).";
+    items = BONITET_ORDER;
+  } else if (mode === "age") {
+    title = "Возрастные группы";
+    subtitle =
+      "Молодняки до спелых и перестойных (последние интересны для боровиков).";
+    items = AGE_ORDER;
+  } else {
+    title = "Породы";
+    subtitle = "Цвет выдела — преобладающая порода по данным ФГИС ЛК.";
+    items = SPECIES_ORDER.map((e) => ({
+      color: SPECIES_COLORS[e.slug],
+      label: e.label,
+    }));
+  }
+
   return (
     <Modal
       visible={visible}
@@ -51,14 +94,12 @@ export function Legend({ visible, onClose }: Props) {
         {/* Внутренний Pressable перехватывает тап на самой панели,
             чтобы не закрыть modal случайно. */}
         <Pressable style={styles.panel} onPress={() => {}}>
-          <Text style={styles.title}>Породы</Text>
-          <Text style={styles.subtitle}>
-            Цвет выдела — преобладающая порода по данным ФГИС ЛК.
-          </Text>
+          <Text style={styles.title}>{title}</Text>
+          <Text style={styles.subtitle}>{subtitle}</Text>
           <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-            {SPECIES_ORDER.map((entry) => (
-              <View key={entry.slug} style={styles.row}>
-                <View style={[styles.swatch, { backgroundColor: SPECIES_COLORS[entry.slug] }]} />
+            {items.map((entry) => (
+              <View key={entry.label} style={styles.row}>
+                <View style={[styles.swatch, { backgroundColor: entry.color }]} />
                 <Text style={styles.label}>{entry.label}</Text>
               </View>
             ))}

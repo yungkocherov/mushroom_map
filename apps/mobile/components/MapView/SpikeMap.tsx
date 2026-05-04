@@ -22,9 +22,17 @@ import {
 import { getLayerLocalUri } from "../../services/regions";
 import { getApiBaseUrl } from "../../services/api";
 import { ensureGlyphsExtracted, glyphsUrlPattern } from "../../services/glyphs";
-import { buildMapStyle, type BaseMapMode, type ForestSource } from "./style";
+import {
+  buildMapStyle,
+  type BaseMapMode,
+  type ForestColorMode,
+  type ForestSource,
+  type OverlayKey,
+} from "./style";
 import { ForestPopup, type ForestFeatureProps } from "./ForestPopup";
 import { Legend } from "./Legend";
+import { LayerSheet } from "./LayerSheet";
+import { SearchOverlay } from "./SearchOverlay";
 import { SpotsLayer } from "./SpotsLayer";
 import { SaveSpotSheet } from "../SaveSpotSheet";
 
@@ -68,6 +76,13 @@ export function SpikeMap() {
   const [baseMap, setBaseMap] = useState<BaseMapMode>("scheme");
   const [statusExpanded, setStatusExpanded] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
+  const [layerSheetOpen, setLayerSheetOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [forestColorMode, setForestColorMode] = useState<ForestColorMode>("species");
+  const [overlays, setOverlays] = useState<Partial<Record<OverlayKey, boolean>>>({});
+
+  const toggleOverlay = (k: OverlayKey, v: boolean) =>
+    setOverlays((prev) => ({ ...prev, [k]: v }));
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapViewRef>(null);
 
@@ -167,8 +182,11 @@ export function SpikeMap() {
       basemapPmtilesUri: basemapUri,
       glyphsUrl: glyphsBaseUri ? glyphsUrlPattern(glyphsBaseUri) : null,
       baseMap,
+      forestColorMode,
+      overlays,
+      tilesBaseUrl: getApiBaseUrl() + "/tiles",
     }),
-    [sources, basemapUri, glyphsBaseUri, baseMap],
+    [sources, basemapUri, glyphsBaseUri, baseMap, forestColorMode, overlays],
   );
 
   if (sources.length === 0 && !basemapUri && !assetError) {
@@ -356,11 +374,45 @@ export function SpikeMap() {
         </Pressable>
       ) : null}
 
-      <Pressable style={styles.legendBtn} onPress={() => setLegendOpen(true)}>
-        <Text style={styles.legendBtnText}>Легенда</Text>
-      </Pressable>
+      <View style={styles.bottomLeftBtns}>
+        <Pressable style={styles.pillBtn} onPress={() => setSearchOpen(true)}>
+          <Text style={styles.pillBtnText}>Поиск</Text>
+        </Pressable>
+        <Pressable style={styles.pillBtn} onPress={() => setLayerSheetOpen(true)}>
+          <Text style={styles.pillBtnText}>Слои</Text>
+        </Pressable>
+        <Pressable style={styles.pillBtn} onPress={() => setLegendOpen(true)}>
+          <Text style={styles.pillBtnText}>Легенда</Text>
+        </Pressable>
+      </View>
 
-      <Legend visible={legendOpen} onClose={() => setLegendOpen(false)} />
+      <Legend
+        visible={legendOpen}
+        onClose={() => setLegendOpen(false)}
+        mode={forestColorMode}
+      />
+
+      <LayerSheet
+        visible={layerSheetOpen}
+        onClose={() => setLayerSheetOpen(false)}
+        forestColorMode={forestColorMode}
+        onForestColorModeChange={setForestColorMode}
+        overlays={overlays}
+        onToggleOverlay={toggleOverlay}
+      />
+
+      <SearchOverlay
+        visible={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        onPickPlace={(lat, lon) => {
+          setFollowMode(false);
+          cameraRef.current?.setCamera({
+            centerCoordinate: [lon, lat],
+            zoomLevel: 12,
+            animationDuration: 600,
+          });
+        }}
+      />
     </View>
   );
 }
@@ -470,10 +522,14 @@ const styles = StyleSheet.create({
   gpsBtnTextActive: {
     color: palette.light.paper,
   },
-  legendBtn: {
+  bottomLeftBtns: {
     position: "absolute",
     left: spacing[4],
     bottom: spacing[5],
+    flexDirection: "row",
+    gap: spacing[2],
+  },
+  pillBtn: {
     paddingHorizontal: spacing[3],
     paddingVertical: spacing[2],
     borderRadius: radius.pill,
@@ -481,7 +537,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: palette.light.rule,
   },
-  legendBtnText: {
+  pillBtnText: {
     color: palette.light.ink,
     fontSize: fontSize.sm,
   },

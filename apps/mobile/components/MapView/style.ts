@@ -86,6 +86,26 @@ export type ForestSource = {
  */
 export type BaseMapMode = "scheme" | "satellite" | "hybrid";
 
+/**
+ * Режим раскраски forest fill:
+ *   - species: dominant_species → палитра коры (default)
+ *   - bonitet: bonitet 1..5 → зелёный→красный (качество местопроизрастания)
+ *   - age: age_group → палитра возраста (молодняк → перестойный)
+ */
+export type ForestColorMode = "species" | "bonitet" | "age";
+
+/**
+ * Toggleable overlay layers — все online через api.geobiom.ru/tiles/.
+ * Каждый pmtiles ~ десятки МБ, поэтому offline-bundle не делаем.
+ *
+ * - felling: вырубки/гари (важно — там через 2-3 года растут лисички, опята)
+ * - oopt: ООПТ (где НЕЛЬЗЯ собирать)
+ * - protective: защитные леса (ограничения)
+ * - waterway: ручьи/реки (ориентир)
+ * - roads: дороги (где ставить машину)
+ */
+export type OverlayKey = "felling" | "oopt" | "protective" | "waterway" | "roads";
+
 export type StyleInput = {
   forests: ForestSource[];
   /** OpenMapTiles-schema basemap (planetiler output). Optional. */
@@ -99,6 +119,15 @@ export type StyleInput = {
   glyphsUrl?: string | null;
   /** Базовая подложка. По умолчанию `scheme`. */
   baseMap?: BaseMapMode;
+  /** Режим раскраски forest fill. По умолчанию species. */
+  forestColorMode?: ForestColorMode;
+  /**
+   * Включённые overlay-слои + URL базы (api.geobiom.ru). Каждый pmtiles
+   * online; offline просто молча не загрузится.
+   */
+  overlays?: Partial<Record<OverlayKey, boolean>>;
+  /** Базовый URL до tile-сервера (для overlay'ев). Прим. https://api.geobiom.ru. */
+  tilesBaseUrl?: string | null;
 };
 
 /**
@@ -297,6 +326,192 @@ const ESRI_SATELLITE_TILES = [
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
 ];
 
+/** Палитра качества местопроизрастания (бонитет 1..5). Web-совместимо. */
+export const BONITET_COLORS = {
+  1: "#1b5e20",
+  2: "#66bb6a",
+  3: "#fdd835",
+  4: "#ef6c00",
+  5: "#b71c1c",
+  unknown: "#9e9e9e",
+} as const;
+
+/** Палитра возрастных групп Rosleshoz. Web-совместимо. */
+export const AGE_GROUP_COLORS: Record<string, string> = {
+  "молодняки":        "#a5d6a7",
+  "средневозрастные": "#43a047",
+  "приспевающие":     "#2e7d32",
+  "спелые":           "#795548",
+  "перестойные":      "#4e342e",
+  unknown:            "#9e9e9e",
+};
+
+const BONITET_COLOR_MATCH = [
+  "match", ["get", "bonitet"],
+  1, BONITET_COLORS[1],
+  2, BONITET_COLORS[2],
+  3, BONITET_COLORS[3],
+  4, BONITET_COLORS[4],
+  5, BONITET_COLORS[5],
+  BONITET_COLORS.unknown,
+] as const;
+
+const AGE_COLOR_MATCH = [
+  "match", ["get", "age_group"],
+  "молодняки",        AGE_GROUP_COLORS["молодняки"],
+  "средневозрастные", AGE_GROUP_COLORS["средневозрастные"],
+  "приспевающие",     AGE_GROUP_COLORS["приспевающие"],
+  "спелые",           AGE_GROUP_COLORS["спелые"],
+  "перестойные",      AGE_GROUP_COLORS["перестойные"],
+  AGE_GROUP_COLORS.unknown,
+] as const;
+
+function pickForestFillColor(mode: ForestColorMode): unknown {
+  if (mode === "bonitet") return BONITET_COLOR_MATCH;
+  if (mode === "age") return AGE_COLOR_MATCH;
+  return SPECIES_COLOR_MATCH;
+}
+
+/**
+ * Overlay-слои поверх forest fill. Все online через api.geobiom.ru.
+ * Возвращает массив layer-объектов; sources регистрируются отдельно
+ * через `addOverlaySource(map, key, baseUrl)` — но здесь стиль строится
+ * декларативно, source попадает в `sources` map'у одновременно.
+ */
+function buildOverlayLayers(
+  enabled: Partial<Record<OverlayKey, boolean>>,
+  mapSources: Record<string, unknown>,
+  tilesBaseUrl: string,
+): unknown[] {
+  const out: unknown[] = [];
+  const addSource = (key: OverlayKey, file: string) => {
+    mapSources[key] = {
+      type: "vector",
+      url: `pmtiles://${tilesBaseUrl}/${file}`,
+    };
+  };
+
+  if (enabled.felling) {
+    addSource("felling", "felling.pmtiles");
+    out.push({
+      id: "felling-fill",
+      type: "fill",
+      source: "felling",
+      "source-layer": "felling",
+      paint: {
+        "fill-color": [
+          "match", ["get", "area_type"],
+          "Вырубка",            "#ff5722",
+          "Гарь",               "#b71c1c",
+          "Погибшее насаждение", "#5d4037",
+          "#bf360c",
+        ],
+        "fill-opacity": 0.55,
+        "fill-antialias": false,
+      },
+    });
+  }
+
+  if (enabled.oopt) {
+    addSource("oopt", "oopt.pmtiles");
+    out.push({
+      id: "oopt-fill",
+      type: "fill",
+      source: "oopt",
+      "source-layer": "oopt",
+      paint: {
+        "fill-color": [
+          "match", ["get", "oopt_category"],
+          "zapovednik",    "#b71c1c",
+          "nat_park",      "#e65100",
+          "prirodny_park", "#f57f17",
+          "zakaznik",      "#558b2f",
+          "pamyatnik",     "#6a1b9a",
+          "#455a64",
+        ],
+        "fill-opacity": 0.3,
+        "fill-antialias": false,
+      },
+    });
+  }
+
+  if (enabled.protective) {
+    addSource("protective", "protective.pmtiles");
+    out.push({
+      id: "protective-fill",
+      type: "fill",
+      source: "protective",
+      "source-layer": "protective",
+      paint: {
+        "fill-color": "#6a1b9a",
+        "fill-opacity": 0.25,
+        "fill-antialias": false,
+      },
+    });
+  }
+
+  if (enabled.waterway) {
+    addSource("waterway", "waterway.pmtiles");
+    out.push({
+      id: "waterway-line",
+      type: "line",
+      source: "waterway",
+      "source-layer": "waterway",
+      minzoom: 9,
+      paint: {
+        "line-color": [
+          "match", ["get", "waterway"],
+          "river", "#1976d2",
+          "canal", "#1976d2",
+          "stream", "#42a5f5",
+          "drain", "#7e57c2",
+          "ditch", "#7e57c2",
+          "#42a5f5",
+        ],
+        "line-width": [
+          "interpolate", ["linear"], ["zoom"],
+          9,  ["match", ["get", "waterway"], "river", 2.0, "canal", 1.5, 0.6],
+          13, ["match", ["get", "waterway"], "river", 5.0, "canal", 4.0, "stream", 2.5, 1.5],
+        ],
+        "line-opacity": 0.85,
+      },
+    });
+  }
+
+  if (enabled.roads) {
+    addSource("roads", "roads.pmtiles");
+    out.push({
+      id: "roads-casing",
+      type: "line",
+      source: "roads",
+      "source-layer": "roads",
+      minzoom: 10,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#ffffff",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.2, 14, 5.5],
+        "line-opacity": 0.85,
+      },
+    });
+    out.push({
+      id: "roads-line",
+      type: "line",
+      source: "roads",
+      "source-layer": "roads",
+      minzoom: 10,
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": "#4a2c20",
+        "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.0, 14, 2.6],
+        "line-opacity": 0.95,
+        "line-dasharray": [2, 1.5],
+      },
+    });
+  }
+
+  return out;
+}
+
 /**
  * Build style.json для текущего набора forest sources + (опц.) basemap.
  * Если пусто и нет basemap'а — рисуется только paper-фон.
@@ -376,6 +591,7 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
   // Forest fill — поверх basemap'а / спутника. На satellite/hybrid снижаем
   // непрозрачность, чтобы рельеф читался под раскраской выделов.
   const forestOpacity = mode === "scheme" ? 0.5 : 0.35;
+  const forestFillColor = pickForestFillColor(normalized.forestColorMode ?? "species");
 
   for (const src of normalized.forests) {
     mapSources[src.id] = {
@@ -389,7 +605,7 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
       source: src.id,
       "source-layer": src.sourceLayer ?? "forest",
       paint: {
-        "fill-color": SPECIES_COLOR_MATCH as unknown as string,
+        "fill-color": forestFillColor as unknown as string,
         "fill-opacity": forestOpacity,
         "fill-outline-color": "rgba(0,0,0,0)",
       },
@@ -402,6 +618,17 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
     if (src.maxzoom !== undefined) layer.maxzoom = src.maxzoom;
     else if (isLowZoom) layer.maxzoom = 9;
     layers.push(layer);
+  }
+
+  // Overlay-слои (felling/oopt/protective/waterway/roads) — после forest,
+  // чтобы видеть вырубки/ООПТ/дороги поверх раскраски выделов.
+  if (normalized.overlays && normalized.tilesBaseUrl) {
+    const overlayLayers = buildOverlayLayers(
+      normalized.overlays,
+      mapSources,
+      normalized.tilesBaseUrl,
+    );
+    layers.push(...overlayLayers);
   }
 
   return {
