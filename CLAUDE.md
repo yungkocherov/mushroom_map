@@ -1,903 +1,438 @@
 # CLAUDE.md — project context for Claude Code sessions
 
-This file is auto-loaded at the start of every session. It contains the
-durable conventions, commands, and known gotchas. For architecture see
-`docs/architecture.md`; for the active **redesign 2026-04 spec** see
-**`docs/redesign-2026-04.md`** (planner-first IA, map-as-home, 3-phase
-rollout — phases 1 done, phase 2 in progress); for roadmap see
-`docs/roadmap_content_ideas.md`; for why we ended up with Rosleshoz see
-`docs/forest_sources_analysis.md`.
+This file is auto-loaded at the start of every session. **Durable
+conventions, commands, gotchas only.** Time-stamped status / running
+log / past phase details — в memory (`MEMORY.md`) или в архивных
+plan-файлах (`docs/archive/`). Не вешать сюда «what shipped today» —
+для этого есть git log.
 
-**Brand:** the project is being renamed `mushroom-map` → **Geobiom**
-(Title Case in prose/UI/OG, lowercase `geobiom` in URL/files; wordmark
-may use lowercase). Domain `geobiom.ru` is author-owned, parked at
-Cloudflare. The repo name and npm-workspace names (`@mushroom-map/*`)
-will rename in a later phase.
-
-**Sibling repo `mushroom-forecast`** живёт в `C:\Users\ikoch\mushroom-forecast`
-(GitHub: yungkocherov/mushroom-forecast, private). Он владеет схемой
-`forecast.*` в этой же Postgres-базе. mushroom-map **только читает**
-`forecast.prediction` (будущий `/api/forecast/at`). В public.* из
-forecast-репо не пишем — это двусторонний контракт.
-
-**Mobile app `apps/mobile`** (с 2026-05-01) — Geobiom Android-app
-(React Native + Expo bare + maplibre-react-native), цель: offline-карта
-леса с GPS-маркером в РФ-no-VPN. План — `docs/mobile-app-2026-05.md`
-(16 решений зафиксированы, 3 open questions).
-
-**Текущее состояние** (после autonomous run 2026-05-01):
-- **Phase 0 spike** — ✅ VERIFIED 2026-05-01 на эмуляторе Pixel 6 /
-  API 34 / x86_64. Карта-экран `(tabs)/index.tsx` + `SpikeMap.tsx`
-  (PMTiles из bundled-asset через `pmtiles://file:///abs/path` +
-  GPS-маркер + chanterelle dot). 8 граблин зафиксированы в
-  `docs/mobile-app-2026-05.md` секции «Phase 0 progress». `tsc
-  --noEmit` зелёный.
-- **Phase 1 foundation** — bottom tabs (Карта/Споты/Виды/Настройки),
-  SQLite (`@op-engineering/op-sqlite` с SQLCipher с Phase 5 = 2026-05-04;
-  до этого `expo-sqlite` plain), `spotsRepo.ts`, API client с
-  `Authorization: Bearer device_token`, Yandex OAuth PKCE.
-- **Phase 2** (essentially done) — per-district pmtiles pipeline +
-  download manager + popup на выделе + basemap. Migration 032
-  (`admin_area.slug`), `pipelines/build_district_tiles.py` (auto-cluster
-  через python-pmtiles), 18 районов × 4 слоя = 627 МБ на TimeWeb +
-  Oracle. `services/regions.ts` + `useOfflineRegions` + `/regions`
-  экран. `pipelines/build_basemap.py` (planetiler v0.7 + Geofabrik
-  northwestern-fed-district extract) → bundled `apps/mobile/assets/
-  basemap-lo-low.pmtiles` 11.7 МБ z0-10 (OpenMapTiles schema). SpikeMap
-  multi-source style.json (basemap + forest sources). ForestPopup
-  Modal с КВ + «Виды по биотопу» из bundled species-affinity.json.
-- **Phase 3** (done) — spots offline-first. SaveSpotSheet (FAB на
-  карте → form modal), spots list с distance-from-GPS sort
-  (haversine), spot detail (`app/spot/[uuid].tsx`) с компасом
-  (`expo-sensors` Magnetometer + Animated rotate, bearing computed
-  haversine'ом).
-- **Phase 4 polish** (done) — Russian species names в popup,
-  cancel-in-progress download через `dl.cancelAsync()`, manifest
-  update detection (outdated Set + UI badge), 3-screen onboarding
-  flow (welcome / GPS permission / regions), species catalog tab
-  с filters + detail screen, NetworkBanner (NetInfo + animated
-  slide-in при offline + pending-spots indicator).
-- **Phase 5 prep** (mostly done 2026-05-04):
-  - ✅ gorhom/bottom-sheet вместо Modal в SaveSpotSheet (BottomSheet
-    с императивным API через `snapToIndex`/`close` ref-методы; index-prop
-    при изменении из родителя на complex-картах не всегда триггерит
-    snap-to-close, ref надёжнее).
-  - ✅ SQLCipher через `@op-engineering/op-sqlite` v15. Encryption key —
-    32-байтовый random в Android Keystore через `expo-secure-store`.
-    Adapter в `services/db.ts` сохраняет API expo-sqlite. Миграция
-    legacy plain DB (`migrateLegacyPlainDb`) one-shot копирует данные
-    при первом cold-start после апгрейда.
-  - ✅ bundled `forest-luzhsky.pmtiles` placeholder удалён (-40 МБ APK).
-    Online режим через api.geobiom.ru покрывает «нет скачанных регионов».
-  - ✅ production keystore tooling: `apps/mobile/scripts/generate-release-keystore.sh`
-    + Expo config-plugin `apps/mobile/plugins/with-release-signing.js`
-    идемпотентно патчит build.gradle после prebuild. Документ
-    `apps/mobile/docs/release-signing.md` + RuStore чек-лист
-    `apps/mobile/docs/rustore-submission.md`.
-  - ✅ brand-icon + adaptive + splash через PIL-скрипт
-    `apps/mobile/scripts/generate-icons.py` (paper-фон + green
-    mushroom-cap, реплика web-icon.svg).
-  - ✅ tags словарь шарится через `@mushroom-map/types/spotTags` —
-    единый source-of-truth для web (SaveSpotModal/SpotDetailPage/
-    CabinetSpotsPage) и mobile (SaveSpotSheet, spots list, spot detail).
-    11 деревьев + 13 грибов + 5 ягод. `tagLabel(slug)` → русское имя.
-  - ✅ bundled glyphs PBF (2026-05-04) — 18 PBF (Noto Sans Regular/Bold/
-    Italic × 6 ranges, ~1.8 МБ) в `apps/mobile/assets/glyphs/`,
-    `services/glyphs.ts: ensureGlyphsExtracted()` копирует в
-    `documentDirectory/glyphs/` при первом старте (idempotent), потом
-    style получает `file://` glyph-URL. Online fallback
-    (`BASEMAP_GLYPHS_URL_FALLBACK`) — пока extract не прошёл или упал.
-  - 🟡 Outstanding: реальный keystore generation + бэкап (manual у
-    автора), RuStore submission (manual + ИП регистрация в RuStore
-    Developer Console).
-- **Phase 6 (started 2026-05-04):**
-  - ✅ /spots tab — search-input по name+note + tag-chip filter
-    (мульти-AND, чипы только из тегов, реально присутствующих в спотах) +
-    sort toggle расстояние/дата + count-line.
-  - ✅ Spots cluster на карте — `components/MapView/SpotsLayer.tsx`
-    с native MapLibre clustering (`cluster=true`, radius=50,
-    clusterMaxZoomLevel=12). Цвет cluster'а step-by-point_count
-    (chanterelle/forest/ink), индивидуальные точки colored по rating.
-    Tap на cluster → camera-zoom; tap на точку → /spot/[uuid].
-- **Backend дельта:**
-  - Миграция `db/migrations/031_user_spot_client_uuid.sql` —
-    `client_uuid UUID UNIQUE` (partial), `client_updated_at`,
-    `deleted_at` для soft-delete sync'a.
-  - `services/api/src/api/routes/mobile.py` — три эндпоинта:
-    `POST /api/mobile/auth/yandex` (PKCE code exchange → device_token),
-    `POST /api/mobile/auth/revoke` (Phase 2 stub),
-    `POST /api/mobile/spots/sync` (idempotent upsert по client_uuid +
-    last-write-wins по client_updated_at + diff с last_sync_at для
-    pull),
-    `GET /api/mobile/regions` (Phase 2 stub).
-  - `encode_device_token` в `auth/jwt_tokens.py` — long-lived JWT
-    (default 365 дней) с `typ='device'`, `did`-claim. Принимается
-    `decode_access_token` наравне с access-токеном.
-  - Settings: `yandex_mobile_client_id/secret` (отдельное Yandex-app
-    с типом «Мобильное», redirect URI `geobiom://auth/callback`).
-  - `cabinet.list_spots` теперь фильтрует `deleted_at IS NULL`
-    (sync пишет soft-delete).
-  - 5 unit-тестов на `encode_device_token` round-trip
-    (`tests/test_mobile_jwt.py`), 67 passed / 39 skipped (2 pre-existing
-    fails — нужен running API).
-
-**Что поставлено на dev** (см. `apps/mobile/README.md`):
-- JDK 17 ✓ Microsoft.OpenJDK.17 через winget,
-  `JAVA_HOME=%LOCALAPPDATA%\Programs\Microsoft\jdk-17.0.10.7-hotspot`
-- Android SDK ✓ через cmdline-tools (без полного Android Studio) в
-  `%LOCALAPPDATA%\Android\Sdk\`. `ANDROID_HOME`+`ANDROID_SDK_ROOT` в User env.
-  Пакеты: `platform-tools` (adb), `platforms;android-34`,
-  `build-tools;34.0.0`. Лицензии preseed'ом через `Sdk\licenses\*`
-  (стандартный CI-трюк, sdkmanager не умеет non-interactive license
-  accept на Windows-pipe'ах).
-- pmtiles CLI ✓ v1.22.2 в `%USERPROFILE%\bin\pmtiles.exe`
-- Что НЕ поставлено: Android Studio IDE (1+ ГБ, не нужен для
-  `expo run:android`), Go (winget MSI требует admin; pmtiles взяли
-  prebuilt-бинарником вместо `go install`), Android Emulator
-  (`sdkmanager "emulator" "system-images;android-34;google_apis;x86_64"` —
-  если понадобится AVD; рекомендация — физический Android device).
-
-**Перезапустить терминал** после `setx`/`SetEnvironmentVariable("User")` —
-открытые сессии не видят новые env vars.
-
-Workspaces: `@mushroom-map/mobile`, шерит `@mushroom-map/tokens` (новый
-export `/native` с number-размерами для RN). Distribution v1 —
-**Android only**, RuStore + APK direct; iOS отложен в v2.
-
-## Iteration workflow — ОБЯЗАТЕЛЬНО в конце каждой итерации
-
-Чтобы любая новая сессия могла за 30 секунд понять «что сделано / что
-следующее», **не закрывай итерацию без**: (1) commit + push в origin,
-(2) апдейт `Iter-N status` / `Next up` секций этого файла, (3) апдейт
-memory-файлов (`MEMORY.md` + relevant `reference_*.md`), (4) фиксация
-exit-state в активном plan-файле если он был. Полная версия правила —
-в `mushroom-forecast/CLAUDE.md`, этот репо следует тому же протоколу.
+Pointers:
+- Architecture: `docs/architecture.md`
+- Redesign 2026-04 (current IA, phases 1 done / 2 in progress): `docs/redesign-2026-04.md`
+- Why Rosleshoz: `docs/forest_sources_analysis.md`
+- Mobile (Geobiom Android): `docs/mobile-app-2026-05.md`
+- Production runbook (two-stack): см. секцию ниже + `docs/deployment.md` (legacy initial setup)
+- Backup runbook: `scripts/backup/README.md`
+- Observability runbook: `services/observability/README.md`
 
 ## One-line summary
 
-Interactive forest+forage map for Leningrad Oblast (rebranded to
-**Geobiom**, prod live на `geobiom.ru`). PostGIS + FastAPI + React +
-MapLibre GL + PMTiles + Zustand. Forest polygons from Rosleshoz/ФГИСЛК
-(~2M, full LoO coverage), painted by dominant tree species / bonitet /
-age group; click → popup with bonitet/age + fungi theoretical from
-species registry. Home (`/`) = карта c collapsible sidebar.
+Interactive forest+forage map for Leningrad Oblast (rebrand
+**`mushroom-map` → Geobiom**, prod live на `geobiom.ru`). PostGIS +
+FastAPI + React + MapLibre GL + PMTiles + Zustand. Forest polygons из
+Rosleshoz/ФГИСЛК (~2M, full LO coverage), раскраска по dominant
+species / bonitet / age group; click → popup с bonitet/age + theoretical
+fungi из species registry. Home (`/`) = карта c collapsible sidebar.
 
-## IA & key routes (post-redesign 2026-04)
+**Brand:** lowercase `geobiom` в URL/files, Title Case в UI/prose. Repo
+и npm-workspace names (`@mushroom-map/*`) переименуются позже.
+
+**Sibling repo `mushroom-forecast`** в `C:\Users\ikoch\mushroom-forecast`
+(GitHub: yungkocherov/mushroom-forecast, private). Владеет схемой
+`forecast.*` в этой же Postgres-базе. mushroom-map **только читает**
+`forecast.prediction` (будущий `/api/forecast/at`). В `public.*` из
+forecast-репо не пишем — двусторонний контракт.
+
+**Mobile app `apps/mobile`** — React Native + Expo bare +
+maplibre-react-native, Android only (RuStore + APK direct), iOS
+отложен. SQLCipher (op-sqlite v15), bundled basemap PMTiles, per-district
+download manager. Dev-setup: JDK 17 + Android SDK через cmdline-tools
+(без Android Studio IDE), pmtiles CLI v1.22.2 в `%USERPROFILE%\bin\`.
+Полные требования и phase-log — `docs/mobile-app-2026-05.md`,
+`apps/mobile/README.md`.
+
+## IA & key routes
 
 ```
-/                        → map-as-home (MapHomePage = Sidebar + MapView)
-                           Sidebar collapsible (persist localStorage);
-                           карта читает grid-column:2 явно — иначе при
-                           display:none sidebar'а MapPane уезжал в 0px
-                           колонку (баг найден 2026-04-28).
+/                        → map-as-home (Sidebar + MapView, sidebar collapsible)
 /map                     → 301 → /
-/map/:district           → district detail (SidebarDistrict)
-/species                 → catalog
-/species/:slug           → species detail (без CTA «Открыть на карте» —
-                           справочник, не точка входа в карту)
-/spots                   → «Сохранённые места» (auth-gated). URL ASCII;
-                           UI labels — «Сохранённые места» (header),
-                           «Сохранённые» (LayerGrid чип, узкий).
+/map/:district           → district detail
+/species, /species/:slug → catalog + detail (без CTA «Открыть на карте»)
+/spots                   → «Сохранённые места» (auth-gated)
 /cabinet/spots           → 301 → /spots
-/methodology             → hub (данные / модель / проект / legal)
-/methodology/:slug       → MDX article
+/methodology[/:slug]     → MDX articles hub
 /about                   → 301 → /methodology/about
-/guide                   → 301 → /methodology
 /legal/{privacy,terms}   → live
-/auth/*                  → Yandex OAuth flow
+/auth/*                  → Yandex OAuth
 ```
 
-**District choropleth удалён 2026-04-28.** Раскраска по 18 районам
-отражала бы географию VK-постов, а не реальное распределение грибов.
-Удалены `forecast-choropleth-fill` слой, top-5 список в SidebarOverview,
-choropleth-controller useEffect в MapView. `forecastChoropleth.ts`
-файл и ключ в `useLayerVisibility` оставлены (выключен) на случай
-возврата при появлении точечной forecast-модели.
+`grid-column:2` на MapPane задаётся **явно** — иначе при `display:none`
+sidebar'а MapPane уезжает в 0px колонку (баг 2026-04-28). Полный спек IA —
+`docs/redesign-2026-04.md`.
 
-**user_spot.tags TEXT[]** (миграция 029, 2026-04-28) + **user_spot.rating
-SMALLINT 1-5** (миграция 030, 2026-04-29 — заменила старый `color` enum).
-Tags: multi-select из словаря `apps/web/src/lib/spotTags.ts` — 11 пород
-деревьев + 13 видов грибов + 5 ягод. Slug'и совпадают с
-`species_forest_affinity` где возможно (boletus-edulis...) — задел на
-матчинг с моделью прогноза. SaveSpotModal + SpotDetailPage edit рисуют
-чип-блоки «Деревья / Грибы / Ягоды». Сервер только дедуп+trim, без
-word-list валидации — словарь во фронте.
+**District forecast choropleth:** по умолчанию выключен (раскраска по 18
+районам отражала бы географию VK-постов, не реальное распределение
+грибов). Слой жив в реестре + чип «Прогноз» в LayerGrid + `DateScrubber`
+в SidebarDistrict + endpoint `/api/forecast/districts`. Включается
+вручную; ждёт точечной forecast-модели для пересмотра дефолта.
 
-Rating: оценка качества места 1..5 (1=плохое → 5=отличное). Цвет маркера
-производный от rating через `apps/web/src/lib/spotRating.ts`
-(red→orange→grey→green→dark-green). Pydantic Field(ge=1, le=5) +
-CHECK constraint синхронизированы. Старые color-значения backfill'ятся
-в миграции (forest/chanterelle→4, moss/birch→3, danger→1).
+**user_spot.tags** (TEXT[], миграция 029) + **rating** (SMALLINT 1..5,
+миграция 030 — заменила старый color enum). Tag-словарь шарится через
+`@mushroom-map/types/spotTags` (web + mobile, 11 деревьев + 13 грибов
++ 5 ягод). Цвет маркера производный от rating через
+`apps/web/src/lib/spotRating.ts`.
 
 Global UI primitives:
-- **Spotlight (⌘K)** — `apps/web/src/components/Spotlight.tsx`. Mounted in
-  `Layout`. Хитит `/api/species/search` + `/api/places/search`
-  (`searchGazetteer`). Без cmdk — на Radix Dialog.
-- **BottomSheet** — `apps/web/src/components/mobile/BottomSheet.tsx`.
-  3 snap (peek 18% / half 55% / full 92%), `@use-gesture/react` +
-  `@react-spring/web`. Stand-alone primitive; интеграция с MapLibre popup
-  на ≤768px пойдёт следующим шагом.
-- **LayerGrid** — `apps/web/src/components/mapView/LayerGrid.tsx`. После
-  rеfactor'а 2026-04-29 расширен до primary 7 chip'ов (Прогноз/Породы/
-  Бонитет/Возраст/Почва/Рельеф/Споты) + secondary 8 chip'ов под disclosure
-  «Ещё слои» (Водотоки/Болота/Водоохранные/ООПТ/Дороги/Вырубки/Защитные/
-  Районы). `floating?` prop оборачивает в `position:absolute` для
-  использования внутри MapView как floating-панель; в Sidebar — без prop'а.
-  Рендерится в трёх местах: SidebarOverview, SidebarDistrict, MapView (top-right
-  floating). Все три синхронизированы через `useLayerVisibility` store.
-- **Per-page `<title>` / meta-description** — `useLayerTitle` hook в
-  `apps/web/src/lib/usePageTitle.ts`. Подключён к /species, /species/:slug,
-  /spots, /methodology, /methodology/:slug.
+- **Spotlight (⌘K)** — `apps/web/src/components/Spotlight.tsx`,
+  Radix Dialog. `/api/species/search` + `/api/places/search`.
+- **BottomSheet (mobile web)** — 3 snap, `@use-gesture/react` +
+  `@react-spring/web`.
+- **LayerGrid** — primary 7 + secondary 8 чипов под disclosure. Source
+  of truth: store `useLayerVisibility`. Floating-режим внутри MapView
+  (`floating?` prop), inline в Sidebar.
+- **Per-page `<title>` / meta** — `useLayerTitle` хук в
+  `apps/web/src/lib/usePageTitle.ts`.
 
-Methodology articles живут как MDX в `apps/web/src/content/methodology/`:
-forest-data, vk-pipeline, species-registry — рубрика «Источники данных»;
-about, authors, changelog — «О проекте». Frontmatter содержит `category`
-(см. `index.ts:METHODOLOGY_CATEGORIES`).
+Methodology MDX в `apps/web/src/content/methodology/`, frontmatter с
+`category`. Hero photo manifest scaffold —
+`apps/web/src/content/photos.json` + `photos-candidates.md` (TODO).
 
-Hero photo manifest scaffold: `apps/web/src/content/photos.json` (TODO в
-`apps/web/src/content/photos-candidates.md`). До наполнения карточки
-`/species/:slug` рисуют диагональный паттерн `birch` в hero.
+Map state в Zustand:
+- `useLayerVisibility.ts` — 13 layer keys + forestColorMode + UI-toasts
+- `useMapMode.ts` — `'overview' | 'district'` + selected district
+- `useForecastDate.ts` + `useForecastDistricts.ts` — date scrubber + cached fetch
 
-State for the map sub-app lives in three Zustand stores:
-- `apps/web/src/store/useLayerVisibility.ts` — 13 layer keys + forestColorMode
-- `apps/web/src/store/useMapMode.ts` — `'overview' | 'district'` + selected district
-- `apps/web/src/store/useForecastDate.ts` — date scrubber state
-- `apps/web/src/store/useForecastDistricts.ts` — cached fetch hook for `/api/forecast/districts`
+## Iteration workflow — ОБЯЗАТЕЛЬНО
+
+Не закрывай итерацию без: (1) commit + push в origin, (2) апдейт
+memory-файлов (`MEMORY.md` + relevant `reference_*.md` / `project_*.md`),
+(3) фиксация exit-state в активном plan-файле если он был. Полная
+версия правила — в `mushroom-forecast/CLAUDE.md`, этот репо следует
+тому же протоколу.
 
 ## Environment quirks — read this first
 
 - **Python venv**: `/c/Users/ikoch/mushroom-map/.venv/Scripts/python.exe`
-  (Python 3.14). Never just `python` — it runs system Python without deps.
-- **Node**: `/c/Program Files/nodejs/` is not on PATH by default in bash.
-  Before any `npm` / `npx` command:
-  `export PATH="/c/Program Files/nodejs:$PATH"`
-- **Postgres port**: host port **5434** (not 5432). Native Windows Postgres
-  squats on 5432. Pipelines use `DATABASE_URL=postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map`.
-  API container talks to `db:5432` via the compose network — that's fine.
-- **Vite proxy target is `127.0.0.1:8000`**, not `localhost:8000`.
-  Node 18+ resolves localhost → IPv6 first, uvicorn listens on IPv4.
-  Do NOT "fix" this.
-- **Windows cp1251 encoding**: don't put `→`, `←`, Unicode arrows in
-  `print()` calls — Python crashes with UnicodeEncodeError when redirected.
-  Use `->` / `<-`.
-- **psycopg3 is `cursor.executemany()`**, not `conn.executemany()`. The
-  latter silently works on psycopg2 but errors on psycopg3.
-- **psycopg3 strict-parses `%` even in SQL comments and string literals.**
-  Любой одиночный `%` в строке → `incomplete placeholder` error. Typical
-  trap: комментарий типа `-- дубли на 1-2% площади` или print(f"{x}%").
-  Решение: экранировать `%%`, или вообще избегать `%` в SQL-строках. Актуально
-  для SQL, который передаётся как Python f-string / literal с параметрами.
-- **Vite HMR on Docker + Windows needs polling**: `vite.config.ts` has
-  `watch: { usePolling: true, interval: 300 }`. If file changes don't
-  reload, verify that config is intact.
-- **Web dev запускается на хосте, не в docker** (с Phase 1 D3). Docker
-  Desktop + WSL2 + virtiofs на Windows ловит esbuild `Cannot read
-  directory ".": cannot allocate memory` при bind-mount workspace-репо.
-  Поэтому service `web` теперь в профиле `full-web` и НЕ поднимается
-  через `docker compose --profile full up -d`. Dev-loop:
-  ```
-  export PATH="/c/Program Files/nodejs:$PATH"
-  npm run dev              # из репо-root: vite workspace @mushroom-map/web
-  ```
-  Контейнер `web` всё ещё билдится (`docker compose --profile full-web
-  build web`) для прод-проверки. Dockerfile обновлён под workspaces:
-  copy root + packages/* package.json, `npm ci --workspaces
-  --include-workspace-root`, WORKDIR /workspace/apps/web. Когда ставишь
-  host-side новый npm-пакет: `npm install --workspace=@mushroom-map/web
-  <pkg>` из репо-root.
-- **PMTiles Range requests** go direct to API (`http://${API_ORIGIN}/tiles/...`),
-  not through Vite proxy. Vite proxy doesn't handle Range well.
+  (Python 3.14). Никогда просто `python` — system Python без deps.
+- **Node**: `/c/Program Files/nodejs/` не на PATH в bash по дефолту.
+  Перед `npm`/`npx`: `export PATH="/c/Program Files/nodejs:$PATH"`.
+- **Postgres port 5434** (не 5432). Native Windows Postgres на 5432.
+  DSN: `postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map`.
+  API в Docker → `db:5432` через compose network — нормально.
+- **Vite proxy → `127.0.0.1:8000`**, не `localhost`. Node 18+ резолвит
+  localhost в IPv6 first, uvicorn слушает IPv4. NOT a bug.
+- **Windows cp1251**: не клади `→`, `←`, Unicode arrows в `print()` —
+  Python падает с UnicodeEncodeError при redirect. Используй `->` / `<-`.
+- **psycopg3 — `cursor.executemany()`**, не `conn.executemany()`
+  (последнее работало на psycopg2, на psycopg3 ошибка).
+- **psycopg3 строго парсит `%`** даже в SQL-комментариях и string
+  literals. Любой одиночный `%` → `incomplete placeholder`. Trap:
+  комментарий `-- 1-2% площади` или `print(f"{x}%")`. Решение —
+  экранировать `%%` или избегать.
+- **Vite HMR на Docker+Windows**: polling-режим в `vite.config.ts`.
+- **Web dev запускается на хосте** (с Phase 1 D3): Docker+WSL2+virtiofs
+  ловит esbuild OOM на bind-mount workspace-репо. Service `web` в
+  профиле `full-web`, не поднимается через `--profile full`. Dev-loop:
+  `export PATH="/c/Program Files/nodejs:$PATH" && npm run dev`.
+  Host-side новый npm-пакет: `npm install --workspace=@mushroom-map/web <pkg>`.
+- **PMTiles Range requests** идут напрямую в API
+  (`http://${API_ORIGIN}/tiles/...`), не через Vite proxy (Vite плохо
+  держит Range).
 
 ## Common commands
 
 ```bash
-# Bring up backend stack (db + api). Web фронт запускается на хосте
-# отдельно через `npm run dev` (см. Environment quirks).
+# Backend stack (db + api). Web фронт — на хосте через `npm run dev`.
 docker compose --profile full up -d
 
 # DB only (для API/web разработки без докеризированного API)
 docker compose up -d db
 
 # Фронт — hot-reload Vite на хосте
-export PATH="/c/Program Files/nodejs:$PATH"
-npm run dev                        # репо-root: workspace @mushroom-map/web
+export PATH="/c/Program Files/nodejs:$PATH" && npm run dev
 
 # Migrations
 .venv/Scripts/python.exe db/migrate.py
 
-# ─── Rosleshoz/FGIS forest data — TWO pipelines ─────────────────────────
-#
-# 1) NEW (2026-05-04): bulk-скрап через ФГИС API endpoint'ы
-#    attributesinfo + boundingbox + WMS GetFeatureInfo. 100% покрытие
-#    выделов ЛО (~96k выделов в одном object_id-блоке). См.
-#    pipelines/scrape_fgislk_attrinfo.py + memory/reference_fgislk_api.md.
-#    ВКЛЮЧИ AdGuard split-tunnel exclusion для pub.fgislk.gov.ru
-#    + pub5.fgislk.gov.ru (или выключи VPN полностью) — RU IP обязателен.
+# Forest data — bulk-скрап ФГИС API (current path, см. memory/reference_fgislk_api.md).
+# Включи AdGuard split-tunnel exclusion для pub.fgislk.gov.ru / pub5.fgislk.gov.ru
+# (или выключи VPN полностью) — RU IP обязателен.
 .venv/Scripts/python.exe pipelines/scrape_fgislk_attrinfo.py \
   --start 109022831 --end 109118831 --workers 30
-#    Output: data/rosleshoz/fgislk_attrinfo.geojson (~95k features)
-#    Resume-friendly: progress в data/rosleshoz/fgislk_attrinfo_progress.db
-#
-# 2) DEPRECATED (но всё ещё в репо до cleanup'а): MVT-скрап через
-#    pub5.fgislk.gov.ru/plk/gwc-01/geowebcache/. Возвращает ~70% выделов
-#    (server-side rendering rules выкидывают мелкие/низкоприоритетные).
-#    Не использовать для новых ingest'ов.
-#
-# Re-ingest GeoJSON в forest_polygon (~15-30 min для ~95k полигонов)
+# Resume-friendly: progress в data/rosleshoz/fgislk_attrinfo_progress.db
+
+# Re-ingest GeoJSON в forest_polygon
 .venv/Scripts/python.exe -u pipelines/ingest_forest.py \
   --source rosleshoz --region lenoblast \
   --rosleshoz-file data/rosleshoz/fgislk_attrinfo.geojson \
   --rosleshoz-version fgislk-attrinfo-2026-05 \
   --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
 
-# Rebuild forest.pmtiles after ingest (needs DATABASE_URL env var, NOT --dsn).
-# minzoom=5, maxzoom=13. На z<=8 идёт coarse-путь (build_tile_bytes_lowzoom):
-# все полигоны мерджатся через ST_Union с большим буфером (BUFFER_BY_ZOOM)
-# в один полигон 'mixed' → сплошной зелёный массив без дырок при отдалении.
-# На z>=9 — детальная per-species раскраска (BUFFER_BY_ZOOM[z] на лету).
+# Rebuild forest.pmtiles (use DATABASE_URL env, NOT --dsn)
 DATABASE_URL="postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map" \
   .venv/Scripts/python.exe -u pipelines/build_tiles.py --region lenoblast
+# minzoom=5, maxzoom=13. z<=8 — coarse-путь (ST_Union в один 'mixed' полигон,
+# сплошной зелёный массив без дырок при отдалении). z>=9 — per-species.
 
-# Build terrain from scratch: download 81 Copernicus DEM tiles (~1.6 GB) ->
-# mosaic/reproject/derive slope+aspect+hillshade -> hillshade.pmtiles (~453 MB).
+# Terrain (one-time): 81 Copernicus DEM tiles → mosaic → hillshade.pmtiles (~453 MB)
 .venv/Scripts/python.exe -u scripts/download_copernicus_dem.py
 .venv/Scripts/python.exe -u pipelines/build_terrain.py --step all
 .venv/Scripts/python.exe -u pipelines/build_hillshade_tiles.py
 
-# DEPRECATED MVT extract (см. выше: используй scrape_fgislk_attrinfo вместо)
-# .venv/Scripts/python.exe -u pipelines/fgislk_tiles_to_geojson.py \
-#   --in data/rosleshoz/fgislk_tiles \
-#   --out data/rosleshoz/fgislk_vydels.geojson
-
-# Districts (admin_level=6) of LO from OSM Overpass. Populates admin_area
-# and rewrites region.geometry via ST_Union of districts.
+# Districts (admin_level=6 LO from OSM Overpass) → admin_area + region.geometry
 .venv/Scripts/python.exe -u scripts/download_districts_overpass.py
 .venv/Scripts/python.exe -u pipelines/ingest_districts.py --region lenoblast
 
-# Gazetteer (OSM places/lakes/rivers/stations) + VK post -> district via Natasha NER.
-# load_gazetteer: 5x5 bbox split, per-tile tolerance; ~21k entries for LO.
-# --skip-admin keeps our 18 districts from ingest_districts.py untouched.
+# Gazetteer + VK post → district (Natasha NER)
 PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -u pipelines/load_gazetteer.py --region lenoblast --skip-admin
 PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -u pipelines/extract_vk_districts.py --region lenoblast
 
 # Typecheck web
 cd apps/web && export PATH="/c/Program Files/nodejs:$PATH" && npx tsc --noEmit
 
-# API container logs (for 500 errors that manifest as CORS in the browser)
+# API container logs (для 500 в виде CORS в браузере)
 docker compose logs --tail 50 api
 
-# Run all tests (smoke API + unit). Smoke skipped if docker not up.
+# Tests (smoke API + unit; smoke skipped без docker)
 .venv/Scripts/python.exe -m pytest -q
 
-# ─── Production деплой ──────────────────────────────────────────────
-# Полный runbook — docs/deployment.md. Краткая шпаргалка:
-#
-# Локальный prod-build образа API (валидация перед push в GHCR):
-docker build -f services/api/Dockerfile.prod -t mushroom-api:prod .
-#
-# На VM (Yandex Cloud, Ubuntu 22.04 — alias `geobiom-prod` в ~/.ssh/config):
-#   bash scripts/deploy/bootstrap_oracle.sh   (один раз; скрипт назван так
-#                                              исторически — Oracle был первой
-#                                              целью, реально работает на любом
-#                                              Ubuntu 22+ с docker)
-#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
-#
-# DB-миграции в проде (изнутри контейнера):
-#   docker compose -f docker-compose.prod.yml exec -T api \
-#       python /app/db/migrate.py
-#
-# pg_dump из локали в прод:
-#   REMOTE=root@<vm-ip> bash scripts/deploy/sync_db_to_remote.sh
-#
-# Forest tile build (5 мин с tippecanoe в Docker):
-#   bash pipelines/build_forest_tiles.sh
-#
-# PMTiles -> TimeWeb VM (rsync/scp на /srv/mushroom-map/tiles/):
-#   bash scripts/deploy/sync_tiles_to_vm.sh           # все
-#   bash scripts/deploy/sync_tiles_to_vm.sh forest    # один слой
+# Build forest.pmtiles via tippecanoe (5 мин на 2.17M полигонов, output ~318 MB)
+bash pipelines/build_forest_tiles.sh
+
+# PMTiles → VM (rsync)
+bash scripts/deploy/sync_tiles_to_vm.sh             # все
+bash scripts/deploy/sync_tiles_to_vm.sh forest      # один слой
 ```
 
 ## Production стек: two-stack (с 2026-04-30)
 
-После попыток мигрировать TimeWeb → Oracle Stockholm (бесплатный ARM)
-выяснилось что TSPU режет любой foreign-IP destination для RU-юзеров без
-ВПН (per-IP volume throttle ~16 KB freeze). Чистый Oracle = 0% RU-no-VPN
-аудитории. Чистый RU-host = ~95% работает без ВПН но проблемы у части
-VPN-юзеров. **Решение — two-stack**, две независимые копии.
+TSPU режет foreign-IP destinations для RU-юзеров без ВПН. Чистый Oracle
+= 0% RU-no-VPN. Чистый RU-host = ~95% RU-no-VPN, проблемы у части
+VPN-юзеров. Решение — **two-stack**, две независимые копии.
 
 ```
-geobiom.ru     →  178.253.43.136 (TimeWeb)  ← RU-no-VPN юзеры (primary)
-api.geobiom.ru →  178.253.43.136              full stack: db + api + tiles
-www.geobiom.ru →  178.253.43.136              + frontend(VITE_API_URL=api.geobiom.ru)
-
-app.geobiom.ru     →  79.76.46.181 (Oracle)  ← VPN/foreign юзеры
-app-api.geobiom.ru →  79.76.46.181              full stack replica
-                                                + frontend(VITE_API_URL=app-api.geobiom.ru)
+geobiom.ru / api.geobiom.ru / www.geobiom.ru  →  178.253.43.136 (TimeWeb, primary RU)
+app.geobiom.ru / app-api.geobiom.ru           →  79.76.46.181 (Oracle Stockholm, foreign replica)
 ```
 
-Полная история и факты про TSPU — memory `project_website_migration.md`.
+Обе VM используют один и тот же `docker-compose.prod.yml` (db + api +
+caddy). Frontend — два билда (Vite-env-vars запекаются), `VITE_API_URL`
+— per-stack. Tiles локально на каждой VM, отдаёт Caddy через
+`/tiles/*`. DB-sync TimeWeb→Oracle nightly cron (~10 мин, заменяет full
+db, Oracle на 24h stale — приемлемо).
 
-### TimeWeb (primary RU)
+**Aliases в `~/.ssh/config`:** `geobiom-prod-timeweb`, `geobiom-prod-oracle`.
 
-- **Хосты:** `geobiom.ru` / `www.geobiom.ru` / `api.geobiom.ru`
-- **VM:** `178.253.43.136`, alias `geobiom-prod-timeweb` в `~/.ssh/config`
-- **Stack:** `docker-compose.prod.yml` (db + api + caddy)
-- **Frontend:** `/srv/web/`, Vite-build с `VITE_API_URL=https://api.geobiom.ru`
-- **Tiles:** `/srv/mushroom-map/tiles/` → Caddy → `api.geobiom.ru/tiles/*`
-- **Deploy:** `.github/workflows/deploy-{api,web}.yml` (push main → GHCR/rsync → VM)
-- **DNS:** A grey-cloud (DNS only) на CF. **Никаких proxied (orange-cloud)** —
-  TSPU режет CF SNI.
+**DNS:** A grey-cloud (DNS only) на CF. **НЕ ставить orange-cloud** —
+TSPU режет CF SNI.
 
-### Oracle (foreign replica)
+**Deploy:** `.github/workflows/deploy-{api,web}.yml` (push main → GHCR
+build → ssh rsync → restart). На Oracle — manual rsync с dev (отдельный
+GH workflow ещё не написан).
 
-- **Хосты:** `app.geobiom.ru` / `app-api.geobiom.ru`
-- **VM:** `79.76.46.181` (Stockholm), alias `geobiom-prod-oracle`. Always-Free
-  (4 OCPU / 24 GB / 200 GB ARM).
-- **Stack:** тот же `docker-compose.prod.yml` + `imresamu/postgis:16-3.4` (ARM)
-- **Frontend:** `/srv/web/`, отдельная сборка с `VITE_API_URL=https://app-api.geobiom.ru`
-- **Tiles:** `/srv/mushroom-map/tiles/` (синкнуто однократно из TimeWeb)
-- **DB-sync:** nightly cron pg_dump TimeWeb → ssh-pipe → pg_restore Oracle
-  (~10 мин, заменяет full db). Данные на Oracle на **24h stale** — приемлемо.
-- **DNS:** `app` / `app-api` A-records на CF
+**GitHub vars/secrets:** `PROD_HOST=178.253.43.136`,
+`PROD_SSH_USER=root`, `PROD_SSH_KEY` = `~/.ssh/geobiom_yc`,
+`VITE_API_URL=https://api.geobiom.ru`, `PROD_DEPLOY_ENABLED=true`.
+**НЕ задавать `VITE_TILES_URL`** — фронт fallback'ит на API.
 
-### Frontend env (две сборки)
+**`.env.prod`:** `CADDY_API_HOST` / `CADDY_WEB_HOST` per-stack +
+`CADDY_ACME_EMAIL` + `WEB_HOST_PATH=/srv/web`.
 
-Vite-env-vars запекаются во время build'а. Для two-stack — два билда:
+**Foreign basemap CDN** (`tiles.versatiles.org`,
+`server.arcgisonline.com`) фронт дёргает напрямую — RU-no-VPN юзеры
+через TSPU. Иногда работает по lottery (мелкие тайлы 5-30 KB).
+Полный fix через caddy-proxy + патч URL во фронте отложен.
 
-```bash
-# TimeWeb билд (default flow)
-VITE_API_URL=https://api.geobiom.ru npm run build  # из репо-root
+**Migration scripts (Oracle, 2026-04-30, contingency-only):**
+`scripts/deploy/{bootstrap_oracle,cutover_to_oracle,smoke_test_prod,
+cloudflare_set_ttl,cloudflare_dns_cutover,rollback_to_timeweb,
+decommission_timeweb}.sh`. Cloudflare API token —
+`~/.cloudflare/geobiom-api-token` (DNS-Edit zone).
 
-# Oracle билд
-VITE_API_URL=https://app-api.geobiom.ru npm run build
-```
+История миграции и факты про TSPU — memory `project_website_migration.md`.
 
-CI: `.github/workflows/deploy-web.yml` собирает + деплоит на TimeWeb. Для
-Oracle отдельный target — пока **manual** (rsync с dev), позже добавить
-`deploy-web-oracle.yml`.
+**Через 1 месяц review:** есть пользователи помимо автора → продолжаем
+TimeWeb-primary; только автор → переезд на Oracle полностью.
 
-### Build forest.pmtiles
+**RU-VPS REG.RU Free Tier (dormant fallback):** `195.208.119.105`
+(Москва-2), 1 vCPU / 1 GB. Caddyfile в `infra/Caddyfile.ru-proxy`.
+Бесплатно до ~2026-10-30.
 
-`pipelines/build_forest_tiles.sh` (tippecanoe v1.24 в `klokantech/tippecanoe`
-Docker + go-pmtiles convert). 5 мин на 2.17M полигонов, output 209 MB.
-Tiles собираются однократно на dev, потом sync на оба VM:
-- TimeWeb: `bash scripts/deploy/sync_tiles_to_vm.sh forest`
-- Oracle: тем же скриптом с `REMOTE=geobiom-prod-oracle`
-
-### GitHub secrets / vars (для CI)
-
-**Secrets:**
-- `PROD_HOST` = `178.253.43.136` (TimeWeb IP)
-- `PROD_SSH_USER` = `root`
-- `PROD_SSH_KEY` = приватная часть `~/.ssh/geobiom_yc`
-
-**Vars:**
-- `VITE_API_URL=https://api.geobiom.ru` (для TimeWeb билда)
-- `PROD_DEPLOY_ENABLED=true`
-- **НЕ задавать `VITE_TILES_URL`** — фронт fallback'ит на `${API_ORIGIN}/tiles`
-
-### `.env.prod` на VM
-
-**Обе VM:** `CADDY_API_HOST`, `CADDY_WEB_HOST`, `CADDY_ACME_EMAIL`,
-`WEB_HOST_PATH=/srv/web`. На TimeWeb: `CADDY_API_HOST=api.geobiom.ru`,
-`CADDY_WEB_HOST=geobiom.ru`. На Oracle: `CADDY_API_HOST=app-api.geobiom.ru`,
-`CADDY_WEB_HOST=app.geobiom.ru`.
-
-### RU-VPS REG.RU Free Tier (dormant fallback)
-
-`195.208.119.105` (Москва-2), 1 vCPU / 1 GB / 10 GB, alias `geobiom-ru-proxy`.
-Бесплатно до **~2026-10-30** (6 мес). Caddyfile в `infra/Caddyfile.ru-proxy`,
-схема — frontend + tiles локально, /api/* проксируется. Активен/не активен —
-не критично пока. Используется как backup-host если TimeWeb выпадет.
-
-### Known gotchas
-
-- **Vite env-vars запекаются** — менять `VITE_API_URL` → редеплой обязателен.
-- **Каждый `git push`** проверять `gh run list` — `deploy-web` ~1 мин,
-  `deploy-api` ~5 мин.
-- **TSPU CF SNI блокировка** — не возвращать orange-cloud на CF.
-- **Foreign basemap CDN** (`tiles.versatiles.org`, `server.arcgisonline.com`)
-  фронт дёргает напрямую — RU-no-VPN юзеры через TSPU. Иногда работает по
-  lottery (мелкие тайлы 5-30 KB). Полный fix через каддy-proxy + патч URL
-  во фронте отложен.
-
-### Через 1 месяц (2026-05-30): review
-
-- Если **есть пользователи** помимо автора → **продолжаем TimeWeb-primary**
-  (платный RU host = единственный гарантированный путь для RU-no-VPN)
-- Если только автор → **переезд на Oracle полностью** (decommission TimeWeb,
-  принимаем требование ВПН для всех юзеров, экономим $X/мес)
-
-## Observability (GlitchTip + Umami)
-
-См. spec `docs/superpowers/specs/2026-04-30-prod-readiness-design.md`
-§4-§5 + runbook `services/observability/README.md`.
-
-- **GlitchTip** (Sentry-compatible) на `sentry.geobiom.ru`. Стек: web +
-  worker + redis. Compose-оверлей
-  `services/observability/glitchtip/docker-compose.yml`. Биндится на
-  `127.0.0.1:8001`, наружу — через Caddy. Использует отдельную БД
-  `glitchtip` на основном Postgres (бэкапится тем же `geobiom-backup.timer`).
-  SDK: `sentry-sdk[fastapi]` в API + `@sentry/react` во фронте. Init
-  no-op'ит если `SENTRY_DSN` / `VITE_SENTRY_DSN` не заданы — код можно
-  деплоить до того как поднят сервер. Release-tag = git SHA (через
-  `GIT_SHA` env в `deploy-api.yml` / `VITE_GIT_SHA` в `deploy-web.yml`).
-- **Umami** на `analytics.geobiom.ru`. Single Node контейнер,
-  `services/observability/umami/docker-compose.yml`. Privacy-first:
-  IP хешируется, нет cookies, нет third-party. Custom events в
-  `apps/web/src/lib/track.ts` (LayerGrid → `layer.toggle`, SaveSpotModal
-  → `spot.save`, SpeciesDetailPage → `species.open`, useMapMode →
-  `district.open`, Spotlight → `spotlight.search`). **PII в payload не
-  передаём** — только length / boolean / slug.
-- **Source maps** включены (`vite.config.ts: build.sourcemap=true`) —
-  GlitchTip подтягивает по URL, stack trace в исходник. Maps публично
-  доступны — приемлемо для open-source.
-- **Caddy** — site-block'и `{$CADDY_SENTRY_HOST}` и `{$CADDY_UMAMI_HOST}`
-  в `infra/Caddyfile`. В `.env.prod` добавить:
-  ```
-  CADDY_SENTRY_HOST=sentry.geobiom.ru
-  CADDY_UMAMI_HOST=analytics.geobiom.ru
-  GLITCHTIP_DB_PASSWORD=...
-  UMAMI_DB_PASSWORD=...
-  SENTRY_DSN=...
-  ```
-- **Запуск стека**:
-  ```
-  docker compose -f docker-compose.prod.yml \
-                 -f services/observability/glitchtip/docker-compose.yml \
-                 -f services/observability/umami/docker-compose.yml \
-                 --env-file .env.prod up -d
-  ```
-- **First-run** (createsuperuser в GlitchTip, регистрация website в
-  Umami, копирование DSN/website-id в GH Variables) — см. runbook §5-§7.
-
-## Backup (nightly to Yandex Object Storage)
-
-См. spec `docs/superpowers/specs/2026-04-30-prod-readiness-design.md` §1
-+ runbook `scripts/backup/README.md`.
-
-- **Pipeline**: `docker exec mushroom_db_prod pg_dump -Fc -Z 9` →
-  `age -r $AGE_RECIPIENT` → `rclone rcat geobiom-yos:geobiom-backups/db/YYYY-MM-DD.sql.gz.age`
-  (no temp file on disk; pure stream).
-- **Schedule**: systemd timer `geobiom-backup.timer` (daily 03:00 UTC) +
-  `geobiom-backup-rotate.timer` (Sunday 04:00 UTC). Units и скрипты
-  лежат в `scripts/backup/` и `scripts/backup/systemd/`. Деплой —
-  `REMOTE=geobiom-prod bash scripts/deploy/install_backup_systemd.sh`.
-- **Retention**: 7 daily + 4 weekly + 3 monthly = 14 файлов.
-- **Encryption**: `age` (single-recipient). Public key — на VM в
-  `/etc/geobiom/.env.backup` (`AGE_RECIPIENT=age1...`). Private key —
-  на dev-машине в `~/.ssh/geobiom-backup.age`. **Без приватного ключа
-  бэкапы нерасшифровать** — резервная копия ключа в личном password
-  manager обязательна.
-- **Bucket**: `geobiom-backups` в Y.O.S., service account
-  `geobiom-backup-writer` с ролью `storage.editor` только на этот
-  bucket. Static key в `/etc/geobiom/.env.backup`, mode 600.
-- **Restore-drill**: `bash scripts/backup/restore_drill.sh` — pull
-  latest, decrypt, restore в transient docker postgres, ассерты на
-  `forest_polygon >= 2M`, `admin_area >= 18`, `vk_post >= 60k`. **Без
-  репетиции бэкап считаем несуществующим.**
-- **Disaster recovery**: см. `scripts/backup/README.md` «Disaster
-  recovery: VM полностью потеряна».
-
-## Migration to Oracle ARM (планируется)
-
-Текущий прод на TimeWeb VM временный — план переезда на Oracle Cloud
-Free Tier ARM (4 OCPU / 24 GB, always-free). Spec
-`docs/superpowers/specs/2026-04-30-prod-readiness-design.md` §6, plan
-`docs/superpowers/plans/2026-04-30-prod-readiness-oracle-migration.md`.
-
-Скрипты (все в `scripts/deploy/`):
-- `bootstrap_oracle.sh` — обновлён: +swap 4GB, +Tailscale install,
-  +ufw lockdown (deny 22 from any except tailnet 100.64.0.0/10), +age,
-  +rclone, +/etc/geobiom/. Запускается ОДИН раз на свежей Oracle VM.
-- `cutover_to_oracle.sh` — Phase 3: pull latest backup из Y.O.S. →
-  decrypt age → scp на Oracle → pg_restore → rsync tiles из TimeWeb
-  через dev → up стека (включая GlitchTip+Umami оверлеи если их env-files
-  заполнены) → smoke-test через tailnet. TimeWeb остаётся живой.
-- `smoke_test_prod.sh` — curl-чеки `/`, `/health`, `/api/healthz`,
-  `/api/species?q=...`, HEAD `/tiles/forest.pmtiles`. Авто-выбор
-  http (tailnet host) vs https (публичный домен) по точке в host'е.
-- `cloudflare_set_ttl.sh` — за 24h до cutover'а опускает TTL до 300
-  на geobiom A-records (для быстрого rollback).
-- `cloudflare_dns_cutover.sh` — Phase 4: flip A-записи на NEW_IP.
-- `rollback_to_timeweb.sh` — emergency: вернуть DNS на 178.253.43.136
-  (TimeWeb IP жёстко зашит).
-- `decommission_timeweb.sh` — Phase 8 после soak'а: tar /srv на TimeWeb
-  → age → Y.O.S. под configs/timeweb-decommission-DATE.tar.age, потом
-  manual finish (TimeWeb dashboard, ssh-config, CLAUDE.md update).
-
-Tailscale aliases в `~/.ssh/config`:
-- `geobiom-prod` — целевая Oracle VM (после bootstrap'а tagged
-  `tag:prod` в Tailscale admin)
-- `geobiom-prod-timeweb` — текущий TimeWeb (нужен для rsync tiles в
-  cutover'е и для decommission'а)
-
-Cloudflare API token живёт локально в `~/.cloudflare/geobiom-api-token`
-(scope `Zone — DNS — Edit` на zone `geobiom.ru`).
-
-## Pre-prod-deploy checklist (для будущих environments / staging)
-
-1. **Yandex OAuth callback URL.** На [oauth.yandex.ru](https://oauth.yandex.ru/)
-   проектное приложение → Redirect URI добавить
-   `https://<host>/api/auth/yandex/callback`. Без этого вход откажет с
-   `redirect_uri_mismatch`.
-2. **`.env.prod` секреты на VM:** `JWT_SECRET` (32+ байт),
-   `OAUTH_STATE_SECRET` (отдельные 32+ байт), `YANDEX_CLIENT_ID/SECRET`,
-   `DATABASE_URL=postgresql://mushroom:...@db:5432/mushroom_map`.
-3. **DB:** `REMOTE=root@<vm-ip> bash scripts/deploy/sync_db_to_remote.sh`
-   (скрипт умеет fallback'нуть на `docker exec mushroom_db pg_dump`
-   когда host pg_dump не установлен).
-4. **PMTiles → R2.** `bash scripts/deploy/sync_tiles_to_r2.sh`. Без этого
-   forest и hillshade слои будут 404'иться в проде.
-5. **DNS A-запись** в Cloudflare на IP VM. Делать ПОСЛЕ того, как VM
-   ответит 200 на `https://<vm-ip>/health` — иначе CF Universal SSL
-   не выдаст cert.
-
-VM-статус и hosting-fallback живут в memory-файле
-`project_website_migration.md`.
+**Observability + Backup runbooks** — `services/observability/README.md`,
+`scripts/backup/README.md`. Stack: GlitchTip (`sentry.geobiom.ru`) +
+Umami (`analytics.geobiom.ru`); nightly pg_dump → age → Yandex Object
+Storage с restore-drill через `scripts/backup/restore_drill.sh`.
 
 ## Deprecated (don't extend, don't rely on)
 
-- **`observation` table + `vk_post.observation_written` column.** Старый
-  flow «продвигать VK-пост в наблюдение с координатой» так и не дошёл до
-  Stage-4: таблица всегда пустая, `observation_written` вечно FALSE. Район
-  у поста живёт в `vk_post.district_admin_area_id` (см. `extract_vk_districts.py`).
-  Mat-view `observation_h3_species_stats` и API-endpoint'ы вокруг него
-  тоже мёртвые. Не дропаем (потенциально пригодится для POI-уровня), но
-  ничего туда не пишем и тестов на это не вешаем.
-- **`pipelines/extract_places.py`.** Часть deprecated flow выше. Заменён
-  `pipelines/extract_vk_districts.py`. Не вызывается из активных пайплайнов.
+- **`observation` table + `vk_post.observation_written`.** Stage-4 «промоут
+  VK-поста в наблюдение с координатой» так и не дошёл — таблица всегда
+  пустая, флаг вечно FALSE. Район у поста живёт в
+  `vk_post.district_admin_area_id` (см. `extract_vk_districts.py`).
+  Mat-views `observation_h3_species_stats` и API-обвязка тоже мёртвые.
+  Не дропаем (миграции immutable; потенциально пригодится для
+  POI-уровня), но **ничего туда не пишем и тестов не вешаем**.
 
 ## Shared script utilities
 
 - `scripts/_bbox.py` — `LO_BBOX_DEFAULT` + `load_bbox(env_var)` /
-  `load_split(env_var, default)`. Все `download_*_overpass.py` (oopt /
-  roads / waterway / wetland) читают bbox через эти helpers.
-  Env-имена: `OOPT_BBOX`, `ROADS_BBOX` / `ROADS_SPLIT`, `WATERWAY_BBOX` /
-  `WATERWAY_SPLIT`, `WETLAND_BBOX` / `WETLAND_SPLIT`. Формат:
-  `south,west,north,east`. Не задано → default LO `(58.5, 27.8, 61.8, 33.0)`.
-- `scripts/_overpass.py` — `overpass_post(query, timeout_s=...)` и
-  `overpass_elements(query, ...)`. Stdlib-only клиент (urllib) с
+  `load_split(env_var, default)`. Все `download_*_overpass.py` читают
+  bbox через эти helpers. Env: `OOPT_BBOX`, `ROADS_BBOX/SPLIT`,
+  `WATERWAY_BBOX/SPLIT`, `WETLAND_BBOX/SPLIT`. Формат
+  `south,west,north,east`. Default LO `(58.5, 27.8, 61.8, 33.0)`.
+- `scripts/_overpass.py` — stdlib-only клиент (urllib) с
   mirror-rotation + 429/503/504 retry. Канонический httpx-based клиент
-  для пакета `placenames` живёт в `services/placenames/.../gazetteer.py`
-  — это два separate-by-design (scripts остаются zero-dep).
+  для пакета `placenames` — в `services/placenames/.../gazetteer.py`
+  (separate-by-design — scripts остаются zero-dep).
 
 ## Architecture — the contract
 
-- **`soil_polygon` + `soil_profile` + lookups (`soil_type`, `soil_parent`)**
-  — почвенная карта Докучаевского ин-та (1:2.5М, EGRPR/soil-db.ru). Полигоны
-  с soil0/1/2/3 (комплекс) и parent1/2 (порода); 9 точечных разрезов в bbox
-  ЛО+Карелия с pH/CORG. Слой `soil.pmtiles` (1.9 МБ); endpoint `/api/soil/at`
-  возвращает polygon + profile_nearest. Используется как feature-extractor
-  для модели в sister-репо `ik_mushrooms_parser`.
-- **`osm_waterway`** — линейные водотоки из OSM (stream/river/canal/drain/ditch).
-  ~204k записей в ЛО. Слой `waterway.pmtiles` (26 МБ, zoom 9–14). Endpoint
-  `/api/water/distance/at` возвращает минимум по трём источникам (waterway /
-  water_zone / wetland) с KNN-индексом — feature-extractor для proxy
-  «расстояние до воды → влажность».
-- **`admin_area` (level=6)** — 18 районов ЛО из OSM (17 муниципальных + Сосновоборский
-  ГО). Собираются через Overpass area-query (map_to_area от relation "Ленинградская
-  область" admin_level=4); outer-segments склеиваются в полигоны через
-  `shapely.polygonize + unary_union`. Endpoint `/api/districts/` отдаёт GeoJSON
-  FeatureCollection (без PMTiles — 18 фич ~0.7 МБ), `/api/districts/at?lat=&lon=`
-  матчит точку в район с `ORDER BY ST_Area ASC LIMIT 1` (inner-holes типа
-  Сосновый Бор-анклав не учтены). Используется как будущая основа
-  choropleth-слоя прогноза плодоношения (район × день × группа).
-  `region.lenoblast.geometry` пересобирается из ST_Union(admin_area) при
-  каждом ingest — исходный bbox-прямоугольник из миграции 002 заменяется
-  реальным контуром.
-- **`gazetteer_entry` + `vk_post.district_admin_area_id`** — топонимы из OSM
-  (~21k: 6.8k settlements + 6.1k lakes + 5.8k rivers + 2k tracts + 0.4k stations)
-  + Natasha NER поверх `vk_post.text`. Скачка через `load_gazetteer.py` —
-  bbox режется 5×5 из-за 406/504/403 от Overpass на тяжёлых центральных тайлах,
-  per-tile tolerance (скипаем проблемные, собираем оставшееся). Линковка места →
-  район через `ST_Contains` при upsert (под условием `has_admin` в БД — не
-  зависит от `--skip-admin`). Пайплайн `extract_vk_districts.py`: text → Natasha
-  LOC spans → `GazetteerMatcher` (exact/alias/trgm) → лучший матч по
-  `(confidence, kind-priority)` → `admin_area_id` напрямую или ST_Contains fallback.
-  На 69k постов `grib_spb`: ~5.6k (8%) получают район, остальное — `ner_empty` +
-  stopwords ("СПб"/"Россия") + match outside districts. avg confidence 0.988.
-  Поля в `vk_post`: `district_admin_area_id`, `district_confidence`,
-  `place_extracted_at`, `place_match JSONB`. **Это ключевая фича для forecast-модели**
-  (район × день × группа).
-- **Regex-fallback** `scripts/regex_district_check.py` — 18 ЛО-районов + Карелия +
-  Новгородская/Псковская/Тверская/Вологодская + СПб-районы (Курортный, Приморский,
-  Колпинский, Пушкинский, Красносельский, Невский) + города (СПб, Москва).
-  Паттерны на корне прилагательного (`\bвыборгск\w*`) + донор-топонимы
-  (Лемболово → Всеволожский, Рощино → Выборгский и т.д.). Обходит недостатки NER
-  с хештегами и прилагательными формами. Все найденные места пишутся в
-  `vk_post.place_match.detected_places = [{"name":..., "kind":...}]` — kind =
-  `district_lo | subject_ru | district_spb | city`. После прогона:
-  41508 LO-district matches (60% vs NER'овские 8%), 4297 mention'ов
-  соседних субъектов, 3784 — СПб-районов, 1285 — Карелии. Решение, что из
-  этого брать в модель, принимается SQL-фильтром в mushroom-forecast
-  (по `place_match->'detected_places'`).
-- **Terrain (Copernicus GLO-30 DEM)** — файловые растры в `data/copernicus/terrain/`,
-  НЕ в БД (огромный объём, сэмплинг с диска быстрее). `dem_utm.tif` + `slope.tif`
-  + `aspect.tif` в EPSG:32636 UTM 36N, 30 m/px. Endpoint `/api/terrain/at`
-  читает через rasterio.sample — feature-extractor модели (высота/уклон/экспозиция).
-  `hillshade.pmtiles` (~453 МБ, zoom 6–11, RGBA PNG raster) — цветной рельеф:
-  гипсометрия по высоте из `dem_utm.tif` × модуляция hillshade. Собирается
-  через `pipelines/build_hillshade_tiles.py` (два WarpedVRT UTM→3857, PIL → pmtiles).
-  Alpha=0 по маске DEM nodata — убирает тёмные треугольники на углах реекции.
-  API требует `rasterio` + `pyproj` и volume mount
+- **`forest_polygon` table** хранит raw полигоны из multiple sources
+  (osm, terranorte, copernicus, rosleshoz). Каждая строка:
+  `source`, `source_version`, `source_feature_id` (composite unique
+  key), `dominant_species`, `species_composition JSONB`,
+  `meta JSONB` (bonitet, timber_stock, age_group). Geometry
+  4326 MULTIPOLYGON.
+- **`forest_unified` VIEW** — выбирает полигон с highest source priority
+  на каждой точке (rosleshoz=60 > copernicus=50 > terranorte=45 >
+  osm=10). API читает из VIEW; PMTiles собираются из VIEW.
+- **Species slug vocabulary** заморожен (`pine`, `spruce`, `birch`...).
+  Не переименовывать, только добавлять. Контракт между `geodata`
+  (Python), `species_forest_affinity` (SQL) и `forestStyle.ts` (FE).
+- **PMTiles раздаются через FastAPI StaticFiles** из
+  `services/api/.env:TILES_DIR=../../data/tiles`. Browser fetch с
+  HTTP Range. Не ломать.
+
+Слои-фичи:
+- **`soil_polygon` + `soil_profile` + lookups** — почвенная карта
+  Докучаевского ин-та (1:2.5М, EGRPR). Слой `soil.pmtiles` (1.9 MB);
+  endpoint `/api/soil/at` → polygon + profile_nearest. Feature-extractor
+  для модели в sister-репо.
+- **`osm_waterway`** — линейные водотоки OSM (~204k в ЛО).
+  `waterway.pmtiles` 26 MB. Endpoint `/api/water/distance/at` —
+  минимум по три источника (waterway / water_zone / wetland) с
+  KNN-индексом.
+- **`admin_area` (level=6)** — 18 районов ЛО (17 муниципальных +
+  Сосновоборский ГО). Overpass area-query от relation «Ленинградская
+  область», outer-segments склеиваются `shapely.polygonize +
+  unary_union`. `/api/districts/` — GeoJSON FeatureCollection (без
+  PMTiles, ~0.7 MB), `/api/districts/at` — point-match с
+  `ORDER BY ST_Area ASC LIMIT 1`. `region.lenoblast.geometry`
+  пересобирается из `ST_Union(admin_area)` при каждом ingest.
+- **`gazetteer_entry` + `vk_post.district_admin_area_id`** — топонимы
+  OSM (~21k: settlements + lakes + rivers + tracts + stations) +
+  Natasha NER. `load_gazetteer.py` режет bbox 5×5 (Overpass 406/504/403
+  на тяжёлых тайлах), per-tile tolerance. Линковка → район через
+  `ST_Contains` при upsert. Пайплайн `extract_vk_districts.py`:
+  text → NER LOC spans → `GazetteerMatcher` (exact/alias/trgm) →
+  `admin_area_id` напрямую или ST_Contains fallback. На 69k постов
+  `grib_spb`: ~5.6k (8%) получают район через NER. **Ключевая фича
+  для forecast-модели** (район × день × группа).
+- **Regex-fallback** `scripts/regex_district_check.py` — 18 ЛО-районов
+  + соседние субъекты + СПб-районы + города. Паттерны на корне
+  прилагательного (`\bвыборгск\w*`) + донор-топонимы (Лемболово →
+  Всеволожский). Все найденные места пишутся в
+  `vk_post.place_match.detected_places`. На том же 69k: 41508 LO-district
+  matches (60% vs 8% NER'а). Решение что брать в модель — SQL-фильтром
+  в mushroom-forecast.
+- **Terrain (Copernicus GLO-30 DEM)** — растры в
+  `data/copernicus/terrain/`, **НЕ в БД** (объём огромен, sample с диска
+  быстрее). `dem_utm.tif` + `slope.tif` + `aspect.tif` в EPSG:32636
+  UTM 36N, 30 m/px. `/api/terrain/at` через `rasterio.sample`.
+  `hillshade.pmtiles` (~453 MB, zoom 6–11) — гипсометрия по высоте ×
+  hillshade. Alpha=0 по DEM nodata-маске убирает тёмные углы реекции.
+  API требует `rasterio` + `pyproj` + volume mount
   `./data/copernicus/terrain:/terrain:ro`.
-- **`forest_polygon` table** holds raw polygons from multiple sources
-  (osm, terranorte, copernicus, rosleshoz). Each row has
-  `source`, `source_version`, `source_feature_id` (composite unique key),
-  `dominant_species`, `species_composition JSONB`, `meta JSONB` (bonitet,
-  timber_stock, age_group live here). Geometry is 4326 MULTIPOLYGON.
-- **`forest_unified` VIEW** picks the polygon with the highest source
-  priority at each location (rosleshoz=60 > copernicus=50 > terranorte=45
-  > osm=10). API reads from the VIEW; PMTiles are built from the VIEW.
-- **Species slug vocabulary** is frozen (`pine`, `spruce`, `birch`, ...).
-  Don't rename, only add. It's the contract between `geodata` (Python)
-  and `species_forest_affinity` (SQL) and `forestStyle.ts` (frontend).
-- **PMTiles are served via FastAPI StaticFiles** from
-  `services/api/.env:TILES_DIR=../../data/tiles`. Browser fetches with
-  HTTP Range. Do not break this.
 
 ## MapView architecture (post-refactor 2026-04-29)
 
-`apps/web/src/components/MapView.tsx` — тонкий orchestrator (101 строка),
-монтирует хуки и UI-компоненты. Прежние 837 строк с 12 toggle-handler'ами,
-24 useState/useRef парами и 60-строчным `setupForestAndInteractions` —
-схлопнуты в декларативный реестр + единый controller-хук.
+`apps/web/src/components/MapView.tsx` — тонкий orchestrator (~100
+строк), монтирует хуки и UI. Прежние 837 строк с 12 toggle-handler'ами
+и 24 useState схлопнуты в декларативный реестр + единый controller-хук.
 
 **Single source of truth:** `apps/web/src/store/useLayerVisibility.ts`
-(Zustand). Хранит всё map-state'ом: `visible`/`loaded` × 13 LayerKey,
-`baseMap`, `forestColorMode`, `speciesFilter`, `errorMsg`, `vpnToast`,
-`forestHint`, `shareToast`, `speciesFilterLabel`. Никаких useState в
-MapView и компонентах карты — все читают из store.
+(Zustand). Хранит всё map-state: `visible`/`loaded` × LayerKey,
+`baseMap`, `forestColorMode`, `speciesFilter`, UI-toasts. Никаких
+useState в MapView и компонентах — все читают из store.
 
 **Layer registry:** `apps/web/src/components/mapView/registry.ts` —
-декларативный массив 12 entries (`forest`, `water`, `waterway`, `wetland`,
-`oopt`, `roads`, `felling`, `protective`, `soil`, `hillshade`, `districts`,
-`forecastChoropleth`). `userSpots` data-driven, не в реестре. Каждый entry:
-`{id, pmtiles, missingMsg, add, setVisibility, sources, layers}`. Добавление
-13-го слоя = 1 файл + 1 запись (см. секцию «Adding a new data layer»).
+12 entries (`forest`, `water`, `waterway`, `wetland`, `oopt`, `roads`,
+`felling`, `protective`, `soil`, `hillshade`, `districts`,
+`forecastChoropleth`). `userSpots` data-driven, не в реестре.
 
-**Hooks** (в `apps/web/src/components/mapView/hooks/`):
-- `useMapInstance(containerRef, initialView, onReady)` — создаёт MapLibre
-  Map, монтирует controls, парсит `?lat&lon&z`. Возвращает `{map, ready}`.
-  `ready` flips true после первого `styledata + isStyleLoaded()` —
-  критично, иначе `useMapLayers` стреляет до создания карты (race fix
-  794a1ac).
-- `useMapLayers(map, ready)` — единственный controller между store и
-  MapLibre. Lazy-add с HEAD-check'ом, toggle visibility, переприменение
-  forestColorMode/speciesFilter, `reapplyAll()` callback для basemap-switch.
-- `useBaseMap(map, onAfterApply)` — setStyle + RAF-poll до `isStyleLoaded`,
-  затем дёргает onAfterApply (в MapView re-add'ит places + userSpots +
-  `reapplyAll()`).
-- `useMapPopup(map)` — click → fetch forest/soil/water/terrain → попап.
-- `useMapUrl(map)` — moveend → `?lat&lon&z` history.replaceState.
-- `useUserSpotsSync(map, spots)` — приватный data-driven layer.
-- `useMapShare(map)` — clipboard share callback.
-- `useMouseLngLat(map)` — координаты под курсором.
-- `useToastLifecycles()` — VPN/forestHint fade lifecycles.
+**Hooks** в `apps/web/src/components/mapView/hooks/`:
+- `useMapInstance` — создаёт Map + controls + парсит `?lat&lon&z`,
+  `ready` flag после `styledata + isStyleLoaded()`.
+- `useMapLayers` — единственный controller между store и MapLibre.
+  Lazy-add с HEAD-check, toggle visibility, reapply на basemap-switch.
+- `useBaseMap` — setStyle + RAF-poll до `isStyleLoaded`, затем
+  onAfterApply.
+- `useMapPopup` — click → fetch forest/soil/water/terrain → попап.
+- `useMapUrl` — moveend → `?lat&lon&z` history.replaceState.
+- `useUserSpotsSync` — приватный data-driven layer.
+- `useMapShare`, `useMouseLngLat`, `useToastLifecycles`.
 
-**UI components** (в `apps/web/src/components/mapView/`):
-- `LayerGrid` (primary 7 + secondary 8 disclosure, `floating?` prop)
-- `BaseMapPicker` (floating top-left)
-- `ShareButton` (floating bottom-right)
-- `MapOverlays` (4 тоста: share/error/vpn/forestHint)
-- `CursorReadout` (desktop only)
-- `SpeciesFilterBadge`
-- `Legend` (self-subscribed, без props)
+**UI components** в `mapView/`: `LayerGrid`, `BaseMapPicker` (TL),
+`ShareButton` (BR), `MapOverlays` (4 тоста), `CursorReadout`,
+`SpeciesFilterBadge`, `Legend`. **`MapControls.tsx` удалён** в
+Phase 4 — не возвращать.
 
-**`MapControls.tsx` удалён** в Phase 4. Не возвращать.
-
-Полный спек/план: `docs/superpowers/specs/2026-04-29-mapview-decomposition-design.md`,
-`docs/superpowers/plans/2026-04-29-mapview-decomposition.md`.
+Архивный полный спек/план — `docs/archive/2026-04-29-mapview-decomposition*.md`.
 
 ## Adding a new data layer (pattern)
 
 1. **Migration** `db/migrations/NNN_<name>.sql` — table + GIST index.
-2. **Downloader** in `scripts/download_<name>_overpass.py` (or similar).
-   If the bbox is big, split into grid + dedupe. Save to `data/<name>/`.
-3. **Ingest** `pipelines/ingest_<name>.py` — reads GeoJSON, writes DB.
-   Idempotent by (source, source_version). For 100k+ rows use
-   `services/geodata/src/geodata/db.py` COPY+DELETE pattern.
+2. **Downloader** `scripts/download_<name>_overpass.py` (или аналог).
+   Big bbox → grid + dedupe. Save to `data/<name>/`.
+3. **Ingest** `pipelines/ingest_<name>.py` — GeoJSON → DB. Idempotent
+   по (source, source_version). 100k+ rows → COPY+DELETE через
+   `services/geodata/src/geodata/db.py`.
 4. **Tile build** `pipelines/build_<name>_tiles.py` — PostGIS → MVT →
-   `data/tiles/<name>.pmtiles`. Use `build_water_tiles.py` as template.
-5. **Frontend** — после refactor'а MapView 2026-04-29 добавление слоя =
-   1 файл + 1 запись в реестре + 1 чип:
-   - `apps/web/src/components/mapView/layers/<name>.ts` — экспортирует
-     `add<Name>Layer(map)` и `set<Name>Visibility(map, visible)` (template:
-     любой существующий layer-модуль).
-   - `apps/web/src/components/mapView/registry.ts` — новая запись в
-     `LAYER_REGISTRY` со значениями `pmtiles`, `missingMsg`, `add`,
-     `setVisibility`, `sources`, `layers`. `useMapLayers` хук подхватит
-     автоматически — HEAD-check, lazy-add, basemap-switch reapply.
-   - `apps/web/src/components/mapView/LayerGrid.tsx` — добавить чип в
+   `data/tiles/<name>.pmtiles`. Template: `build_water_tiles.py`.
+5. **Frontend** = 1 модуль + 1 запись + 1 чип:
+   - `apps/web/src/components/mapView/layers/<name>.ts` — экспорт
+     `add<Name>Layer(map)` + `set<Name>Visibility(map, visible)`.
+   - `apps/web/src/components/mapView/registry.ts` — entry с
+     `pmtiles`, `missingMsg`, `add`, `setVisibility`, `sources`,
+     `layers`. `useMapLayers` подхватит автоматически.
+   - `apps/web/src/components/mapView/LayerGrid.tsx` — чип в
      `primaryChips` или `secondaryChips`.
-   - `apps/web/src/store/useLayerVisibility.ts` — добавить ключ в
-     `LayerKey` union + дефолты в `DEFAULT_VISIBLE`/`DEFAULT_LOADED`.
-   - `apps/web/src/components/mapView/layerDescriptions.ts` — текст
-     `{title, body}` для нового ключа. Тот же блок «На карте сейчас» в
-     левом сайдбаре подхватит автоматически (`LayerInfoPanel`). TS не
-     даст забыть — `Record<LayerKey, ...>`.
-   Никаких правок в MapView.tsx, useMapLayers, useBaseMap или прочих хуках.
+   - `apps/web/src/store/useLayerVisibility.ts` — ключ в `LayerKey`
+     union + дефолты в `DEFAULT_VISIBLE`/`DEFAULT_LOADED`.
+   - `apps/web/src/components/mapView/layerDescriptions.ts` —
+     `{title, body}` для нового ключа (TS-обязательно).
+   Никаких правок в `MapView.tsx` или хуках.
 
-Python normalize must stay thin. If profiling shows shapely/wkt/area in
-the hot path, push them to SQL (see rosleshoz WKB pass-through for how).
-
-## Rules of engagement for changes
-
-**Process:**
-- **Verify root cause before iterating.** Last session I rewrote the
-  scheme basemap 7 times across 3 providers without once checking if
-  the URL was even returning 200. Always `curl -I <url>` first when a
-  network resource is implicated.
-- **Don't add fallbacks on fallbacks.** If a fetch fails, fix the
-  fetch. Don't stack "try this, then that, then the other" — it hides
-  the root cause and creates fragile behavior matrices.
-- **Respect the user's git history.** Use `git log --oneline -20` at
-  the start of a session to see what was just done — the story is in
-  the commits.
-- **Match the existing style of the file you're editing**, even if you'd
-  do it differently in a fresh project. Consistency inside one repo beats
-  global consistency with your own preferences.
-- **Every changed line should trace directly to the user's request.**
-  If a diff contains cleanup / rename / refactor that the user didn't
-  ask for, cut it out and ask first.
-- **State assumptions explicitly.** If a request is ambiguous, name
-  what's unclear in one sentence and pick a direction — don't silently
-  guess, don't freeze up asking for specs.
-
-**Project-specific facts:**
-- **Scheme/hybrid basemap tiles**: `tiles.openfreemap.org` and
-  `basemaps.cartocdn.com/rastertiles/*` are unreachable from this
-  user's network. `server.arcgisonline.com` and `tiles.versatiles.org`
-  work. The current choice is Versatiles Colorful (vector) patched
-  in-app for sprite-array and text-size.
-- **Hybrid mode** = Versatiles Colorful with ESRI satellite raster
-  injected as the bottom layer and all fill layers removed (so only
-  line + symbol vector layers draw over the imagery). The patch lives
-  in `buildHybridStyle()` in `mapView/styles/hybrid.ts`.
-- **Forest layer z-order**: forest-fill is inserted before the first
-  symbol layer (`findFirstSymbolLayerId`), so labels stay on top.
-  Same pattern for water/oopt overlays.
+Python normalize должен оставаться тонким. Если профайлинг показывает
+shapely/wkt/area в hot path — push в SQL (см. rosleshoz WKB
+pass-through как пример).
 
 ## VK photo classification pipeline
 
-`pipelines/ingest_vk.py` — four stages run in sequence or individually via `--step`.
+`pipelines/ingest_vk.py` — четыре стадии (`collect`, `dates`, `photos`,
+`promote` — последний deprecated, см. ниже), запускаются последовательно
+или по `--step`.
 
 ```bash
 # Full pipeline
 .venv/Scripts/python.exe -u pipelines/ingest_vk.py --group grib_spb --region lenoblast
 
-# Single stage (e.g. re-run photos only)
+# Single stage
 .venv/Scripts/python.exe -u pipelines/ingest_vk.py --group grib_spb --region lenoblast --step photos
 
-# Report (random 500 posts with filter panel)
-.venv/Scripts/python.exe pipelines/vk_photos_report.py --limit 500 --random --out vk_photos_report_random500.html
+# Random-sample report (HTML)
+.venv/Scripts/python.exe pipelines/vk_photos_report.py --limit 500 --random --out report.html
 ```
 
-### Model & workers
+**Model & workers:**
+- Model: `qwen/qwen3.5-9b` через LM Studio на `localhost:1234`. Default,
+  no `--model` флаг.
+- Workers: `--workers 5` (default). LM Studio: **Parallel = 5** для
+  загруженной модели.
+- Thinking disabled: `chat_template_kwargs.enable_thinking=False` в
+  `_ask_model`. Префикс `/no_think` через LM Studio недостаточен.
+- `PHOTO_PROMPT_VERSION` controls reprocessing: code-version != DB-version
+  → photos_stage прогоняет всё.
 
-- Model: `qwen/qwen3.5-9b` via LM Studio on `localhost:1234`. Default, no `--model` flag needed.
-- Workers: `--workers 5` (default). LM Studio must have **Parallel = 5** set for the loaded model.
-- Thinking must be disabled: `chat_template_kwargs.enable_thinking=False` is set in `_ask_model`. The `/no_think` prefix alone is not enough through LM Studio.
-- `PHOTO_PROMPT_VERSION` controls reprocessing: when code version != DB version, photos_stage reruns all posts automatically.
-- **Prompt + JSON Schema живут в `pipelines/prompts/vk_classify_v9.txt` и
-  `vk_classify_schema_v9.json`** — версионированы по имени файла. Новая
-  версия → создать `vk_classify_v10.{txt,json}`, бампнуть `PHOTO_PROMPT_VERSION`,
-  обновить пути в `ingest_vk.py` (две строки).
+**Prompt + JSON Schema:** `pipelines/prompts/vk_classify_v13.txt` +
+`vk_classify_schema_v13.json`. Новая версия → создать
+`vk_classify_v14.{txt,json}`, обновить `PHOTO_PROMPT_VERSION` и пути
+в `ingest_vk.py` (две строки).
 
-### Current prompt version: `v13-birch-strict-pine-softer-2026-04-24`
+**Current prompt:** `v13-birch-strict-pine-softer-2026-04-24`. Эволюция
+v7→v13 — в git log на `pipelines/prompts/`.
 
-History:
-- v7: baseline Gemma prompt, 13 species
-- v8: Qwen, added mokhovik/pine_bolete/fly_agaric/berries, soft species limit, count cap 150
-- v9: merged chanterelle group (trumpet+вороночник→chanterelle), loosened pine_bolete (porcini is default), 6-photo sampling (was 4)
-- v10: balanced porcini ↔ pine_bolete by cap tone (light vs dark, no «default»), added split-by-tone tie-break for mixed baskets; aspen_bolete strengthened via dark-scaled-stem diagnostic + extended cap palette
-- v11: expanded spring_mushroom into morel / verpa / gyromitra triplet with explicit verpa-anti-porcini guard (the «pile of pale stems with little brown caps» case); added Sarcoscypha disambiguation inside russula entry; pruned Russian/Latin names + ecology comments — net size unchanged vs v10
-- v12: split Leccinum palettes — pine_bolete is now pure brown (chestnut/mahogany/dark-brown, explicit «not orange/red/rust»); aspen_bolete is strictly orange/red (combination of dark-scaled stem AND orange/red cap is the diagnostic, not stem alone); birch_bolete expanded (pale beige / grey-brown / tan / mushroom-brown / medium / dark brown — «same Leccinum stem as aspen, but cap plain brown/grey-brown»). Fixes systematic aspen → pine_bolete misclassification observed in v11.
-- v13: fixes v12 over-detection of birch_bolete + slightly softens pine_bolete. birch_bolete palette trimmed (only grey-brown / tan / mushroom-brown; removed pale beige, medium brown, dark brown that overlapped with porcini/pine) and now requires VISIBLE dark scales on the stem — no stem, no birch call. pine_bolete tightened: «clearly DARK cap», and new rule «if cap is only medium brown and could be porcini, prefer porcini»; same lean into porcini in the TIE-BREAK.
-
-### CLASSIFY_SCHEMA species enum (18 keys)
-
+**CLASSIFY_SCHEMA species enum (18 ключей):**
 ```
 porcini, pine_bolete,
 aspen_bolete, birch_bolete, mokhovik,
@@ -908,12 +443,10 @@ blueberry, cloudberry, cranberry,
 other
 ```
 
-### GROUP_TO_SLUGS (what promotes to species table)
-
+**GROUP_TO_SLUGS** (что промоутится в species table):
 | key | slugs |
 |---|---|
-| porcini | boletus-edulis |
-| pine_bolete | boletus-edulis (same slug — разделение только для статистики) |
+| porcini / pine_bolete | boletus-edulis (one slug, разделение для статистики) |
 | aspen_bolete | leccinum-aurantiacum, leccinum-versipelle |
 | birch_bolete | leccinum-scabrum |
 | mokhovik | xerocomus-subtomentosus |
@@ -926,34 +459,62 @@ other
 | oyster | pleurotus-ostreatus |
 | russula | russula-vesca |
 | fly_agaric | amanita-muscaria |
-| blueberry / cloudberry / cranberry | (нет маппинга — в отчёты, но не в species) |
+| blueberry / cloudberry / cranberry | (нет маппинга — в отчёты, не в species) |
 
-### Key model prompting rules
+**Key prompting rules:**
+- `porcini` = default для любого белого с коричневой шляпой.
+  `pine_bolete` только если шляпа UNMISTAKABLY very dark.
+- `chanterelle` = все лисички (обычная / трубчатая / вороночник).
+  Один ключ — один entry с суммой.
+- До 6 фото на пост (равномерно если > 6), иначе все.
+- `max_tokens = 1000`, schema-constrained JSON.
 
-- `porcini` = default для любого белого гриба с коричневой шляпой. `pine_bolete` только если шляпа UNMISTAKABLY very dark (near-black, mahogany).
-- `chanterelle` = все лисички: обычная, трубчатая, вороночник. Один ключ — один entry с суммой.
-- Берёт до 6 фото на пост равномерно (если > 6 фото), иначе все.
-- `max_tokens = 1000`, schema-constrained JSON output.
+## Rules of engagement for changes
+
+**Process:**
+- **Verify root cause before iterating.** `curl -I <url>` first when
+  network resource implicated. Не переписывать basemap по 7 раз без
+  одного HEAD-проверки.
+- **Don't add fallbacks on fallbacks.** Fix the fetch, не стак
+  «попробуй это, потом то» — это прячет root cause и создаёт fragile
+  matrices.
+- **Respect git history.** `git log --oneline -20` в начале сессии —
+  story is in the commits.
+- **Match the existing style of the file**, even если бы я делал иначе
+  в fresh project. Consistency inside one repo > global consistency
+  with my preferences.
+- **Every changed line должен trace to user's request.** Cleanup /
+  rename / refactor без запроса — вырезать, спрашивать.
+- **State assumptions explicitly.** Ambiguous request → одной
+  фразой назвать что неясно + выбрать направление. Не silently guess,
+  не freeze ища спек.
+
+**Project-specific facts:**
+- **Scheme/hybrid basemap tiles**: `tiles.openfreemap.org` и
+  `basemaps.cartocdn.com/rastertiles/*` unreachable из этой сети.
+  `server.arcgisonline.com` и `tiles.versatiles.org` работают. Текущий
+  выбор — Versatiles Colorful, патч в-app для sprite-array и text-size.
+- **Hybrid mode** = Versatiles Colorful + ESRI satellite raster внизу
+  + удалены все fill-слои (line + symbol только). Патч —
+  `buildHybridStyle()` в `mapView/styles/hybrid.ts`.
+- **Forest layer z-order**: forest-fill вставляется перед первым
+  symbol-слоем (`findFirstSymbolLayerId`) → labels сверху. Та же
+  pattern для water/oopt overlays.
 
 ## Gotchas you will hit
 
-- **Forest PMTiles is ~322 MB.** That's intentional after 913k polygons.
-  Range requests keep the browser fast.
-- **setStyle() clears custom sources.** Every basemap switch
-  destroys forest/water/oopt/roads layers. `setupForestAndInteractions()`
-  re-adds them after `styledata` fires.
-- **MapLibre `styledata` fires multiple times** during load (once per
-  sub-resource). Always guard with `m.isStyleLoaded()` inside the handler.
-- **MapLibre `load` event may never fire** if external tiles stall.
-  Use `styledata` + `isStyleLoaded()` for "ready", never `load`.
-- **Layer toggles during basemap switch** = race. The handler must
-  `m.once("idle", ...)` if `!m.isStyleLoaded()`, otherwise the new
-  style wipes the freshly-added layer.
-- **FGIS LK tile cache is at `data/rosleshoz/fgislk_tiles/12/`**.
-  ~700k .pbf files for the full bbox. Re-extraction is cheap; re-download
-  is slow.
-- **Species search** returns 500 → reads in the browser as CORS error
-  because FastAPI doesn't attach CORS headers to error responses. When
-  you see "blocked by CORS policy" on an endpoint that used to work,
-  check `docker compose logs api` for the real exception.
-
+- **Forest PMTiles ~318 MB.** Намеренно после 2.17M полигонов и
+  rescrape z=10+z=11. Range requests держат браузер быстрым.
+- **setStyle() очищает custom sources.** Каждый basemap-switch убивает
+  forest/water/oopt/roads. `useBaseMap` re-add'ит после `styledata`.
+- **MapLibre `styledata` стреляет multiple times** во время load (per
+  sub-resource). Всегда guard `m.isStyleLoaded()` внутри handler'а.
+- **MapLibre `load` event может никогда не выстрелить** если внешние
+  тайлы тормозят. Используй `styledata + isStyleLoaded()` как «ready»,
+  не `load`.
+- **Layer toggles во время basemap-switch** = race. Handler должен
+  `m.once("idle", ...)` если `!m.isStyleLoaded()`, иначе новый стиль
+  смоет свежедобавленный слой.
+- **Species search 500** в браузере читается как CORS error — FastAPI
+  не приклеивает CORS headers к error-responses. См.
+  `docker compose logs api` для реального exception.
