@@ -1,26 +1,26 @@
 """
-VK → observation pipeline (DB-backed, инкрементальный).
+VK ingest pipeline (DB-backed, инкрементальный).
 
-Все стадии читают/пишут vk_post; observation получается на финальной стадии.
-Каждая стадия обрабатывает только то, что ещё не сделано — повторный
-запуск добирает новое, не трогает уже готовое.
+Все стадии читают/пишут vk_post. Каждая стадия обрабатывает только то,
+что ещё не сделано — повторный запуск добирает новое, не трогает готовое.
 
 Стадии:
-  1. collect  — fetch новых постов из VK API (MAX(date_ts) как cutoff);
-                INSERT INTO vk_post ON CONFLICT DO NOTHING.
-  2. dates    — для vk_post.foray_date IS NULL: regex-парсинг текста;
-                --llm добавляет Claude-фоллбэк на не распознанное.
-  3. photos   — для vk_post.photo_processed_at IS NULL: LM Studio (Qwen3.5).
-                Пропускает зимние месяцы и «нерелевантные» по тексту.
-  4. promote  — INSERT INTO observation из vk_post, где есть и foray_date
-                и photo_species; флаг observation_written = TRUE.
+  1. collect — fetch новых постов из VK API (MAX(date_ts) как cutoff);
+               INSERT INTO vk_post ON CONFLICT DO NOTHING.
+  2. dates   — для vk_post.foray_date IS NULL: regex-парсинг текста;
+               --llm добавляет Claude-фоллбэк на не распознанное.
+  3. photos  — для vk_post.photo_processed_at IS NULL: LM Studio (Qwen3.5).
+               Пропускает зимние месяцы и «нерелевантные» по тексту.
+
+(Стадия 4 «promote vk_post → observation» удалена 2026-05-04 — таблица
+observation мёртвая, см. CLAUDE.md §Deprecated. Привязка постов к району
+вместо неё — `pipelines/extract_vk_districts.py`.)
 
 Запуск:
-  python pipelines/ingest_vk.py --group grib_spb --region lenoblast
+  python pipelines/ingest_vk.py --group grib_spb
   python pipelines/ingest_vk.py --group grib_spb --step collect
   python pipelines/ingest_vk.py --group grib_spb --step dates --limit 5000
   python pipelines/ingest_vk.py --group grib_spb --step photos --limit 500
-  python pipelines/ingest_vk.py --group grib_spb --step promote --region lenoblast
 
 Env (.env):
   VK_TOKEN          — токен ВК API
@@ -78,9 +78,12 @@ _PROMPTS_DIR = Path(__file__).parent / "prompts"
 CLASSIFY_PROMPT = (_PROMPTS_DIR / "vk_classify_v13.txt").read_text(encoding="utf-8")
 CLASSIFY_SCHEMA = json.loads((_PROMPTS_DIR / "vk_classify_schema_v13.json").read_text(encoding="utf-8"))
 
-# Один ключ → несколько slug'ов там где Gemma/Qwen не различают визуально
-# (подосиновик красный vs жёлто-бурый; сморчок/шапочка/строчок; опёнок
-# осенний vs летний). Ягоды без маппинга — promote их игнорирует.
+# Маппинг model-group → species.slug. Использовался удалённым
+# promote_stage; оставлен как референс для будущего POI-flow (если когда-то
+# вернёмся к observation-таблице или подобной точечной модели). Один ключ
+# → несколько slug'ов там где Qwen не различает визуально (подосиновик
+# красный vs жёлто-бурый; сморчок/шапочка/строчок; опёнок осенний vs летний).
+# Ягоды без маппинга — в species не идут.
 GROUP_TO_SLUGS: dict[str, list[str]] = {
     "porcini":             ["boletus-edulis"],
     "pine_bolete":         ["boletus-edulis"],
@@ -885,139 +888,15 @@ def photos_stage(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-#  СТАДИЯ 4: PROMOTE — vk_post → observation
-# ═══════════════════════════════════════════════════════════════════════════
-
-def promote_stage(
-    conn: psycopg.Connection,
-    group: str,
-    region_code: str,
-) -> int:
-    """Создаёт observation-записи из vk_post с foray_date + photo_species.
-
-    Помечает обработанные как observation_written = TRUE.
-    Для групп ядерных видов (bolete) делает несколько observation — по slug'у.
-    """
-    row = conn.execute(
-        "SELECT id FROM region WHERE code = %s", (region_code,)
-    ).fetchone()
-    if row is None:
-        raise SystemExit(f"регион {region_code!r} не найден")
-    region_id = row[0]
-
-    slug_to_id: dict[str, int] = {}
-    for r in conn.execute("SELECT id, slug FROM species").fetchall():
-        slug_to_id[r[1]] = r[0]
-    print(f"  region_id={region_id}  species_in_db={len(slug_to_id)}")
-
-    rows = conn.execute(
-        """
-        SELECT id, post_id, foray_date, photo_species, text
-        FROM vk_post
-        WHERE observation_written = FALSE
-          AND foray_date IS NOT NULL
-          AND photo_species IS NOT NULL
-          AND jsonb_array_length(photo_species) > 0
-          AND vk_group = %s
-        """,
-        (group,),
-    ).fetchall()
-    print(f"  {len(rows)} posts ready to promote")
-
-    n_inserted = 0
-    done_ids = []
-    source_version = f"vk-{group}-{datetime.now().strftime('%Y-%m-%d')}"
-
-    with conn.transaction():
-        for vk_pk, post_id, foray_date, photo_species, text in rows:
-            source_ref = f"{group}-{post_id}"
-            text_excerpt = (text or "")[:300]
-
-            for item in photo_species:
-                photo_group = item.get("species", "")
-                if photo_group in ("none", "", "other", "ошибка"):
-                    continue
-                slugs = GROUP_TO_SLUGS.get(photo_group, [])
-                if not slugs:
-                    continue
-                cnt = item.get("count") or None
-
-                # Quality вычисляется из доли фото где вид был виден.
-                # Чем больше фото подтвердили вид — тем выше уверенность.
-                n_seen = item.get("n_photos", 1)
-                n_sampled = item.get("photos_sampled", 1)
-                ratio = n_seen / max(n_sampled, 1)
-                if ratio >= 0.5 or n_seen >= 2:
-                    quality = "high"
-                elif n_seen >= 1 and n_sampled <= 2:
-                    quality = "ok"      # мало фото вообще, одного достаточно
-                else:
-                    quality = "low"     # 1 из 3+ фото — возможна ошибка модели
-
-                for slug in slugs:
-                    sp_id = slug_to_id.get(slug)
-                    if sp_id is None:
-                        continue
-                    conn.execute(
-                        """
-                        INSERT INTO observation
-                          (region_id, source, source_ref, source_version,
-                           species_id, species_raw, observed_on,
-                           count_estimate, quality, text_excerpt, meta)
-                        VALUES (%s, 'vk', %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                        ON CONFLICT (source, source_ref, species_id) DO NOTHING
-                        """,
-                        (
-                            region_id, source_ref, source_version,
-                            sp_id, photo_group, foray_date,
-                            cnt, quality, text_excerpt,
-                            json.dumps({
-                                "photo_group": photo_group,
-                                "vk_group": group,
-                                "n_photos_with_sp": n_seen,
-                                "photos_sampled": n_sampled,
-                            }),
-                        ),
-                    )
-                    n_inserted += 1
-
-            # observation_written ставим в любом случае — мы честно попытались
-            done_ids.append(vk_pk)
-
-        if done_ids:
-            with conn.cursor() as cur:
-                cur.executemany(
-                    "UPDATE vk_post SET observation_written = TRUE WHERE id = %s",
-                    [(i,) for i in done_ids],
-                )
-
-    print(f"  inserted {n_inserted} observations; "
-          f"marked {len(done_ids)} vk_posts as written")
-
-    # освежаем агрегаты
-    try:
-        conn.execute("REFRESH MATERIALIZED VIEW observation_region_species_stats")
-    except psycopg.Error:
-        pass
-    try:
-        conn.execute("REFRESH MATERIALIZED VIEW observation_h3_species_stats")
-    except psycopg.Error:
-        pass
-    conn.commit()
-    return n_inserted
-
-
-# ═══════════════════════════════════════════════════════════════════════════
 #  ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════════════
 
-STEPS = ("collect", "dates", "photos", "promote")
+STEPS = ("collect", "dates", "photos")
 
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--group",  default="grib_spb", help="VK domain (e.g. grib_spb)")
-    ap.add_argument("--region", default="lenoblast", help="region.code для promote")
     ap.add_argument("--step",   choices=STEPS, help="одна стадия")
     ap.add_argument("--from",   dest="from_step", choices=STEPS,
                     help="стартовать с этой и идти дальше")
@@ -1045,7 +924,6 @@ def main() -> None:
 
     print(f"DB:      {args.dsn[:60]}...")
     print(f"group:   {args.group}")
-    print(f"region:  {args.region}")
     print(f"stages:  {', '.join(run)}")
 
     conn = psycopg.connect(args.dsn, autocommit=False)
@@ -1062,9 +940,6 @@ def main() -> None:
                          n_workers=args.workers,
                          date_from=date_from, date_to=date_to,
                          model=args.model)
-        if "promote" in run:
-            print("\n── stage 4: promote → observation ──")
-            promote_stage(conn, args.group, args.region)
     finally:
         conn.close()
 
