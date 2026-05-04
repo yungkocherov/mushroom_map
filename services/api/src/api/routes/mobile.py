@@ -27,7 +27,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.auth import jwt_tokens, yandex
+from api.auth import google, jwt_tokens, yandex
 from api.auth.dependencies import CurrentUser
 from api.auth.users import upsert_oauth_user
 from api.db import get_conn
@@ -83,12 +83,69 @@ def auth_yandex(payload: MobileYandexAuthRequest) -> MobileAuthResponse:
     with get_conn() as conn:
         user = upsert_oauth_user(
             conn,
-            provider="yandex",
-            subject=userinfo.subject,
+            auth_provider="yandex",
+            provider_subject=userinfo.subject,
             email=userinfo.email,
             email_verified=userinfo.email_verified,
             display_name=userinfo.display_name,
             avatar_url=userinfo.avatar_url,
+            locale=None,
+        )
+        conn.commit()
+
+    device_token, ttl = jwt_tokens.encode_device_token(user.id, payload.device_id)
+    return MobileAuthResponse(
+        device_token=device_token,
+        expires_in=ttl,
+        user=MobileUserDto(
+            id=str(user.id),
+            email=user.email,
+            name=user.display_name,
+        ),
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# /auth/google
+# ──────────────────────────────────────────────────────────────────────
+
+
+class MobileGoogleAuthRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=2048)
+    code_verifier: str = Field(min_length=43, max_length=128)
+    redirect_uri: str = Field(min_length=1, max_length=512)
+    device_id: str = Field(min_length=8, max_length=64)
+    device_name: Optional[str] = Field(default=None, max_length=128)
+
+
+@router.post("/auth/google", response_model=MobileAuthResponse)
+def auth_google(payload: MobileGoogleAuthRequest) -> MobileAuthResponse:
+    try:
+        token = google.exchange_code_mobile(
+            code=payload.code,
+            code_verifier=payload.code_verifier,
+            redirect_uri=payload.redirect_uri,
+        )
+    except google.GoogleOAuthError as exc:
+        log.warning("mobile google token exchange failed: %s", exc)
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    try:
+        userinfo = google.fetch_userinfo(token.access_token)
+    except google.GoogleOAuthError as exc:
+        log.warning("mobile google userinfo fetch failed: %s", exc)
+        raise HTTPException(status_code=502, detail="userinfo fetch failed")
+
+    with get_conn() as conn:
+        user = upsert_oauth_user(
+            conn,
+            auth_provider="google",
+            provider_subject=userinfo.subject,
+            email=userinfo.email,
+            email_verified=userinfo.email_verified,
+            display_name=userinfo.display_name,
+            avatar_url=userinfo.avatar_url,
+            locale=None,
         )
         conn.commit()
 

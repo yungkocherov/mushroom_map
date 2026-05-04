@@ -3,11 +3,13 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
-import { isLoggedIn, loginWithYandex, logout } from "../../services/auth";
+import { isLoggedIn, loginWithGoogle, loginWithYandex, logout } from "../../services/auth";
 import { useOfflineRegions } from "../../stores/useOfflineRegions";
 
 const YANDEX_MOBILE_CLIENT_ID =
   process.env.EXPO_PUBLIC_YANDEX_MOBILE_CLIENT_ID ?? "";
+const GOOGLE_MOBILE_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_MOBILE_CLIENT_ID ?? "";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -22,7 +24,7 @@ export default function SettingsScreen() {
     if (availableCount === 0) void refreshRegions();
   }, [availableCount, refreshRegions]);
 
-  const onLogin = async () => {
+  const onLoginYandex = async () => {
     if (!YANDEX_MOBILE_CLIENT_ID) {
       Alert.alert(
         "OAuth не настроен",
@@ -32,6 +34,25 @@ export default function SettingsScreen() {
     }
     setBusy(true);
     const result = await loginWithYandex(YANDEX_MOBILE_CLIENT_ID);
+    setBusy(false);
+    if (result.kind === "ok") {
+      setLogged(true);
+      Alert.alert("Готово", `Вход выполнен${result.userEmail ? ` (${result.userEmail})` : ""}`);
+    } else if (result.kind === "error") {
+      Alert.alert("Ошибка", result.message);
+    }
+  };
+
+  const onLoginGoogle = async () => {
+    if (!GOOGLE_MOBILE_CLIENT_ID) {
+      Alert.alert(
+        "OAuth не настроен",
+        "EXPO_PUBLIC_GOOGLE_MOBILE_CLIENT_ID не задан. Зарегистрируй OAuth-клиент на console.cloud.google.com (тип «Android» или «Web»), добавь redirect uri geobiom://auth/callback и пропиши client_id в .env.",
+      );
+      return;
+    }
+    setBusy(true);
+    const result = await loginWithGoogle(GOOGLE_MOBILE_CLIENT_ID);
     setBusy(false);
     if (result.kind === "ok") {
       setLogged(true);
@@ -57,7 +78,7 @@ export default function SettingsScreen() {
           {logged === null
             ? "Проверяю статус…"
             : logged
-              ? "Ты вошёл через Яндекс. Споты синхронизируются с geobiom.ru."
+              ? "Ты вошёл. Споты синхронизируются с geobiom.ru."
               : "Без логина споты живут только на этом телефоне. Вход — синк с сайтом."}
         </Text>
         {logged ? (
@@ -69,13 +90,22 @@ export default function SettingsScreen() {
             <Text style={styles.btnSecondaryText}>Выйти</Text>
           </Pressable>
         ) : (
-          <Pressable
-            style={[styles.btnPrimary, busy && styles.btnDisabled]}
-            disabled={busy}
-            onPress={onLogin}
-          >
-            <Text style={styles.btnPrimaryText}>Войти через Яндекс</Text>
-          </Pressable>
+          <View style={{ gap: spacing[2] }}>
+            <Pressable
+              style={[styles.btnPrimary, busy && styles.btnDisabled]}
+              disabled={busy}
+              onPress={onLoginYandex}
+            >
+              <Text style={styles.btnPrimaryText}>Войти через Яндекс</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.btnSecondary, busy && styles.btnDisabled]}
+              disabled={busy}
+              onPress={onLoginGoogle}
+            >
+              <Text style={styles.btnSecondaryText}>Войти через Google</Text>
+            </Pressable>
+          </View>
         )}
       </Section>
 

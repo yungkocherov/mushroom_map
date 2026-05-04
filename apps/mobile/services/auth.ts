@@ -16,6 +16,10 @@ const YANDEX_AUTHORIZE_URL = "https://oauth.yandex.ru/authorize";
 const YANDEX_DISCOVERY = {
   authorizationEndpoint: YANDEX_AUTHORIZE_URL,
 };
+const GOOGLE_DISCOVERY = {
+  authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
+  tokenEndpoint: "https://oauth2.googleapis.com/token",
+};
 
 export type AuthResult =
   | { kind: "ok"; userEmail: string | null }
@@ -98,6 +102,94 @@ export async function loginWithYandex(
       device_token: string;
       user: { email: string | null; name: string | null };
     }>("/api/mobile/auth/yandex", {
+      method: "POST",
+      auth: false,
+      body: {
+        code,
+        code_verifier: codeVerifier,
+        redirect_uri: redirectUri,
+        device_id: deviceId,
+      },
+    });
+    await setDeviceToken(exchanged.device_token);
+    return { kind: "ok", userEmail: exchanged.user.email };
+  } catch (err) {
+    return {
+      kind: "error",
+      message: err instanceof Error ? err.message : "exchange failed",
+    };
+  }
+}
+
+/**
+ * Google Sign-In via Authorization Code + PKCE (RFC 8252 для нативных
+ * приложений). Требует `GOOGLE_MOBILE_CLIENT_ID` зарегистрированного
+ * в Google Cloud Console (тип «Android» — без secret'а; либо «Web» —
+ * тогда backend передаёт client_secret из настроек).
+ *
+ * Backend endpoint `/api/mobile/auth/google` обменивает code на наш
+ * device_token (см. services/api/src/api/auth/google.py).
+ */
+export async function loginWithGoogle(
+  clientId: string,
+): Promise<AuthResult> {
+  if (!clientId) {
+    return { kind: "error", message: "GOOGLE_MOBILE_CLIENT_ID is empty" };
+  }
+
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: "geobiom",
+    path: "auth/callback",
+  });
+
+  const codeVerifierBytes = await Crypto.getRandomBytesAsync(32);
+  const codeVerifier = base64UrlEncode(codeVerifierBytes);
+  const codeChallenge = await Crypto.digestStringAsync(
+    Crypto.CryptoDigestAlgorithm.SHA256,
+    codeVerifier,
+    { encoding: Crypto.CryptoEncoding.BASE64 },
+  );
+  const challengeUrlSafe = codeChallenge
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+
+  const stateBytes = await Crypto.getRandomBytesAsync(16);
+  const state = base64UrlEncode(stateBytes);
+
+  const request = new AuthSession.AuthRequest({
+    clientId,
+    redirectUri,
+    scopes: ["openid", "email", "profile"],
+    responseType: AuthSession.ResponseType.Code,
+    codeChallenge: challengeUrlSafe,
+    codeChallengeMethod: AuthSession.CodeChallengeMethod.S256,
+    state,
+    usePKCE: true,
+  });
+  await request.makeAuthUrlAsync(GOOGLE_DISCOVERY);
+  const result = await request.promptAsync(GOOGLE_DISCOVERY);
+
+  if (result.type === "cancel" || result.type === "dismiss") {
+    return { kind: "cancelled" };
+  }
+  if (result.type !== "success") {
+    return { kind: "error", message: `auth flow returned ${result.type}` };
+  }
+  if (result.params.state !== state) {
+    return { kind: "error", message: "state mismatch — possible CSRF" };
+  }
+  const code = result.params.code;
+  if (!code) {
+    return { kind: "error", message: "no code in callback" };
+  }
+
+  const deviceId = await getOrCreateDeviceId();
+  try {
+    const exchanged = await apiRequest<{
+      device_token: string;
+      user: { email: string | null; name: string | null };
+    }>("/api/mobile/auth/google", {
       method: "POST",
       auth: false,
       body: {

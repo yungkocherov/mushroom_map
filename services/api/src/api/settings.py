@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     yandex_mobile_client_id: str = ""
     yandex_mobile_client_secret: str = ""
 
+    # ── Google Sign-In (OIDC, mobile) ─────────────────────────────────
+    # Регистрация: https://console.cloud.google.com/apis/credentials
+    # Для Android-клиента (по типу «Android») client_secret НЕ выдаётся
+    # — flow с PKCE. Если client типа «Web», secret нужен.
+    # В обоих случаях redirect_uri у нас `geobiom://auth/callback`.
+    google_mobile_client_id: str = ""
+    google_mobile_client_secret: str = ""
+
     # Device token TTL (для /api/mobile/auth). Год — компромисс между
     # удобством юзера и blast radius при компрометации устройства. На
     # logout token revoke'ится через blacklist (TBD Phase 2).
