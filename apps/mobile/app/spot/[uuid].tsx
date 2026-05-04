@@ -5,6 +5,7 @@ import {
   Image,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -199,6 +200,32 @@ export default function SpotDetailScreen() {
     ]);
   };
 
+  const onShare = async () => {
+    if (!spot) return;
+    const name = spot.name?.trim() || "Грибной спот";
+    const lat = spot.lat.toFixed(5);
+    const lon = spot.lon.toFixed(5);
+    // Универсальный geo: URI открывают навигаторы; web-link на Я.Карты —
+    // fallback для устройств без местных карт. Текст в одну строку,
+    // получатель видит координаты и кликабельную ссылку.
+    const tagsLine =
+      spot.tags.length > 0
+        ? `\n${spot.tags.map(tagLabel).join(", ")}`
+        : "";
+    const noteLine = spot.note?.trim() ? `\n${spot.note.trim()}` : "";
+    const message =
+      `${name}\n${lat}, ${lon}${tagsLine}${noteLine}\n` +
+      `https://yandex.ru/maps/?pt=${lon},${lat}&z=15`;
+    try {
+      await Share.share({ message });
+    } catch (err) {
+      Alert.alert(
+        "Не удалось поделиться",
+        err instanceof Error ? err.message : "share-failed",
+      );
+    }
+  };
+
   const onDelete = () => {
     Alert.alert(
       "Удалить спот?",
@@ -329,6 +356,10 @@ export default function SpotDetailScreen() {
 
       <Pressable style={styles.routeBtn} onPress={onRoute}>
         <Text style={styles.routeBtnText}>Проложить маршрут</Text>
+      </Pressable>
+
+      <Pressable style={styles.shareBtn} onPress={onShare}>
+        <Text style={styles.shareBtnText}>Поделиться спотом</Text>
       </Pressable>
 
       <Pressable style={styles.deleteBtn} onPress={onDelete}>
@@ -485,6 +516,18 @@ const styles = StyleSheet.create({
   },
   routeBtnText: {
     color: palette.light.paper,
+    fontSize: fontSize.body,
+  },
+  shareBtn: {
+    marginTop: spacing[3],
+    padding: spacing[4],
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: palette.light.rule,
+    alignItems: "center",
+  },
+  shareBtnText: {
+    color: palette.light.ink,
     fontSize: fontSize.body,
   },
   deleteBtn: {
