@@ -78,7 +78,13 @@ def make_opener() -> urllib.request.OpenerDirector:
     )
     opener.addheaders = [
         ("User-Agent", UA),
-        ("Accept", "*/*"),
+        # 2026-05-04: ФГИС attributesinfo контент-негоциирует и при
+        # `Accept: */*` отдаёт ИНОГДА JSON, ИНОГДА XML (видимо разные
+        # backend'ы за load-balancer'ом). XML-ответ ломал json.loads и
+        # ID помечался как 'wrong_region' (или 'empty', если retry'и
+        # тоже попадали на XML). Жёстко фиксируем JSON; в http_get_json
+        # есть XML-fallback на случай если сервер игнорирует Accept.
+        ("Accept", "application/json, */*;q=0.5"),
         ("Accept-Language", "ru,en;q=0.9"),
         ("Referer", "https://pub.fgislk.gov.ru/map/"),
     ]
@@ -92,11 +98,56 @@ def make_opener() -> urllib.request.OpenerDirector:
 OPENER = make_opener()
 
 
+def _parse_xml_responsewrapper(data: bytes) -> dict | None:
+    """Парсит XML-формат ФГИС attributesinfo:
+
+        <ResponseWrapper>
+          <payload>
+            <number>47:15:9:125:5</number>
+            <square>11.2</square>
+            ...
+          </payload>
+        </ResponseWrapper>
+
+    Возвращает dict с тем же shape, что и JSON-вариант:
+    `{"payload": {"number": ..., ...}}`.
+    """
+    try:
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(data)
+    except Exception:
+        return None
+    payload_el = root.find("payload")
+    if payload_el is None:
+        return None
+    payload: dict[str, str] = {}
+    for child in payload_el:
+        if child.tag and child.text is not None:
+            payload[child.tag] = child.text
+    return {"payload": payload}
+
+
 def http_get_json(url: str, *, timeout: float = 15.0, retries: int = 3) -> dict | None:
+    """GET → dict. Принимает и JSON, и XML (ФГИС content-negotiates).
+
+    Если первый байт `<` — пробуем XML-парсинг (ResponseWrapper-формат).
+    Иначе json.loads.
+    """
     for attempt in range(retries):
         try:
             with OPENER.open(url, timeout=timeout) as r:
-                return json.loads(r.read())
+                data = r.read()
+            if not data:
+                return None
+            if data.lstrip().startswith(b"<"):
+                # XML payload (ФГИС sometimes ignores Accept: application/json)
+                parsed = _parse_xml_responsewrapper(data)
+                if parsed is not None:
+                    return parsed
+                # XML, но не наш формат — повторим с retry
+                time.sleep(0.5 * (attempt + 1))
+                continue
+            return json.loads(data)
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 return None  # ID не существует
