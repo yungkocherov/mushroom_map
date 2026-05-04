@@ -11,7 +11,7 @@ import {
   UserLocation,
 } from "@maplibre/maplibre-react-native";
 
-import { palette, fontSize, spacing } from "@mushroom-map/tokens/native";
+import { palette, fontSize, spacing, radius } from "@mushroom-map/tokens/native";
 import { useUserLocation } from "../../stores/useUserLocation";
 import { useOfflineRegions } from "../../stores/useOfflineRegions";
 import { useNetwork } from "../../stores/useNetwork";
@@ -22,9 +22,8 @@ import {
 import { getLayerLocalUri } from "../../services/regions";
 import { getApiBaseUrl } from "../../services/api";
 import { ensureGlyphsExtracted, glyphsUrlPattern } from "../../services/glyphs";
-import { buildMapStyle, type ForestSource } from "./style";
+import { buildMapStyle, type BaseMapMode, type ForestSource } from "./style";
 import { ForestPopup, type ForestFeatureProps } from "./ForestPopup";
-import { VkHeatmapLayer } from "./VkHeatmapLayer";
 import { SpotsLayer } from "./SpotsLayer";
 import { SaveSpotSheet } from "../SaveSpotSheet";
 
@@ -39,6 +38,12 @@ try {
 }
 const LUZHSKY_CENTER: [number, number] = [29.85, 58.74];
 
+const BASEMAP_OPTIONS: Array<{ id: BaseMapMode; label: string }> = [
+  { id: "scheme",    label: "Схема" },
+  { id: "satellite", label: "Спутник" },
+  { id: "hybrid",    label: "Гибрид" },
+];
+
 function tilesStatusLabel(
   sources: ForestSource[],
   downloadedCount: number,
@@ -47,7 +52,7 @@ function tilesStatusLabel(
   if (sources.length === 0) {
     return online ? "—" : "offline · нет региона";
   }
-  if (downloadedCount > 0) return `${sources.length} regions`;
+  if (downloadedCount > 0) return `${sources.length} регионов`;
   if (online) return "online";
   return "—";
 }
@@ -59,12 +64,14 @@ export function SpikeMap() {
   const [popupFeature, setPopupFeature] = useState<ForestFeatureProps | null>(null);
   const [saveSpotOpen, setSaveSpotOpen] = useState(false);
   const [saveSpotCoords, setSaveSpotCoords] = useState<{ lat: number; lon: number } | null>(null);
-  const [heatmapOn, setHeatmapOn] = useState(false);
+  const [baseMap, setBaseMap] = useState<BaseMapMode>("scheme");
+  const [statusExpanded, setStatusExpanded] = useState(false);
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapViewRef>(null);
 
   const fix = useUserLocation((s) => s.fix);
   const followMode = useUserLocation((s) => s.followMode);
+  const setFollowMode = useUserLocation((s) => s.setFollowMode);
   const permission = useUserLocation((s) => s.permission);
   const error = useUserLocation((s) => s.error);
   const downloaded = useOfflineRegions((s) => s.downloaded);
@@ -94,9 +101,7 @@ export function SpikeMap() {
 
   // Bundled glyphs extract — копирует 18 PBF в documentDirectory при первом
   // запуске (~1.8 МБ, idempotent). После копирования style получает
-  // file:// URL и symbol-слои рендерятся offline. До этого момента
-  // BASEMAP_GLYPHS_URL_FALLBACK (online через api.geobiom.ru) — карта
-  // не блокируется, но при отсутствии сети подписи не появятся.
+  // file:// URL и symbol-слои рендерятся offline.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -104,8 +109,7 @@ export function SpikeMap() {
         const base = await ensureGlyphsExtracted();
         if (!cancelled) setGlyphsBaseUri(base);
       } catch {
-        // Если copy упал (out-of-space, permissions) — остаёмся на
-        // online fallback. Карта работает, просто labels через сеть.
+        // online fallback остаётся — карта работает
       }
     })();
     return () => {
@@ -130,14 +134,8 @@ export function SpikeMap() {
     });
   }, [followMode, fix?.lat, fix?.lon]);
 
-  // Приоритет источников forest-выделов:
-  //   1. Скачанные районы (per-district) — самое быстрое, работает offline
-  //   2. Online + не скачано → remote forest.pmtiles + forest_lo через
-  //      HTTP Range (как на сайте; нативный pmtiles plugin умеет https://)
-  //   3. Offline без скачанных районов → лес не показывается. Onboarding
-  //      forces скачать минимум один регион при первом старте, так что
-  //      в нормальном flow эта ветка не достигается. Если юзер всё-таки
-  //      окажется тут — увидит paper-фон + basemap, статус «нет региона».
+  // Приоритет источников forest-выделов: скачанные районы → online через
+  // api.geobiom.ru. Offline без скачанных регионов → лес не показывается.
   const sources = useMemo<ForestSource[]>(() => {
     if (downloaded.size > 0) {
       return Array.from(downloaded).map((slug) => ({
@@ -146,9 +144,6 @@ export function SpikeMap() {
       }));
     }
     if (online) {
-      // Online mode: hard cutoff на z=9. forest_lo для z=5-8 (aggregated),
-      // forest для z>=9 (per-vydel detail). minzoom/maxzoom выставляются
-      // в style.ts builder'е — никакого overlap'а на boundary.
       return [
         {
           id: "forest-remote-lo",
@@ -164,21 +159,16 @@ export function SpikeMap() {
     return [];
   }, [downloaded, online]);
 
-  // Style рисуется всегда — даже при пустых sources даёт paper-фон, чтоб
-  // не блокировать UI «вечным спиннером» если basemap-asset медленно
-  // распаковывается на холодном старте.
   const style = useMemo(
     () => buildMapStyle({
       forests: sources,
       basemapPmtilesUri: basemapUri,
       glyphsUrl: glyphsBaseUri ? glyphsUrlPattern(glyphsBaseUri) : null,
+      baseMap,
     }),
-    [sources, basemapUri, glyphsBaseUri],
+    [sources, basemapUri, glyphsBaseUri, baseMap],
   );
 
-  // basemap-asset ещё может распаковываться при первом запуске — показываем
-  // короткий спиннер пока ни sources, ни basemap не готовы. После первого
-  // distill'а basemapUri / любая загруженная region разблокируют карту.
   if (sources.length === 0 && !basemapUri && !assetError) {
     return (
       <View style={styles.center}>
@@ -187,6 +177,23 @@ export function SpikeMap() {
       </View>
     );
   }
+
+  const recenterToFix = () => {
+    if (!fix || !cameraRef.current) return;
+    setFollowMode(true);
+    cameraRef.current.setCamera({
+      centerCoordinate: [fix.lon, fix.lat],
+      zoomLevel: 14,
+      animationDuration: 500,
+    });
+  };
+
+  const gpsLabel = (() => {
+    if (permission === "granted") return "GPS";
+    if (permission === "denied") return "GPS не разрешён";
+    if (permission === "undetermined") return "GPS не запрошен";
+    return "GPS";
+  })();
 
   return (
     <View style={styles.flex}>
@@ -199,16 +206,20 @@ export function SpikeMap() {
         onLongPress={(feature) => {
           // Long-press где угодно на карте → открыть SaveSpotSheet с
           // координатами точки тапа (как «Save place» в Google Maps).
+          // Это единственный способ сохранить спот: специальной
+          // FAB-кнопки нет, чтоб не перегружать UI.
           const geom = feature.geometry as { coordinates?: [number, number] };
           const coords = geom?.coordinates;
           if (!coords) return;
           setSaveSpotCoords({ lon: coords[0], lat: coords[1] });
           setSaveSpotOpen(true);
         }}
+        onRegionWillChange={() => {
+          // Любой жест-навигация по карте — выключаем follow,
+          // чтоб камера не перепрыгивала на текущий GPS-фикс.
+          if (followMode) setFollowMode(false);
+        }}
         onPress={async (feature) => {
-          // MapView.onPress даёт точку тапа но БЕЗ properties с layer'а.
-          // Нужно явно queryRenderedFeaturesAtPoint по forest-fill ID'ам.
-          // properties.{screenPointX, screenPointY} — pixel-координаты для query.
           const sx = (feature.properties as { screenPointX?: number })?.screenPointX;
           const sy = (feature.properties as { screenPointY?: number })?.screenPointY;
           if (sx == null || sy == null || !mapRef.current) return;
@@ -240,7 +251,6 @@ export function SpikeMap() {
           showsUserHeadingIndicator
           androidRenderMode="compass"
         />
-        <VkHeatmapLayer visible={heatmapOn} />
         <SpotsLayer cameraRef={cameraRef} />
         {fix ? (
           <ShapeSource
@@ -282,49 +292,67 @@ export function SpikeMap() {
         }}
       />
 
-      <Pressable
-        style={[styles.heatChip, heatmapOn && styles.heatChipActive]}
-        onPress={() => setHeatmapOn((v) => !v)}
-      >
-        <Text
-          style={[
-            styles.heatChipText,
-            heatmapOn && styles.heatChipTextActive,
-          ]}
-        >
-          {heatmapOn ? "VK тепло ✓" : "VK тепло"}
-        </Text>
-      </Pressable>
-
-      <Pressable
-        style={styles.fab}
-        onPress={() => {
-          // FAB всегда активен. Если GPS-фикса нет, sheet всё равно
-          // откроется — внутри есть UI «нажми длительно на карту».
-          setSaveSpotCoords(null);
-          setSaveSpotOpen(true);
-        }}
-      >
-        <Text style={styles.fabPlus}>+</Text>
-      </Pressable>
-
-      <View style={styles.statusOverlay} pointerEvents="none">
-        <Text style={styles.statusText}>
-          GPS: {permission === "granted" ? "✓" : permission}
-        </Text>
-        {fix ? (
-          <Text style={styles.statusText}>
-            {fix.lat.toFixed(5)}, {fix.lon.toFixed(5)} · ±
-            {fix.accuracy != null ? Math.round(fix.accuracy) : "?"} м
-          </Text>
-        ) : (
-          <Text style={styles.statusText}>ожидание фикса…</Text>
-        )}
-        <Text style={styles.statusText}>
-          tiles: {tilesStatusLabel(sources, downloaded.size, online)}
-        </Text>
-        {error ? <Text style={styles.errorOverlay}>{error}</Text> : null}
+      {/* Подложка — chip-row top-left. */}
+      <View style={styles.basemapPicker}>
+        {BASEMAP_OPTIONS.map((o) => {
+          const active = baseMap === o.id;
+          return (
+            <Pressable
+              key={o.id}
+              style={[styles.basemapChip, active && styles.basemapChipActive]}
+              onPress={() => setBaseMap(o.id)}
+            >
+              <Text style={[styles.basemapChipText, active && styles.basemapChipTextActive]}>
+                {o.label}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
+
+      {/* Status overlay top-right: collapsed по умолчанию,
+          раскрывается тапом по бэйджу. */}
+      <Pressable
+        style={[styles.statusOverlay, statusExpanded && styles.statusOverlayExpanded]}
+        onPress={() => setStatusExpanded((v) => !v)}
+      >
+        {statusExpanded ? (
+          <>
+            <Text style={styles.statusText}>
+              {gpsLabel}: {permission === "granted" ? "ок" : "—"}
+            </Text>
+            {fix ? (
+              <Text style={styles.statusText}>
+                {fix.lat.toFixed(5)}, {fix.lon.toFixed(5)} · ±
+                {fix.accuracy != null ? Math.round(fix.accuracy) : "?"} м
+              </Text>
+            ) : (
+              <Text style={styles.statusText}>ожидание фикса…</Text>
+            )}
+            <Text style={styles.statusText}>
+              тайлы: {tilesStatusLabel(sources, downloaded.size, online)}
+            </Text>
+            {error ? <Text style={styles.errorOverlay}>{error}</Text> : null}
+            <Text style={styles.statusHint}>тап — свернуть</Text>
+          </>
+        ) : (
+          <Text style={styles.statusBadgeText}>
+            {fix ? `±${fix.accuracy != null ? Math.round(fix.accuracy) : "?"} м` : gpsLabel}
+          </Text>
+        )}
+      </Pressable>
+
+      {/* Кнопка «центрировать на мне». Активна только если есть GPS-фикс. */}
+      {fix ? (
+        <Pressable
+          style={[styles.gpsBtn, followMode && styles.gpsBtnActive]}
+          onPress={recenterToFix}
+        >
+          <Text style={[styles.gpsBtnText, followMode && styles.gpsBtnTextActive]}>
+            на меня
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -338,80 +366,100 @@ const styles = StyleSheet.create({
     backgroundColor: palette.light.paper,
     padding: spacing[5],
   },
-  error: {
-    color: palette.light.danger,
-    fontSize: fontSize.body,
-    marginBottom: spacing[3],
-    textAlign: "center",
-  },
   hint: {
     color: palette.light.inkDim,
     fontSize: fontSize.sm,
     textAlign: "center",
   },
-  statusOverlay: {
+  basemapPicker: {
     position: "absolute",
     top: spacing[5],
     left: spacing[4],
+    flexDirection: "row",
+    gap: spacing[1],
+    backgroundColor: "rgba(245, 241, 230, 0.92)",
+    borderRadius: radius.pill,
+    padding: 3,
+  },
+  basemapChip: {
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[1] + 2,
+    borderRadius: radius.pill,
+  },
+  basemapChipActive: {
+    backgroundColor: palette.light.forest,
+  },
+  basemapChipText: {
+    fontSize: fontSize.xs,
+    color: palette.light.ink,
+  },
+  basemapChipTextActive: {
+    color: palette.light.paper,
+    fontWeight: "600",
+  },
+  statusOverlay: {
+    position: "absolute",
+    top: spacing[5],
     right: spacing[4],
-    backgroundColor: "rgba(245, 241, 230, 0.9)",
-    padding: spacing[3],
-    borderRadius: 8,
+    backgroundColor: "rgba(245, 241, 230, 0.92)",
+    paddingHorizontal: spacing[3],
+    paddingVertical: spacing[2],
+    borderRadius: radius.md,
+    minWidth: 64,
+    alignItems: "flex-end",
+  },
+  statusOverlayExpanded: {
+    paddingVertical: spacing[3],
+    paddingHorizontal: spacing[3],
+    minWidth: 200,
+    alignItems: "flex-start",
+  },
+  statusBadgeText: {
+    color: palette.light.ink,
+    fontSize: fontSize.xs,
+    fontVariant: ["tabular-nums"],
   },
   statusText: {
     color: palette.light.ink,
     fontSize: fontSize.sm,
     fontVariant: ["tabular-nums"],
   },
+  statusHint: {
+    color: palette.light.inkDim,
+    fontSize: fontSize.xs,
+    marginTop: spacing[1],
+  },
   errorOverlay: {
     color: palette.light.danger,
     fontSize: fontSize.sm,
     marginTop: spacing[2],
   },
-  fab: {
+  gpsBtn: {
     position: "absolute",
     right: spacing[4],
     bottom: spacing[5],
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: palette.light.chanterelle,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: palette.light.ink,
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  fabDisabled: {
-    opacity: 0.4,
-  },
-  heatChip: {
-    position: "absolute",
-    right: spacing[4],
-    bottom: spacing[5] + 64 + spacing[2],
-    paddingHorizontal: spacing[3],
-    paddingVertical: spacing[2],
-    borderRadius: 16,
-    backgroundColor: "rgba(245, 241, 230, 0.9)",
+    paddingHorizontal: spacing[4],
+    paddingVertical: spacing[3],
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(245, 241, 230, 0.95)",
     borderWidth: 1,
     borderColor: palette.light.rule,
+    shadowColor: palette.light.ink,
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 3,
   },
-  heatChipActive: {
+  gpsBtnActive: {
     backgroundColor: palette.light.chanterelle,
     borderColor: palette.light.chanterelle,
   },
-  heatChipText: {
+  gpsBtnText: {
     color: palette.light.ink,
     fontSize: fontSize.sm,
+    fontWeight: "500",
   },
-  heatChipTextActive: {
+  gpsBtnTextActive: {
     color: palette.light.paper,
-  },
-  fabPlus: {
-    color: palette.light.paper,
-    fontSize: 32,
-    lineHeight: 36,
   },
 });

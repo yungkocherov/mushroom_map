@@ -57,6 +57,16 @@ export type ForestSource = {
   maxzoom?: number;
 };
 
+/**
+ * Режим базовой подложки.
+ *   - scheme: бумажный фон + bundled basemap-lo-low (offline-friendly).
+ *   - satellite: ESRI World Imagery raster, без подписей; forest сверху
+ *     с пониженной непрозрачностью. Требует интернет.
+ *   - hybrid: ESRI satellite + наши symbol-слои (place/water_name) поверх,
+ *     без landcover-fill. Требует интернет.
+ */
+export type BaseMapMode = "scheme" | "satellite" | "hybrid";
+
 export type StyleInput = {
   forests: ForestSource[];
   /** OpenMapTiles-schema basemap (planetiler output). Optional. */
@@ -68,6 +78,8 @@ export type StyleInput = {
    * через `services/glyphs.ts: ensureGlyphsExtracted()`.
    */
   glyphsUrl?: string | null;
+  /** Базовая подложка. По умолчанию `scheme`. */
+  baseMap?: BaseMapMode;
 };
 
 /**
@@ -188,14 +200,35 @@ function buildBasemapLayers(): unknown[] {
       type: "symbol",
       source: "basemap",
       "source-layer": "place",
-      filter: ["in", ["get", "class"], ["literal", ["village", "hamlet", "suburb"]]],
-      minzoom: 9,
+      filter: ["==", ["get", "class"], "village"],
+      minzoom: 8,
       layout: {
         "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],
         "text-font": ["Noto Sans Regular"],
-        "text-size": ["interpolate", ["linear"], ["zoom"], 9, 10, 14, 13],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 8, 10, 14, 14],
         "text-anchor": "center",
-        "text-padding": 3,
+        "text-padding": 1,
+        "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
+      },
+      paint: {
+        "text-color": "#3a3a36",
+        "text-halo-color": "#f5f1e6",
+        "text-halo-width": 1.6,
+      },
+    },
+    {
+      id: "basemap-place-hamlet",
+      type: "symbol",
+      source: "basemap",
+      "source-layer": "place",
+      filter: ["in", ["get", "class"], ["literal", ["hamlet", "suburb", "neighbourhood", "isolated_dwelling"]]],
+      minzoom: 10,
+      layout: {
+        "text-field": ["coalesce", ["get", "name:ru"], ["get", "name"]],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": ["interpolate", ["linear"], ["zoom"], 10, 9, 14, 12],
+        "text-anchor": "center",
+        "text-padding": 1,
       },
       paint: {
         "text-color": "#5a5a52",
@@ -241,9 +274,17 @@ function normalizeFileUri(uri: string): string {
   return uri;
 }
 
+const ESRI_SATELLITE_TILES = [
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+];
+
 /**
  * Build style.json для текущего набора forest sources + (опц.) basemap.
  * Если пусто и нет basemap'а — рисуется только paper-фон.
+ *
+ * baseMap = "satellite" | "hybrid" — поверх raster-источника ESRI World
+ * Imagery; в hybrid дополнительно рисуются symbol-слои подписей из
+ * pmtiles-basemap'а (без landcover-fill, чтобы не закрывать спутник).
  */
 export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
   // Backward-compat: array → treat as forests-only
@@ -251,24 +292,71 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
     ? { forests: input }
     : input;
 
+  const mode: BaseMapMode = normalized.baseMap ?? "scheme";
   const mapSources: Record<string, unknown> = {};
-  const layers: unknown[] = [
-    {
+  const layers: unknown[] = [];
+
+  if (mode === "satellite" || mode === "hybrid") {
+    // Спутник как нижний слой. При offline tile-failures MapLibre отдаст
+    // прозрачные тайлы — выше идёт fallback на background-paper.
+    layers.push({
       id: "background",
       type: "background",
-      paint: {
-        "background-color": palette.light.paper,
-      },
-    },
-  ];
-
-  if (normalized.basemapPmtilesUri) {
-    mapSources.basemap = {
-      type: "vector",
-      url: `pmtiles://${normalizeFileUri(normalized.basemapPmtilesUri)}`,
+      paint: { "background-color": palette.light.paper },
+    });
+    mapSources["esri-satellite"] = {
+      type: "raster",
+      tiles: ESRI_SATELLITE_TILES,
+      tileSize: 256,
+      maxzoom: 19,
     };
-    layers.push(...buildBasemapLayers());
+    layers.push({
+      id: "esri-satellite",
+      type: "raster",
+      source: "esri-satellite",
+    });
+
+    if (mode === "hybrid" && normalized.basemapPmtilesUri) {
+      // Только symbol-слои подписей из basemap-pmtiles. Fill (water,
+      // landcover, roads) скрываем — спутник под ними должен быть виден.
+      mapSources.basemap = {
+        type: "vector",
+        url: `pmtiles://${normalizeFileUri(normalized.basemapPmtilesUri)}`,
+      };
+      const symbolOnly = (buildBasemapLayers() as Array<Record<string, unknown>>).filter(
+        (l) => l.type === "symbol",
+      );
+      // На спутнике подписи белым с тёмным halo — лучше читаются.
+      const tinted = symbolOnly.map((l) => ({
+        ...l,
+        paint: {
+          ...((l.paint as Record<string, unknown>) ?? {}),
+          "text-color": "#fdfdfd",
+          "text-halo-color": "rgba(0,0,0,0.7)",
+          "text-halo-width": 1.4,
+        },
+      }));
+      layers.push(...tinted);
+    }
+  } else {
+    // scheme: paper-фон + полные basemap-слои (fill+line+symbol).
+    layers.push({
+      id: "background",
+      type: "background",
+      paint: { "background-color": palette.light.paper },
+    });
+    if (normalized.basemapPmtilesUri) {
+      mapSources.basemap = {
+        type: "vector",
+        url: `pmtiles://${normalizeFileUri(normalized.basemapPmtilesUri)}`,
+      };
+      layers.push(...buildBasemapLayers());
+    }
   }
+
+  // Forest fill — поверх basemap'а / спутника. На satellite/hybrid снижаем
+  // непрозрачность, чтобы рельеф читался под раскраской выделов.
+  const forestOpacity = mode === "scheme" ? 0.5 : 0.35;
 
   for (const src of normalized.forests) {
     mapSources[src.id] = {
@@ -283,7 +371,7 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
       "source-layer": src.sourceLayer ?? "forest",
       paint: {
         "fill-color": SPECIES_COLOR_MATCH as unknown as string,
-        "fill-opacity": 0.5,
+        "fill-opacity": forestOpacity,
         "fill-outline-color": "rgba(0,0,0,0)",
       },
     };
