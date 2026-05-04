@@ -360,6 +360,13 @@ def main():
                    help="DEBUG: process only first N IDs (для smoke-теста)")
     p.add_argument("--export-only", action="store_true",
                    help="Только экспортировать GeoJSON из progress.db, не скрапить")
+    p.add_argument("--rerun-wrong-region", action="store_true",
+                   help=("Перепрогнать все ID со статусом 'wrong_region' — "
+                         "большинство из них транзиентные сбои API (пустой "
+                         "payload без поля number → ложно-отбракованные). "
+                         "Запускать вместе с расширенным --region-prefix=47:"))
+    p.add_argument("--rerun-empty", action="store_true",
+                   help="Перепрогнать ID со статусом 'empty' (для проверки)")
     args = p.parse_args()
 
     out_path = Path(args.out)
@@ -374,6 +381,28 @@ def main():
         return
 
     done = progress.get_done_set()
+    # Rerun-режимы: вычеркиваем выбранные статусы из done — будут перепрогнаны.
+    if args.rerun_wrong_region or args.rerun_empty:
+        statuses_to_rerun: list[str] = []
+        if args.rerun_wrong_region:
+            statuses_to_rerun.append("wrong_region")
+        if args.rerun_empty:
+            statuses_to_rerun.append("empty")
+        with sqlite3.connect(str(progress_path)) as c:
+            placeholders = ",".join("?" for _ in statuses_to_rerun)
+            rerun_ids = {
+                r[0] for r in c.execute(
+                    f"SELECT object_id FROM done WHERE status IN ({placeholders})",
+                    statuses_to_rerun,
+                )
+            }
+            # Удаляем — иначе они в `done` set и будут пропущены ниже.
+            c.execute(
+                f"DELETE FROM done WHERE status IN ({placeholders})",
+                statuses_to_rerun,
+            )
+        done = done - rerun_ids
+        print(f"Rerun mode: reprocessing {len(rerun_ids):,} {statuses_to_rerun} IDs")
     todo = [i for i in range(args.start, args.end + 1) if i not in done]
     if args.limit:
         todo = todo[: args.limit]
