@@ -39,9 +39,13 @@ else
 fi
 
 echo "[1/5] dump local forest_polygon $WHERE"
-docker exec "$LOCAL_CONTAINER" psql -U mushroom -d mushroom_map -c "
-    \\copy (SELECT * FROM forest_polygon $WHERE) TO STDOUT WITH (FORMAT csv, HEADER true)
-" > "$LOCAL_CSV"
+# Server-side COPY TO STDOUT — обычный psql metacommand `\copy` не работает
+# с -c (только в интерактивной сессии). Сервер пишет в свой stdout, который
+# docker exec прокидывает в наш stdout-redirect → файл. Это работает потому
+# что mushroom_db слушает только внутри docker-сети, мы внутри контейнера.
+docker exec "$LOCAL_CONTAINER" psql -U mushroom -d mushroom_map -c \
+    "COPY (SELECT * FROM forest_polygon $WHERE) TO STDOUT WITH (FORMAT csv, HEADER true)" \
+    > "$LOCAL_CSV"
 SZ=$(du -h "$LOCAL_CSV" | cut -f1)
 echo "      $LOCAL_CSV  ($SZ)"
 gzip -f "$LOCAL_CSV"
@@ -59,10 +63,14 @@ ssh "$REMOTE" "
 "
 
 echo "[4/5] DELETE + COPY в prod-DB (transactional)"
+# COPY ... FROM '/path' (server-side) — файл должен быть доступен серверу
+# postgres внутри db-контейнера. docker cp положил его в /tmp/, на mounted
+# tmpfs контейнера это работает. Используем server-side COPY вместо
+# client-side \copy по той же причине что в [1/5].
 ssh "$REMOTE" "docker exec -i '$REMOTE_CONTAINER' psql -U mushroom -d mushroom_map -v ON_ERROR_STOP=1 <<SQL
 BEGIN;
 DELETE FROM forest_polygon ${WHERE};
-\\copy forest_polygon FROM '/tmp/forest_polygon.csv' WITH (FORMAT csv, HEADER true);
+COPY forest_polygon FROM '/tmp/forest_polygon.csv' WITH (FORMAT csv, HEADER true);
 COMMIT;
 SQL"
 

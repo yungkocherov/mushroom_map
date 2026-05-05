@@ -78,13 +78,17 @@ _INSERT_SQL = """
     WITH parsed AS (
         SELECT
             region_id, source, source_feature_id, source_version,
-            ST_Multi(ST_MakeValid(ST_SetSRID(
+            -- ST_MakeValid может вернуть GeometryCollection если у source-
+            -- геометрии есть self-intersections — берём только полигональные
+            -- компоненты через ST_CollectionExtract(..., 3) перед ST_Multi,
+            -- чтобы не схлопнулось на «GeometryCollection vs MultiPolygon».
+            ST_Multi(ST_CollectionExtract(ST_MakeValid(ST_SetSRID(
                 COALESCE(
                     ST_GeomFromWKB(decode(geometry_wkb_hex, 'hex')),
                     ST_GeomFromText(geometry_wkt)
                 ),
                 4326
-            ))) AS geom,
+            )), 3)) AS geom,
             area_m2, dominant_species, species_composition,
             canopy_cover, tree_cover_density, confidence, meta
         FROM _forest_polygon_stage
