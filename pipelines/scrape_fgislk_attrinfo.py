@@ -306,12 +306,25 @@ def fetch_polygon_verified(
 
     Bbox от boundingbox-endpoint указывает на bbox целевого vydel'а, но
     irregular shape часто не покрывает bbox CENTER — click туда возвращает
-    геометрию соседнего vydel. Чтобы избежать «подкладки чужой геометрии»
-    под наш cadastral, проверяем `feature.properties.externalid` и при
-    mismatch пробуем альтернативные click-точки внутри bbox.
+    геометрию соседнего vydel. Пробуем 9 click-точек внутри bbox; если
+    одна из них вернёт feature с матчащим externalid — берём её.
 
-    Возвращает GeoJSON geometry dict (EPSG:3857) или None если ни одна
-    из click-попыток не совпала по externalid.
+    2026-05-05: ВАЖНО — verify-drop был bad policy. ФГИС WMS сам по себе
+    inconsistent: одни и те же click-coordinates в разное время отдают
+    разные externalid'ы (rendering rules + кэширование). Drop'ать всё что
+    не match'ит = дыры в карте на 36% точек диагностики.
+
+    Новое поведение: если ни один click не дал extid match, но хотя бы
+    одна попытка вернула feature — берём её геометрию (= то что user
+    видит на ФГИС-карте), помечаем `wms_extid_mismatch=true`.
+
+    Returns dict:
+      - {"geometry": geom_3857, "extid_mismatch": False, "got_extid": ext}
+        — match нашли (canonical case)
+      - {"geometry": geom_3857, "extid_mismatch": True,  "got_extid": ext}
+        — match не нашли но fallback-фича есть
+      - None — WMS не вернул ни одной фичи на 9 точках (всё равно дыра
+        в данных, но это редко: означает empty bbox или сетевую ошибку)
 
     ВАЖНО: WIDTH/HEIGHT влияет на server-side scale-dependent rendering
     rules в Geoserver. Cutoff между 128-192; ставим 512 с запасом.
@@ -338,6 +351,8 @@ def fetch_polygon_verified(
         (W * 3 // 4, W * 3 // 4),  # br
     ]
 
+    fallback_geom: dict | None = None
+    fallback_extid: str = ""
     for i, j in candidates:
         obj = _wms_query(bbox_str, i, j, W)
         if not obj:
@@ -349,13 +364,17 @@ def fetch_polygon_verified(
         props = feat.get("properties") or {}
         got_extid = props.get("externalid") or ""
         geom = feat.get("geometry")
-        if got_extid == expected_externalid and geom:
-            return geom
+        if not geom:
+            continue
+        if got_extid == expected_externalid:
+            return {"geometry": geom, "extid_mismatch": False, "got_extid": got_extid}
+        # Сохраняем первую попавшуюся feature как fallback
+        if fallback_geom is None:
+            fallback_geom = geom
+            fallback_extid = got_extid
 
-    # Ни один click не дал совпадения по externalid. Лучше отказаться
-    # чем сохранять wrong-polygon под правильным cadastral'ом
-    # (создавая 21% mismatched data как было до fix'а 2026-05-04).
-    # ID попадёт в status='fail', можно потом доразобраться отдельно.
+    if fallback_geom is not None:
+        return {"geometry": fallback_geom, "extid_mismatch": True, "got_extid": fallback_extid}
     return None
 
 
@@ -393,9 +412,10 @@ def process_one(object_id: int, region_prefix: str) -> dict | None:
     bbox = fetch_bbox(object_id)
     if not bbox:
         return None
-    geom_3857 = fetch_polygon_verified(bbox, cadastral)
-    if not geom_3857:
+    wms_result = fetch_polygon_verified(bbox, cadastral)
+    if not wms_result:
         return None
+    geom_3857 = wms_result["geometry"]
     coords_4326 = reproject_polygon_3857_to_4326(geom_3857.get("coordinates") or [])
     return {
         "type": "Feature",
@@ -422,6 +442,8 @@ def process_one(object_id: int, region_prefix: str) -> dict | None:
             "forest_land_type": attrs.get("forest_land_type"),
             "event": attrs.get("event"),
             "objectValid": attrs.get("objectValid"),
+            "wms_extid_mismatch": wms_result["extid_mismatch"],
+            "wms_got_extid": wms_result["got_extid"] if wms_result["extid_mismatch"] else None,
         },
     }
 
@@ -482,6 +504,11 @@ def main():
                          "Запускать вместе с расширенным --region-prefix=47:"))
     p.add_argument("--rerun-empty", action="store_true",
                    help="Перепрогнать ID со статусом 'empty' (для проверки)")
+    p.add_argument("--ids-file", default=None,
+                   help=("Путь к файлу с object_id'ами (один на строку). "
+                         "Если указан — заменяет --start/--end диапазон. "
+                         "Используется для рестрейпа union(grid-discovered, "
+                         "wrong_region) в Phase 2."))
     args = p.parse_args()
 
     out_path = Path(args.out)
@@ -518,10 +545,27 @@ def main():
             )
         done = done - rerun_ids
         print(f"Rerun mode: reprocessing {len(rerun_ids):,} {statuses_to_rerun} IDs")
-    todo = [i for i in range(args.start, args.end + 1) if i not in done]
+
+    if args.ids_file:
+        # Phase-2 mode: ID-список из файла (grid-discovered ∪ wrong_region)
+        ids_from_file: list[int] = []
+        with open(args.ids_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                try:
+                    ids_from_file.append(int(line))
+                except ValueError:
+                    continue
+        unique_ids = set(ids_from_file)
+        todo = sorted(unique_ids - done)
+        print(f"IDs from file: {len(unique_ids):,} unique (out of {len(ids_from_file):,} lines)")
+    else:
+        todo = [i for i in range(args.start, args.end + 1) if i not in done]
+        print(f"Range: {args.start:,} ... {args.end:,}  ({args.end - args.start + 1:,} IDs)")
     if args.limit:
         todo = todo[: args.limit]
-    print(f"Range: {args.start:,} ... {args.end:,}  ({args.end - args.start + 1:,} IDs)")
     print(f"Already processed: {len(done):,}")
     print(f"To do this run:    {len(todo):,}")
     print(f"Workers:           {args.workers}")
