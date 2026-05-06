@@ -100,6 +100,37 @@ memory-файлов (`MEMORY.md` + relevant `reference_*.md` / `project_*.md`),
 версия правила — в `mushroom-forecast/CLAUDE.md`, этот репо следует
 тому же протоколу.
 
+## Free-tier лимиты — НИКОГДА не превышать, держать запас
+
+Этот проект целиком сидит на free-tier'ах. Превышение = деньги (Oracle,
+R2 Class A) или suspend (Oracle Always Free). **Перед любым ресурсо-
+ёмким действием** (массовый scrape >10k req, sync тайлов, db-дамп
+push, CI matrix expansion) оценить вклад в месячные квоты и убедиться
+что мы остаёмся **с запасом ≥30%** к лимиту, а не «впритык».
+
+Лимиты (актуальный список — `memory/feedback_check_provider_limits.md`):
+- **Oracle Cloud Always Free** (`geobiom-prod-oracle`): 200 GB block,
+  10 TB egress/мес, 4 OCPU + 24 GB Ampere. **Egress — главная риск-
+  зона** (sync тайлов × итераций).
+- **Cloudflare**: API 1200 req / 5 min на токен; R2 10 GB / 1M Class A
+  / 10M Class B ops в месяц; Workers 100k req/day.
+- **TimeWeb VM** (`geobiom-prod-timeweb`): фикс-тариф, но disk +
+  monthly traffic в panel.
+- **Backup R2 bucket**: тоже free-tier R2.
+- **REG.RU RU-VPS** (dormant): бесплатно до ~2026-10-30.
+
+Правила:
+1. Перед `sync_*.sh` / `build_tiles*` / heavy scrape — посчитать
+   ожидаемый egress и flag юзеру если **прогноз ≥70% месячной квоты**
+   (внимание: «~70% Oracle egress в этом месяце»).
+2. Раз в неделю/после крупного rollout — глянуть Oracle billing
+   (Always Free usage) + R2 dashboard. Зафиксировать число в memory
+   если выше прошлого замера.
+3. Если квота близка — **не делать действие, спросить юзера**. Лучше
+   дороже-но-предсказуемый план, чем suspend.
+4. При расширении (новый слой / regular cron / increase tile size) —
+   считать impact на месячный egress _до_ имплементации.
+
 ## Environment quirks — read this first
 
 - **Python venv**: `/c/Users/ikoch/mushroom-map/.venv/Scripts/python.exe`
