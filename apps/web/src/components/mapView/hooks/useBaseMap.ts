@@ -57,10 +57,15 @@ export function useBaseMap(
       requestAnimationFrame(poll);
 
       // Hard timeout: на flaky-CDN basemap-style может не дойти до
-      // isStyleLoaded() в разумный срок. После 5с считаем «и так сойдёт» —
-      // карта уже отрисовала старый стиль; re-add layers лучше с задержкой,
-      // чем не сделать вообще (вечный RAF-poll крутится, батарея садится).
-      fallbackTimer = setTimeout(fireOnce, 5000);
+      // isStyleLoaded() в разумный срок. После 15с — последний шанс через
+      // map "idle". onAfterApply зовёт addSource/addLayer; вызов до того,
+      // как style реально загрузился, ловится исключением "Style is not
+      // done loading" и весь forest-слой (и places) просто не появляются.
+      fallbackTimer = setTimeout(() => {
+        if (cancelled || fired) return;
+        if (m.isStyleLoaded()) fireOnce();
+        else m.once("idle", fireOnce);
+      }, 15000);
     };
 
     if (baseMap === "scheme") {
