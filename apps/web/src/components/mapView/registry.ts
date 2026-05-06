@@ -50,11 +50,9 @@ export const LAYER_REGISTRY: ReadonlyArray<LayerEntry> = [
     missingMsg: "Леса не собраны — запустите ingest_forest.py + build_tiles.py",
     add: addForestLayer,
     setVisibility: setForestVisibility,
-    // Forest состоит из двух pmtiles: forest_lo (z=5-7, упрощённый) +
-    // forest (z=8-13, полная детализация). HEAD-check выше делается на
-    // forest.pmtiles; forest_lo.pmtiles предполагается рядом.
-    sources: ["forest", "forest_lo"],
-    layers: ["forest-lo-fill", "forest-fill"],
+    // forest.pmtiles покрывает z=5..13 одним source-layer'ом.
+    sources: ["forest"],
+    layers: ["forest-fill"],
   },
   {
     id: "water",

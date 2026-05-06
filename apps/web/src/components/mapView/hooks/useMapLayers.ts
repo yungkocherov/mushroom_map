@@ -123,16 +123,15 @@ export function useMapLayers(
     }
   }, [visible, loaded, mapRef, ready, setLoaded, setVisible, setErrorMsg]);
 
-  // forestColorMode + speciesFilter применяются и к forest-fill (z>=8), и
-  // к forest-lo-fill (z<=7) — оба должны выглядеть одинаково при переключении.
-  // forest_lo не имеет полей bonitet/age_group → в этих режимах layer
-  // упадёт в "default" цвет (`#9e9e9e`); приемлемый visual fallback.
+  // forestColorMode + speciesFilter применяются к forest-fill — единственному
+  // forest-слою (purges z=5..13 включая coarse-путь на z<=8).
+  // На z<=8 build_tiles.py пишет NULL для bonitet/age_group/area_m2; в
+  // соответствующих режимах раскраски тайлы fall back на default colour.
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
     const color = paintForMode(forestColorMode);
     if (m.getLayer("forest-fill")) m.setPaintProperty("forest-fill", "fill-color", color);
-    if (m.getLayer("forest-lo-fill")) m.setPaintProperty("forest-lo-fill", "fill-color", color);
   }, [forestColorMode, mapRef, ready]);
 
   useEffect(() => {
@@ -142,7 +141,6 @@ export function useMapLayers(
       ? ["in", ["get", "dominant_species"], ["literal", speciesFilter]] as never
       : null;
     if (m.getLayer("forest-fill")) m.setFilter("forest-fill", filter);
-    if (m.getLayer("forest-lo-fill")) m.setFilter("forest-lo-fill", filter);
   }, [speciesFilter, mapRef, ready]);
 
   const reapplyAll = useCallback(() => {
@@ -166,11 +164,9 @@ export function useMapLayers(
     const filter = speciesFilter
       ? ["in", ["get", "dominant_species"], ["literal", speciesFilter]] as never
       : null;
-    for (const id of ["forest-fill", "forest-lo-fill"]) {
-      if (m.getLayer(id)) {
-        m.setPaintProperty(id, "fill-color", color);
-        if (filter) m.setFilter(id, filter);
-      }
+    if (m.getLayer("forest-fill")) {
+      m.setPaintProperty("forest-fill", "fill-color", color);
+      if (filter) m.setFilter("forest-fill", filter);
     }
   }, [mapRef, loaded, visible, forestColorMode, speciesFilter]);
 

@@ -7,7 +7,7 @@ import styles from "./ForestLoadingOverlay.module.css";
  * Per-tile shimmer overlay для forest-источников.
  *
  * Стратегия:
- *   - `dataloading` event на forest/forest_lo sources → tile в pending Set
+ *   - `dataloading` event на forest source → tile в pending Set
  *   - `data` event на тех же sources → если tile.state === 'loaded'/'errored'
  *     → удаляем из pending
  *   - Render: absolute-positioned div per pending tile, проектируем
@@ -31,7 +31,7 @@ type TileLikeEvent = MapDataEvent & {
   };
 };
 
-const FOREST_SOURCES = ["forest", "forest_lo"];
+const FOREST_SOURCES = ["forest"];
 
 function tileBoundsLngLat(x: number, y: number, z: number) {
   const n = 2 ** z;

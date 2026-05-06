@@ -6,25 +6,12 @@ import { TILES_BASE } from "../utils/api";
 import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
 
 export const FOREST_PMTILES_URL = `pmtiles://${TILES_BASE}/forest.pmtiles`;
-export const FOREST_LO_PMTILES_URL = `pmtiles://${TILES_BASE}/forest_lo.pmtiles`;
 
 /**
- * Forest состоит из ДВУХ pmtiles-источников и ДВУХ layer'ов:
- *
- *   forest-lo (z=5..8):  forest_lo.pmtiles, ~30MB, same-species union'ы
- *                        внутри породы → крупные блобы. Цвета те же что
- *                        и full forest. Грузится в 10-30× быстрее на
- *                        обзорных зумах.
- *   forest    (z=8..13): forest.pmtiles, 737MB. Реальные вы́делы
- *                        Рослесхоза, каждый со своими границами +
- *                        properties.
- *
- * На z=8 рендерятся ОБА слоя (overlap). forest добавлен после, поэтому
- * рисуется поверх — visually forest dominate'ит. Пока forest тайлы
- * качаются на z=7→8 transition, forest-lo даёт continuous fallback
- * (без «дырки» в данных).
- *
- * setForestVisibility переключает оба layer'а синхронно.
+ * forest.pmtiles покрывает z=5..13. На z<=8 build_tiles.py идёт coarse-путь
+ * (per-species ST_Union по `forest_3857_low`) — цвета пород сохраняются,
+ * bonitet/age_group теряются. На z>=9 — реальные выделы Рослесхоза с
+ * полным набором properties. Один source + один layer на всех зумах.
  */
 export function addForestLayer(m: Map): void {
   if (m.getLayer("forest-fill")) return;
@@ -32,33 +19,13 @@ export function addForestLayer(m: Map): void {
     if (!m.getSource("forest")) {
       m.addSource("forest", { type: "vector", url: FOREST_PMTILES_URL });
     }
-    if (!m.getSource("forest_lo")) {
-      m.addSource("forest_lo", { type: "vector", url: FOREST_LO_PMTILES_URL });
-    }
     const beforeId = findFirstSymbolLayerId(m);
-    // Hard cutoff на z=9 — никакого overlap'а forest_lo + forest.
-    // MapLibre `maxzoom` — exclusive (layer прячется при zoom >= maxzoom),
-    // `minzoom` — inclusive (layer показывается при zoom >= minzoom).
-    // Так z<9 = только forest_lo; z>=9 = только forest. Resulting opacity
-    // фиксированная 0.5 (приходит из FOREST_LAYER_PAINT_COLOR).
-    m.addLayer(
-      {
-        id: "forest-lo-fill",
-        type: "fill",
-        source: "forest_lo",
-        "source-layer": "forest_lo",
-        maxzoom: 9,
-        paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
-      },
-      beforeId,
-    );
     m.addLayer(
       {
         id: "forest-fill",
         type: "fill",
         source: "forest",
         "source-layer": "forest",
-        minzoom: 9,
         paint: FOREST_LAYER_PAINT_COLOR as unknown as maplibregl.FillLayerSpecification["paint"],
       },
       beforeId,
@@ -72,5 +39,4 @@ export function addForestLayer(m: Map): void {
 export function setForestVisibility(m: Map, visible: boolean): void {
   const visibility = visible ? "visible" : "none";
   if (m.getLayer("forest-fill")) m.setLayoutProperty("forest-fill", "visibility", visibility);
-  if (m.getLayer("forest-lo-fill")) m.setLayoutProperty("forest-lo-fill", "visibility", visibility);
 }
