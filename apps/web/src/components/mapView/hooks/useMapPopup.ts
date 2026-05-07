@@ -17,6 +17,21 @@ import {
 } from "@mushroom-map/api-client";
 import { buildPopupHtml, attachPopupHandlers } from "../utils/popup";
 
+/**
+ * MapLibre popup позиционируется через `transform: translate(-50%, -100%) translate(Xpx, Ypx)`.
+ * Целочисленная часть `translate(Xpx, Ypx)` округлена (`subpixelPositioning: false` по дефолту),
+ * но `translate(-50%, ...)` — это процент от ширины самого попапа. Если ширина контента
+ * нечётная, `-50%` = пол-пикселя → Chrome на Windows растеризует текст на composited layer
+ * с sub-pixel offset → видимый блёр. Yandex Browser рендерит иначе (нет блёра).
+ * Фиксим, форсируя чётную ширину контейнера, тогда -50% всегда integer-px.
+ */
+function snapPopupWidthEven(el: HTMLElement): void {
+  const content = el.querySelector<HTMLElement>(".maplibregl-popup-content");
+  if (!content) return;
+  const w = content.offsetWidth;
+  if (w > 0 && w % 2 !== 0) content.style.width = `${w + 1}px`;
+}
+
 export function useMapPopup(mapRef: React.MutableRefObject<Map | null>) {
   useEffect(() => {
     const m = mapRef.current;
@@ -43,7 +58,10 @@ export function useMapPopup(mapRef: React.MutableRefObject<Map | null>) {
         ]);
         popup.setHTML(buildPopupHtml(forest, soil, water, terrain, lat, lng));
         const el = popup.getElement();
-        if (el) attachPopupHandlers(el);
+        if (el) {
+          attachPopupHandlers(el);
+          snapPopupWidthEven(el);
+        }
       } catch {
         popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
       }
