@@ -11,6 +11,12 @@
   box-sizing: border-box;
 }
 
+/* Root font-size — рычаг масштаба для всех rem-токенов (--fs-*, --space-*).
+ * Browser default = 16px. 17px даёт ~+6% ко всем rem-зависимым размерам. */
+html {
+  font-size: 17px;
+}
+
 html, body, #root {
   margin: 0;
   padding: 0;
