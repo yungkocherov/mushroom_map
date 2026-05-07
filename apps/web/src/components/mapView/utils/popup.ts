@@ -85,9 +85,9 @@ function buildWaterHtml(water: WaterDistanceResponse | null): string {
   if (bs.waterway && bs.waterway !== n) detailBits.push(`ручей ${fmtDistance(bs.waterway.distance_m)}`);
   if (bs.wetland  && bs.wetland  !== n) detailBits.push(`болото ${fmtDistance(bs.wetland.distance_m)}`);
   return `
-    <div style="margin-top:6px;font-size:11px;color:#555">
+    <div style="margin-top:6px;font-size:13px;color:#555">
       💧 До воды: <b>${fmtDistance(n.distance_m)}</b> (${label}${named})
-      ${detailBits.length ? `<div style="font-size:10px;color:#888;margin-top:1px">${detailBits.join(" · ")}</div>` : ""}
+      ${detailBits.length ? `<div style="font-size:12px;color:#888;margin-top:1px">${detailBits.join(" · ")}</div>` : ""}
     </div>`;
 }
 
@@ -97,7 +97,7 @@ function buildTerrainHtml(t: TerrainAtResponse | null): string {
   // компактный геофакт в одну строку.
   if (!t || t.elevation_m == null) return "";
   return `
-    <div style="margin-top:6px;font-size:11px;color:#555">
+    <div style="margin-top:6px;font-size:13px;color:#555">
       ⛰ Высота: <b>${Math.round(t.elevation_m)} м</b>
     </div>`;
 }
@@ -120,11 +120,11 @@ function buildSoilHtml(soil: SoilAtResponse | null): string {
   }
   return `
     <div style="margin-top:8px;padding-top:6px;border-top:1px solid #eee">
-      <div style="font-size:11px;color:#888;margin-bottom:3px">Почва</div>
-      <div style="font-size:12px;color:#333">${soil0Descript}</div>
-      ${accomp.length ? `<div style="font-size:10px;color:#888;margin-top:1px">+ ${accomp.join("; ")}</div>` : ""}
-      ${parent ? `<div style="font-size:10px;color:#888;margin-top:1px">Порода: ${parent}</div>` : ""}
-      ${profileBits.length ? `<div style="font-size:10px;color:#666;margin-top:2px">${profileBits.join(" · ")}</div>` : ""}
+      <div style="font-size:13px;color:#888;margin-bottom:3px">Почва</div>
+      <div style="font-size:14px;color:#333">${soil0Descript}</div>
+      ${accomp.length ? `<div style="font-size:12px;color:#888;margin-top:1px">+ ${accomp.join("; ")}</div>` : ""}
+      ${parent ? `<div style="font-size:12px;color:#888;margin-top:1px">Порода: ${parent}</div>` : ""}
+      ${profileBits.length ? `<div style="font-size:12px;color:#666;margin-top:2px">${profileBits.join(" · ")}</div>` : ""}
     </div>`;
 }
 
@@ -142,7 +142,7 @@ function buildSaveSpotButton(lat: number, lon: number): string {
         data-mm-save-spot
         data-lat="${lat}"
         data-lon="${lon}"
-        style="font-family:inherit;font-size:11px;cursor:pointer;background:transparent;border:1px solid #d8d2c0;border-radius:4px;padding:3px 8px;color:#2d5a3a">
+        style="font-family:inherit;font-size:13px;cursor:pointer;background:transparent;border:1px solid #d8d2c0;border-radius:4px;padding:3px 8px;color:#2d5a3a">
         Сохранить это место
       </button>
     </div>`;
@@ -247,35 +247,35 @@ export function buildPopupHtml(
       return `<tr class="sp-row" data-p="${isPriority ? 1 : 0}" data-s="${inSeason ? 1 : 0}"
           style="display:${isPriority ? "table-row" : "none"}">
         <td style="${style};padding:2px 6px 2px 0">${nameCell}</td>
-        <td style="color:#aaa;font-size:10px;padding:2px 6px 2px 0;font-style:italic">${nameLat}</td>
-        <td style="font-size:10px;color:#555;padding:2px 6px 2px 0;white-space:nowrap">${months}</td>
-        <td style="font-size:10px;color:#888;padding:2px 0">${aff}%</td>
+        <td style="color:#aaa;font-size:12px;padding:2px 6px 2px 0;font-style:italic">${nameLat}</td>
+        <td style="font-size:12px;color:#555;padding:2px 6px 2px 0;white-space:nowrap">${months}</td>
+        <td style="font-size:12px;color:#888;padding:2px 0">${aff}%</td>
       </tr>`;
     })
     .join("");
 
-  return `<div style="font-family:inherit;font-size:13px;min-width:0;max-width:100%;line-height:1.4">
+  return `<div style="font-family:inherit;font-size:15px;min-width:0;max-width:100%;line-height:1.4">
     <div style="margin-bottom:6px">
-      <strong style="font-size:14px">${forestName}</strong>
-      ${areaStr ? `<span style="font-size:11px;color:#aaa;margin-left:8px">${areaStr}</span>` : ""}
-      ${metaStr ? `<div style="font-size:11px;color:#888;margin-top:2px">${metaStr}</div>` : ""}
+      <strong style="font-size:16px">${forestName}</strong>
+      ${areaStr ? `<span style="font-size:13px;color:#aaa;margin-left:8px">${areaStr}</span>` : ""}
+      ${metaStr ? `<div style="font-size:13px;color:#888;margin-top:2px">${metaStr}</div>` : ""}
     </div>
     ${speciesRows ? `
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:11px;color:#888">Виды грибов</span>
+        <span style="font-size:13px;color:#888">Виды грибов</span>
         <div style="display:flex;gap:8px;align-items:center">
-          <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
+          <label style="font-size:12px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
             <input type="checkbox" data-sp-cb="all" style="margin:0">
             все виды
           </label>
-          <label style="font-size:10px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
+          <label style="font-size:12px;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px">
             <input type="checkbox" data-sp-cb="season" style="margin:0">
             в сезоне
           </label>
         </div>
       </div>
       <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="font-size:10px;color:#aaa;border-bottom:1px solid #eee">
+        <thead><tr style="font-size:12px;color:#aaa;border-bottom:1px solid #eee">
           <th style="text-align:left;padding:0 6px 3px 0">Гриб</th>
           <th></th>
           <th style="text-align:left;padding:0 6px 3px 0">Сезон</th>
@@ -283,7 +283,7 @@ export function buildPopupHtml(
         </tr></thead>
         <tbody>${speciesRows}</tbody>
       </table>`
-    : `<p style="color:#aaa;font-size:12px;margin:0">Нет данных о видах для этого типа леса</p>`}
+    : `<p style="color:#aaa;font-size:14px;margin:0">Нет данных о видах для этого типа леса</p>`}
     ${buildTerrainHtml(terrain ?? null)}
     ${buildWaterHtml(water ?? null)}
     ${buildSoilHtml(soil ?? null)}

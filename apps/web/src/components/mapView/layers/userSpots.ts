@@ -88,15 +88,15 @@ export function addUserSpotsLayer(m: Map, spots: UserSpot[]): void {
     e.originalEvent.stopPropagation();
 
     const noteHtml = p.note
-      ? `<div style="margin-top:4px;color:#555;font-size:11px;white-space:pre-wrap">${escapeHtml(p.note)}</div>`
+      ? `<div style="margin-top:4px;color:#555;font-size:13px;white-space:pre-wrap">${escapeHtml(p.note)}</div>`
       : "";
     const spotPopup = new maplibregl.Popup({ maxWidth: "260px", closeButton: true })
       .setLngLat([lon, lat])
       .setHTML(`
-        <div style="font-family:inherit;font-size:13px">
+        <div style="font-family:inherit;font-size:15px">
           <div style="font-weight:600;color:#2d5a3a">${escapeHtml(p.name)}</div>
           ${noteHtml}
-          <div style="margin-top:6px;font-family:var(--font-mono);font-size:10px;color:#888">
+          <div style="margin-top:6px;font-family:var(--font-mono);font-size:12px;color:#888">
             ${lat.toFixed(5)}, ${lon.toFixed(5)}
           </div>
         </div>`)

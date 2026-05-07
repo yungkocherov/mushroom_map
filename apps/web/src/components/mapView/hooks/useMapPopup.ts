@@ -49,7 +49,7 @@ export function useMapPopup(mapRef: React.MutableRefObject<Map | null>) {
         // setHTML меняет content-size → новый transform → MutationObserver внутри
         // sharpenPopup сработает автоматически. Доп. вызов не нужен.
       } catch {
-        popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
+        popup.setHTML(`<div style="color:#c62828;font-size:14px">Ошибка загрузки данных</div>`);
       }
     };
 
