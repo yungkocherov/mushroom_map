@@ -549,3 +549,53 @@ other
 - **Species search 500** в браузере читается как CORS error — FastAPI
   не приклеивает CORS headers к error-responses. См.
   `docker compose logs api` для реального exception.
+- **ФГИС WMS GetFeatureInfo — это rendering API, не data API.** Geoserver
+  scale-dependent rules иногда возвращают контур более крупного слоя
+  (квартал/лесничество) вместо запрошенного выдела. Защита в `pipelines/
+  scrape_fgislk_attrinfo.py::fetch_polygon_verified` — sanity-check
+  `real_area / square_ha > 3.0` на КАЖДЫЙ click-point (не только
+  fallback). Если все 9 кликов inflate — `status='empty'`, в `progress.db`
+  bogus не попадает. ФГИС также возвращает один контур для соседних
+  `object_id` (выделы :2/:3 одного квартала) — defense в `db.py`
+  `_INSERT_SQL` через DISTINCT ON (10m centroid grid + log-area-bucket).
+- **Worktree vs main path при `cd`/exec.** Когда работаешь в
+  `.claude/worktrees/<name>/`, edits идут туда, но `cd
+  /c/Users/ikoch/mushroom-map && bash pipelines/...` выполняется в
+  main repo path. Перед edit verify `git rev-parse --show-toplevel`,
+  а перед каждым long-running pipeline — `diff -q worktree main` для
+  changed files. Этот session: 2 часа потеряли на «db.py edits не
+  применяются» — оказалось pipeline читал main где старая копия.
+- **Pre-INSERT, не post-INSERT.** Bogus / dup строки **не должны
+  попадать** в `forest_polygon`, не убираться post-factum. Все фильтры
+  в `db.py::_INSERT_SQL` (CTE chain `parsed → sane → by_cadastral →
+  INSERT DISTINCT ON`) или раньше — в scraper'е. `upsert_forest_polygons`
+  делает single finalize INSERT после всех batches (через stage table)
+  чтобы DISTINCT ON работал глобально, не per-batch.
+- **MVT discovery bbox должен покрывать ВСЁ.** Default
+  `pipelines/discover_oids_from_mvt.py --bbox 27.8,58.5,33.0,61.8`
+  обрезал восточную часть ЛО (lon до 33° вместо 35.7°) — целые
+  районы 47:1, 47:9, 47:13, 47:18 были почти не покрыты (47:9
+  Бокситогорский: 6 oid'ов вместо 100k+). Если запускаешь discovery —
+  всегда `--bbox 27.8,58.5,35.7,61.8` (полная ЛО) или дальше.
+- **`Cache-Control: max-age=86400, immutable` на pmtiles при changing
+  content.** Caddy раздаёт `forest.pmtiles` как immutable, но при
+  rebuild содержимое меняется → user видит stale tile до hard-reload.
+  Либо снять `immutable` (`max-age=300, must-revalidate`), либо ввести
+  content-hash в URL (`forest-<sha>.pmtiles`). TODO.
+- **ROUND boundary при dedup-key.** `ROUND(x, 4)` имеет границу cell
+  на `0.5` digit — два центроида 8cm apart могут попасть на разные
+  стороны boundary (0.499 vs 0.501) и dedup их разделит. `FLOOR(x /
+  step)` тоже имеет boundary на integer cells, тоже split'ит pairs
+  что unlucky сидят на cell border. **Решение**: 10m grid step
+  (`FLOOR(x / 0.0001)`), boundary каждые 10m → крайне маловероятно
+  что 8cm-pair попадёт точно на cell border.
+- **ScheduleWakeup ненадёжен.** Best-effort scheduler от Anthropic
+  harness — задержки 1-2 ч встречены, бывает не выстрелит вовсе. Не
+  полагайся на wakeup как single mechanism для long-running task'ов;
+  всегда параллельно `until grep ... do sleep N; done` background
+  bash monitor → notification on exit.
+- **Bash monitor false-positives через substring.** `until grep -qE
+  "Done|complete|ok="` matches `complete` в любом контексте включая
+  «completed» в caller bash output. ASCII-end-signals в pipeline
+  должны быть **уникальные** (e.g. `PIPELINE_EAST_DONE`, не просто
+  `Done`).
