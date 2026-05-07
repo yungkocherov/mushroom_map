@@ -13,6 +13,7 @@
 import maplibregl, { type Map } from "maplibre-gl";
 import type { UserSpot } from "@mushroom-map/types";
 import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
+import { sharpenPopup } from "../utils/sharpenPopup";
 import { escapeHtml } from "../../../lib/escapeHtml";
 import { RATING_HEX } from "../../../lib/spotRating";
 
@@ -89,7 +90,7 @@ export function addUserSpotsLayer(m: Map, spots: UserSpot[]): void {
     const noteHtml = p.note
       ? `<div style="margin-top:4px;color:#555;font-size:11px;white-space:pre-wrap">${escapeHtml(p.note)}</div>`
       : "";
-    new maplibregl.Popup({ maxWidth: "260px", closeButton: true })
+    const spotPopup = new maplibregl.Popup({ maxWidth: "260px", closeButton: true })
       .setLngLat([lon, lat])
       .setHTML(`
         <div style="font-family:inherit;font-size:13px">
@@ -100,6 +101,7 @@ export function addUserSpotsLayer(m: Map, spots: UserSpot[]): void {
           </div>
         </div>`)
       .addTo(m);
+    sharpenPopup(spotPopup);
   });
 
   // Курсор-pointer над точками — отдаёт сигнал «кликабельно».

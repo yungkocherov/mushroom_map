@@ -16,6 +16,7 @@ import {
   fetchTerrainAt,
 } from "@mushroom-map/api-client";
 import { buildPopupHtml, attachPopupHandlers } from "../utils/popup";
+import { sharpenPopup } from "../utils/sharpenPopup";
 
 export function useMapPopup(mapRef: React.MutableRefObject<Map | null>) {
   useEffect(() => {
@@ -33,6 +34,7 @@ export function useMapPopup(mapRef: React.MutableRefObject<Map | null>) {
         .setLngLat([lng, lat])
         .setHTML(`<div style="font-family:inherit;color:#555;padding:4px">Загружаю…</div>`)
         .addTo(m);
+      sharpenPopup(popup);
 
       try {
         const [forest, soil, water, terrain] = await Promise.all([
@@ -44,6 +46,8 @@ export function useMapPopup(mapRef: React.MutableRefObject<Map | null>) {
         popup.setHTML(buildPopupHtml(forest, soil, water, terrain, lat, lng));
         const el = popup.getElement();
         if (el) attachPopupHandlers(el);
+        // setHTML меняет content-size → новый transform → MutationObserver внутри
+        // sharpenPopup сработает автоматически. Доп. вызов не нужен.
       } catch {
         popup.setHTML(`<div style="color:#c62828;font-size:12px">Ошибка загрузки данных</div>`);
       }
