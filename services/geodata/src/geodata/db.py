@@ -139,19 +139,20 @@ _INSERT_SQL = """
     --    1.3M+ rows. Cross-batch dups (которые попали в разные 100k
     --    flushes) тоже dедулируются.
     --    KEY FIX 2026-05-07: ни md5 raw, ни ST_SnapToGrid(N) не ловили
-    --    пары где WMS вернул "почти" одинаковые контуры (одно тело, чуть
-    --    разные vertex chains: 24 vs 25 vertices, area differs by 0.03%).
-    --    Используем composite signature: centroid round 4-digit (~10m at
-    --    60°N) + log-bucket по area (1% precision). Round 4 (а не 5)
-    --    закрывает boundary-эффект, когда два центроида отличаются в
-    --    5-м знаке (~0.5m) и round-5 их разделяет. Два полигона с
-    --    identical centroid (10m) + area (1%) = тот же выдел в ФГИС.
-    --    Risk false positive: distinct vydels с центроидами within 10m
-    --    AND areas within 1% — на ЛО плотности (~260m avg) практически
-    --    невозможно случайно.
+    --    пары где WMS вернул "почти" одинаковые контуры. Прежний approach
+    --    — ROUND(centroid, 4) + log-area-bucket — имел boundary-effect:
+    --    два центроида physical 8cm apart могут попасть в разные ROUND-cells
+    --    если они на 0.5-границе (29.038749 vs 29.038751 → round 4 = .0387
+    --    vs .0388). Решение: integer-grid через `(x / 0.00005)::int` —
+    --    это 5m grid в lon/lat, **без** boundary fragility (oба centroid'а
+    --    в одном integer cell гарантированно).
+    --    Composite key: (cx_grid_5m, cy_grid_5m, log-bucket area 1%).
+    --    Risk false positive: distinct vydels with centroids within 5m
+    --    + areas within 1% — на ЛО плотности (~260m avg spacing) practically
+    --    impossible. Trade-off worth it.
     SELECT DISTINCT ON (
-        ROUND(ST_X(ST_Centroid(geom))::numeric, 4),
-        ROUND(ST_Y(ST_Centroid(geom))::numeric, 4),
+        FLOOR(ST_X(ST_Centroid(geom)) / 0.0001)::bigint,
+        FLOOR(ST_Y(ST_Centroid(geom)) / 0.0001)::bigint,
         ROUND((LN(GREATEST(ST_Area(geom::geography), 1)) * 100)::numeric)::int
     )
         region_id, source, source_feature_id, source_version,
@@ -161,8 +162,8 @@ _INSERT_SQL = """
         canopy_cover, tree_cover_density, confidence, meta
     FROM by_cadastral
     ORDER BY
-        ROUND(ST_X(ST_Centroid(geom))::numeric, 4),
-        ROUND(ST_Y(ST_Centroid(geom))::numeric, 4),
+        FLOOR(ST_X(ST_Centroid(geom)) / 0.0001)::bigint,
+        FLOOR(ST_Y(ST_Centroid(geom)) / 0.0001)::bigint,
         ROUND((LN(GREATEST(ST_Area(geom::geography), 1)) * 100)::numeric)::int,
         source_feature_id
 """
