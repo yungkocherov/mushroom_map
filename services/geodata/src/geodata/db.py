@@ -74,6 +74,24 @@ _COPY_SQL = """
 #: area_m2: если источник прислал — берём его; иначе считаем в SQL через
 #: ST_Area(ST_Transform(..., 3857)). Это ещё один проход по координатам,
 #: но C-код PostGIS сильно быстрее shapely.
+#: Два фильтра применяются ПЕРЕД INSERT — bogus / dup строки не должны
+#: появляться в forest_polygon вообще, не убираться post-factum.
+#:
+#:  1. Sanity-check ratio>3: `WHERE NOT (real_area > 3 × square_ha)` —
+#:     отбрасывает inflated геометрии, где WMS GetFeatureInfo вернул
+#:     соседа/квартал вместо запрошенного выдела.
+#:
+#:  2. Dedup-by-geometry: WHERE NOT EXISTS check vs already-inserted rows
+#:     для того же (source, source_version) — отбрасывает выделы у которых
+#:     md5(geom) уже есть в forest_polygon (cross-batch). ФГИС иногда
+#:     возвращает один контур для нескольких object_id (соседние выделы).
+#:     Оставляем тот что вставился первым (стабильно по INSERT-порядку
+#:     внутри transaction).
+#:
+#:  3. DISTINCT ON (source, feature_id, version) — within-batch защита
+#:     от duplicate cadastrals.
+#:
+#:  4. DISTINCT ON (md5(geom)) — within-batch dedup-by-geometry.
 _INSERT_SQL = """
     WITH parsed AS (
         SELECT
@@ -92,6 +110,22 @@ _INSERT_SQL = """
             area_m2, dominant_species, species_composition,
             canopy_cover, tree_cover_density, confidence, meta
         FROM _forest_polygon_stage
+    ),
+    sane AS (
+        -- 1. Не пустые + 2. sanity-check ratio>3 (drop inflated WMS-bogus).
+        SELECT * FROM parsed
+        WHERE NOT ST_IsEmpty(geom)
+          AND NOT (
+            (meta->>'square_ha') IS NOT NULL
+            AND (meta->>'square_ha')::float > 0
+            AND ST_Area(geom::geography) / 10000.0 > 3.0 * (meta->>'square_ha')::float
+          )
+    ),
+    by_cadastral AS (
+        -- 3. DISTINCT ON cadastral — защита от dup cadastrals в input.
+        SELECT DISTINCT ON (source, source_feature_id, source_version) *
+        FROM sane
+        ORDER BY source, source_feature_id, source_version
     )
     INSERT INTO forest_polygon (
         region_id, source, source_feature_id, source_version,
@@ -99,25 +133,23 @@ _INSERT_SQL = """
         dominant_species, species_composition,
         canopy_cover, tree_cover_density, confidence, meta
     )
-    SELECT DISTINCT ON (source, source_feature_id, source_version)
+    -- 4. Within-batch dedup-by-geometry: DISTINCT ON md5(geom) — два
+    --    разных cadastrals с identical контуром (ФГИС вернул одну
+    --    геометрию для соседних object_id) дают визуальный «темнее»
+    --    при fill-opacity=0.5×2. Оставляем стабильно по min(externalid).
+    --
+    --    NB: dedup-в-пределах-batch'а. Cross-batch миссы редки, потому
+    --    что rosleshoz feature stream идёт sorted by externalid (см.
+    --    sources/rosleshoz/source.py) — соседние выделы одного quarter
+    --    попадают в один BATCH=100k.
+    SELECT DISTINCT ON (md5(ST_AsBinary(geom)))
         region_id, source, source_feature_id, source_version,
         geom,
         COALESCE(area_m2, ST_Area(ST_Transform(geom, 3857))),
         dominant_species, species_composition,
         canopy_cover, tree_cover_density, confidence, meta
-    FROM parsed
-    WHERE NOT ST_IsEmpty(geom)
-      -- Sanity-check для bogus inflated геометрий (rosleshoz/ФГИС attrinfo:
-      -- WMS GetFeatureInfo иногда возвращает геометрию соседа/квартала вместо
-      -- запрошенного выдела). Если real area > 3× заявленного `square_ha` из
-      -- attrs ФГИС — это inflate, выкидываем. У источников без `meta.square_ha`
-      -- (osm/copernicus/terranorte) условие no-op (NULL evaluate to FALSE).
-      AND NOT (
-        (meta->>'square_ha') IS NOT NULL
-        AND (meta->>'square_ha')::float > 0
-        AND ST_Area(geom::geography) / 10000.0 > 3.0 * (meta->>'square_ha')::float
-      )
-    ORDER BY source, source_feature_id, source_version
+    FROM by_cadastral
+    ORDER BY md5(ST_AsBinary(geom)), source_feature_id
 """
 
 
@@ -207,33 +239,6 @@ def upsert_forest_polygons(
             flush()
 
     flush()
-
-    # Post-ingest dedup-by-geometry. ФГИС WMS GetFeatureInfo иногда возвращает
-    # одну и ту же геометрию для соседних object_id (соседние выделы:2/:3
-    # одного квартала → один контур). DISTINCT ON (source, feature_id, version)
-    # в _INSERT_SQL это не ловит (cadastrals разные). На карте такие пары
-    # рисуются друг на друге (fill-opacity=0.5 × 2 → визуально темнее).
-    # Оставляем row с минимальным id (стабильно), удаляем остальных.
-    # MD5(ST_AsBinary(geometry)) — быстрый hash, ловит EXACT-bit совпадения.
-    if verbose:
-        print("  -> dedup by geometry hash...", flush=True)
-    for src, ver in deleted_keys:
-        with conn.transaction():
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    DELETE FROM forest_polygon a
-                    USING forest_polygon b
-                    WHERE a.source = %s AND a.source_version = %s
-                      AND b.source = a.source AND b.source_version = a.source_version
-                      AND a.id > b.id
-                      AND md5(ST_AsBinary(a.geometry)) = md5(ST_AsBinary(b.geometry))
-                    """,
-                    (src, ver),
-                )
-                if verbose:
-                    print(f"     dedup {src!r}/{ver!r}: deleted {cur.rowcount} duplicates", flush=True)
-                total -= cur.rowcount
     return total
 
 
