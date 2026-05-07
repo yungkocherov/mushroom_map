@@ -142,14 +142,29 @@ _INSERT_SQL = """
     --    что rosleshoz feature stream идёт sorted by externalid (см.
     --    sources/rosleshoz/source.py) — соседние выделы одного quarter
     --    попадают в один BATCH=100k.
-    SELECT DISTINCT ON (md5(ST_AsBinary(geom)))
+    --    KEY FIX 2026-05-07: ни md5 raw, ни ST_SnapToGrid(N) не ловили
+    --    пары где WMS вернул "почти" одинаковые контуры (одно тело, чуть
+    --    разные vertex chains: 24 vs 25 vertices, area differs by 0.03%).
+    --    Использую composite signature: centroid округлённый до 5 знаков
+    --    (~1m at 60°N) + log-bucket по area (1% precision). Два полигона
+    --    с identical centroid + identical area-bucket физически в одном
+    --    месте с одинаковой площадью = один и тот же выдел в ФГИС-данных.
+    SELECT DISTINCT ON (
+        ROUND(ST_X(ST_Centroid(geom))::numeric, 5),
+        ROUND(ST_Y(ST_Centroid(geom))::numeric, 5),
+        ROUND((LN(GREATEST(ST_Area(geom::geography), 1)) * 100)::numeric)::int
+    )
         region_id, source, source_feature_id, source_version,
         geom,
         COALESCE(area_m2, ST_Area(ST_Transform(geom, 3857))),
         dominant_species, species_composition,
         canopy_cover, tree_cover_density, confidence, meta
     FROM by_cadastral
-    ORDER BY md5(ST_AsBinary(geom)), source_feature_id
+    ORDER BY
+        ROUND(ST_X(ST_Centroid(geom))::numeric, 5),
+        ROUND(ST_Y(ST_Centroid(geom))::numeric, 5),
+        ROUND((LN(GREATEST(ST_Area(geom::geography), 1)) * 100)::numeric)::int,
+        source_feature_id
 """
 
 
