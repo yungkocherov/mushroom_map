@@ -107,6 +107,16 @@ _INSERT_SQL = """
         canopy_cover, tree_cover_density, confidence, meta
     FROM parsed
     WHERE NOT ST_IsEmpty(geom)
+      -- Sanity-check для bogus inflated геометрий (rosleshoz/ФГИС attrinfo:
+      -- WMS GetFeatureInfo иногда возвращает геометрию соседа/квартала вместо
+      -- запрошенного выдела). Если real area > 3× заявленного `square_ha` из
+      -- attrs ФГИС — это inflate, выкидываем. У источников без `meta.square_ha`
+      -- (osm/copernicus/terranorte) условие no-op (NULL evaluate to FALSE).
+      AND NOT (
+        (meta->>'square_ha') IS NOT NULL
+        AND (meta->>'square_ha')::float > 0
+        AND ST_Area(geom::geography) / 10000.0 > 3.0 * (meta->>'square_ha')::float
+      )
     ORDER BY source, source_feature_id, source_version
 """
 
@@ -197,6 +207,33 @@ def upsert_forest_polygons(
             flush()
 
     flush()
+
+    # Post-ingest dedup-by-geometry. ФГИС WMS GetFeatureInfo иногда возвращает
+    # одну и ту же геометрию для соседних object_id (соседние выделы:2/:3
+    # одного квартала → один контур). DISTINCT ON (source, feature_id, version)
+    # в _INSERT_SQL это не ловит (cadastrals разные). На карте такие пары
+    # рисуются друг на друге (fill-opacity=0.5 × 2 → визуально темнее).
+    # Оставляем row с минимальным id (стабильно), удаляем остальных.
+    # MD5(ST_AsBinary(geometry)) — быстрый hash, ловит EXACT-bit совпадения.
+    if verbose:
+        print("  -> dedup by geometry hash...", flush=True)
+    for src, ver in deleted_keys:
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM forest_polygon a
+                    USING forest_polygon b
+                    WHERE a.source = %s AND a.source_version = %s
+                      AND b.source = a.source AND b.source_version = a.source_version
+                      AND a.id > b.id
+                      AND md5(ST_AsBinary(a.geometry)) = md5(ST_AsBinary(b.geometry))
+                    """,
+                    (src, ver),
+                )
+                if verbose:
+                    print(f"     dedup {src!r}/{ver!r}: deleted {cur.rowcount} duplicates", flush=True)
+                total -= cur.rowcount
     return total
 
 
