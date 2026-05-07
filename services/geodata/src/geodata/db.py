@@ -133,15 +133,11 @@ _INSERT_SQL = """
         dominant_species, species_composition,
         canopy_cover, tree_cover_density, confidence, meta
     )
-    -- 4. Within-batch dedup-by-geometry: DISTINCT ON md5(geom) — два
-    --    разных cadastrals с identical контуром (ФГИС вернул одну
-    --    геометрию для соседних object_id) дают визуальный «темнее»
-    --    при fill-opacity=0.5×2. Оставляем стабильно по min(externalid).
-    --
-    --    NB: dedup-в-пределах-batch'а. Cross-batch миссы редки, потому
-    --    что rosleshoz feature stream идёт sorted by externalid (см.
-    --    sources/rosleshoz/source.py) — соседние выделы одного quarter
-    --    попадают в один BATCH=100k.
+    -- 4. GLOBAL dedup-by-geometry. С 2026-05-07 этот INSERT вызывается
+    --    ОДИН раз в `finalize_inserts()` после всех batches, читая
+    --    accumulated stage целиком — DISTINCT ON работает над всеми
+    --    1.3M+ rows. Cross-batch dups (которые попали в разные 100k
+    --    flushes) тоже dедулируются.
     --    KEY FIX 2026-05-07: ни md5 raw, ни ST_SnapToGrid(N) не ловили
     --    пары где WMS вернул "почти" одинаковые контуры (одно тело, чуть
     --    разные vertex chains: 24 vs 25 vertices, area differs by 0.03%).
@@ -215,18 +211,28 @@ def upsert_forest_polygons(
             Jsonb(poly.meta) if poly.meta else Jsonb({}),
         )
 
+    # Two-phase ingest для **глобального** dedup-by-geometry:
+    #  Phase 1 (per batch): COPY rows в stage table — append-only, без INSERT.
+    #  Phase 2 (один раз в конце): single INSERT из ВСЕЙ stage с DISTINCT ON
+    #          по (centroid_x, centroid_y, area-bucket). Это catches dups
+    #          через все batches, не только within-batch.
+    #
+    # KEY FIX 2026-05-07: previous version делала INSERT per batch — пары
+    # выделов в разных batches не dедулировались (cross-batch миссы).
+    # User reported visible darker pairs even after centroid+bucket key fix
+    # because pairs landed in different 100k flushes.
+
     def flush() -> None:
         nonlocal total
         if not batch:
             return
-        # Какие (source, version) ключи появились впервые — их надо очистить
         keys_in_batch = {(row[1], row[3]) for row in batch}
         new_keys = keys_in_batch - deleted_keys
         with conn.transaction():
             with conn.cursor() as cur:
-                # Первый раз видим эти (source, version) — вычищаем старое.
-                # Для 913k строк одного source_version это одна index-range
-                # операция, занимает доли секунды.
+                # Первый раз видим этот (source, version) — DELETE old + start
+                # accumulating in stage. Не TRUNCATE stage между batches —
+                # хотим накопить ВСЁ для финального INSERT.
                 for src, ver in new_keys:
                     if verbose:
                         print(f"  -> DELETE old rows for source={src!r} version={ver!r}...", flush=True)
@@ -237,23 +243,39 @@ def upsert_forest_polygons(
                     if verbose:
                         print(f"     deleted {cur.rowcount}", flush=True)
                     deleted_keys.add((src, ver))
-                # Stage clean before each flush (иначе INSERT дублирует)
-                cur.execute("TRUNCATE _forest_polygon_stage")
+                # COPY append в stage — НЕ TRUNCATE, чтобы накопились все batches
                 with cur.copy(_COPY_SQL) as cp:
                     for row in batch:
                         cp.write_row(row)
-                cur.execute(_INSERT_SQL)
         total += len(batch)
         if verbose:
-            print(f"  -> загружено {total} полигонов...", flush=True)
+            print(f"  -> staged {total} полигонов...", flush=True)
         batch.clear()
+
+    def finalize_inserts() -> int:
+        """Один большой INSERT из stage с GLOBAL DISTINCT ON. Вызывается
+        после всех batches. Возвращает actually inserted count (после
+        cross-batch dedup может быть меньше чем staged).
+        """
+        if verbose:
+            print(f"  -> finalize: global INSERT с dedup-by-geometry...", flush=True)
+        with conn.transaction():
+            with conn.cursor() as cur:
+                cur.execute(_INSERT_SQL)
+                inserted = cur.rowcount
+                cur.execute("TRUNCATE _forest_polygon_stage")
+        if verbose:
+            print(f"     inserted {inserted} (dedup-dropped {total - inserted})", flush=True)
+        return inserted
 
     for poly in polygons:
         batch.append(to_row(poly))
         if len(batch) >= BATCH:
             flush()
-
     flush()
+
+    if total > 0:
+        total = finalize_inserts()
     return total
 
 
