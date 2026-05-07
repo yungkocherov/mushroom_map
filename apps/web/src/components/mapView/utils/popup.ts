@@ -198,7 +198,7 @@ export function buildPopupHtml(
 ): string {
   const saveBtn = (lat != null && lon != null) ? buildSaveSpotButton(lat, lon) : "";
   if (!data.forest) {
-    return `<div style="font-family:sans-serif;padding:4px 2px;color:#555">
+    return `<div style="font-family:inherit;padding:4px 2px;color:#555">
       Вне лесных полигонов${buildTerrainHtml(terrain ?? null)}${buildWaterHtml(water ?? null)}${buildSoilHtml(soil ?? null)}${saveBtn}
     </div>`;
   }
@@ -254,7 +254,7 @@ export function buildPopupHtml(
     })
     .join("");
 
-  return `<div style="font-family:sans-serif;font-size:13px;min-width:0;max-width:100%;line-height:1.4">
+  return `<div style="font-family:inherit;font-size:13px;min-width:0;max-width:100%;line-height:1.4">
     <div style="margin-bottom:6px">
       <strong style="font-size:14px">${forestName}</strong>
       ${areaStr ? `<span style="font-size:11px;color:#aaa;margin-left:8px">${areaStr}</span>` : ""}

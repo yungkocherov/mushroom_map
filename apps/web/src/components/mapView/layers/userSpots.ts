@@ -89,25 +89,17 @@ export function addUserSpotsLayer(m: Map, spots: UserSpot[]): void {
     const noteHtml = p.note
       ? `<div style="margin-top:4px;color:#555;font-size:11px;white-space:pre-wrap">${escapeHtml(p.note)}</div>`
       : "";
-    const spotPopup = new maplibregl.Popup({ maxWidth: "260px", closeButton: true })
+    new maplibregl.Popup({ maxWidth: "260px", closeButton: true })
       .setLngLat([lon, lat])
       .setHTML(`
-        <div style="font-family:sans-serif;font-size:13px">
+        <div style="font-family:inherit;font-size:13px">
           <div style="font-weight:600;color:#2d5a3a">${escapeHtml(p.name)}</div>
           ${noteHtml}
-          <div style="margin-top:6px;font-family:monospace;font-size:10px;color:#888">
+          <div style="margin-top:6px;font-family:var(--font-mono);font-size:10px;color:#888">
             ${lat.toFixed(5)}, ${lon.toFixed(5)}
           </div>
         </div>`)
       .addTo(m);
-    // Чётная ширина → integer-px translate(-50%, ...) → нет sub-pixel блёра в Chrome.
-    // См. snapPopupWidthEven в useMapPopup.ts для детального обоснования.
-    const spotEl = spotPopup.getElement();
-    const spotContent = spotEl?.querySelector<HTMLElement>(".maplibregl-popup-content");
-    if (spotContent) {
-      const sw = spotContent.offsetWidth;
-      if (sw > 0 && sw % 2 !== 0) spotContent.style.width = `${sw + 1}px`;
-    }
   });
 
   // Курсор-pointer над точками — отдаёт сигнал «кликабельно».
