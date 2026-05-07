@@ -50,7 +50,7 @@ function Logo() {
   return (
     <img
       className={styles.logo}
-      src="/logo-mark.png"
+      src="/icon-192.png"
       alt=""
       width={32}
       height={32}

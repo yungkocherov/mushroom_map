@@ -105,16 +105,16 @@ export function LayerGrid({
       onClick: () => trackedToggle("forecastChoropleth"),
     },
     {
-      key: "soil",
-      label: "Почва",
-      active: visible.soil,
-      onClick: () => trackedToggle("soil"),
+      key: "waterway",
+      label: "Водотоки",
+      active: visible.waterway,
+      onClick: () => trackedToggle("waterway"),
     },
     {
-      key: "hillshade",
-      label: "Рельеф",
-      active: visible.hillshade,
-      onClick: () => trackedToggle("hillshade"),
+      key: "wetland",
+      label: "Болота",
+      active: visible.wetland,
+      onClick: () => trackedToggle("wetland"),
     },
   ];
 
@@ -130,9 +130,9 @@ export function LayerGrid({
   }
 
   const secondaryChips: ChipDescriptor[] = [
-    { key: "waterway", label: "Водотоки", active: visible.waterway, onClick: () => trackedToggle("waterway") },
-    { key: "wetland",  label: "Болота",   active: visible.wetland,  onClick: () => trackedToggle("wetland") },
     { key: "water",    label: "Водоохранные", active: visible.water, onClick: () => trackedToggle("water") },
+    { key: "soil",     label: "Почва",    active: visible.soil,     onClick: () => trackedToggle("soil") },
+    { key: "hillshade", label: "Рельеф",  active: visible.hillshade, onClick: () => trackedToggle("hillshade") },
     { key: "oopt",     label: "ООПТ",     active: visible.oopt,     onClick: () => trackedToggle("oopt") },
     { key: "roads",    label: "Дороги",   active: visible.roads,    onClick: () => trackedToggle("roads") },
     { key: "felling",  label: "Вырубки",  active: visible.felling,  onClick: () => trackedToggle("felling") },
