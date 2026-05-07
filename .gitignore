@@ -48,7 +48,8 @@ data/glyphs/
 vk_photos_report*.html
 
 # Claude Code session data
-.claude/
+.claude/*
+!.claude/skills/
 .superpowers/
 
 # Env / secrets / private keys
