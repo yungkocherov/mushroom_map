@@ -52,8 +52,8 @@ function Logo() {
       className={styles.logo}
       src="/icon-192.png"
       alt=""
-      width={32}
-      height={32}
+      width={64}
+      height={64}
       aria-hidden="true"
     />
   );
