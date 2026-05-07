@@ -210,6 +210,87 @@ def reproject_polygon_3857_to_4326(coords: list) -> list:
     return [reproject_polygon_3857_to_4326(c) for c in coords]
 
 
+# ─── Sanity-check для bogus inflated геометрий (root cause: ФГИС WMS) ─────
+#
+# WMS GetFeatureInfo с QUERY_LAYERS=TAXATION_PIECE иногда возвращает не
+# контур запрошенного выдела, а контур более крупного слоя (квартала или
+# лесничества) — Geoserver scale-dependent rendering rules переключают
+# response в зависимости от bbox/WIDTH/HEIGHT. Проявляется как «правильный
+# externalid в attrs, но геометрия в 100-500× больше square_ha».
+#
+# Эти два check'а отвергают inflated геометрию **в scraper'е**, до записи в
+# progress.db. Если все 9 click-points возвращают bogus — oid идёт в
+# status='empty' (как будто данных нет), и в БД bogus вообще не появляется.
+#
+# Defense-in-depth: точно тот же ratio>3 check продублирован в
+# `_INSERT_SQL` (services/geodata/src/geodata/db.py) на случай если scrape
+# был раньше моего fix'а — старые bogus в progress.db не попадут в БД при
+# re-ingest.
+
+INFLATE_RATIO_LIMIT = 3.0  # real_area / square_ha > 3 → bogus
+BBOX_OVERFLOW_LIMIT = 2.0  # real_area / bbox_area > 2 → bogus
+
+
+def _polygon_area_3857_m2(geom: dict) -> float:
+    """Площадь Polygon/MultiPolygon в EPSG:3857 (м²) через shoelace.
+
+    EPSG:3857 в high-lat (60°N для ЛО) растягивает area в ~4×, но для
+    sanity-check ratio'ов это не важно — числитель и знаменатель оба в
+    той же проекции.
+    """
+    if not geom:
+        return 0.0
+    gtype = geom.get("type", "")
+    coords = geom.get("coordinates") or []
+    if gtype == "Polygon":
+        rings = coords
+    elif gtype == "MultiPolygon":
+        rings = [r for poly in coords for r in poly]
+    else:
+        return 0.0
+    total = 0.0
+    for ring in rings:
+        if len(ring) < 3:
+            continue
+        s = 0.0
+        n = len(ring)
+        for i in range(n):
+            x1, y1 = ring[i][0], ring[i][1]
+            x2, y2 = ring[(i + 1) % n][0], ring[(i + 1) % n][1]
+            s += x1 * y2 - x2 * y1
+        total += abs(s) * 0.5
+    return total
+
+
+def _geom_passes_sanity(
+    geom: dict,
+    expected_square_ha: float | None,
+    bbox_3857: tuple[float, float, float, float],
+) -> bool:
+    """Возвращает True если геометрия не похожа на bogus inflate.
+
+    Two checks:
+      1. real_area / declared square_ha > INFLATE_RATIO_LIMIT → reject
+         (ФГИС attrs square_ha из attributesinfo — ground truth)
+      2. real_area / bbox_area > BBOX_OVERFLOW_LIMIT → reject
+         (геометрия выдела не должна сильно вылазить за свой bbox)
+    """
+    geom_area_m2 = _polygon_area_3857_m2(geom)
+    if geom_area_m2 <= 0:
+        return False
+    # Check 1: vs ФГИС-declared square (если есть)
+    if expected_square_ha and expected_square_ha > 0:
+        geom_area_ha = geom_area_m2 / 10000.0
+        if geom_area_ha / expected_square_ha > INFLATE_RATIO_LIMIT:
+            return False
+    # Check 2: vs bbox sanity
+    xmin, ymin, xmax, ymax = bbox_3857
+    bbox_area_m2 = (xmax - xmin) * (ymax - ymin)
+    if bbox_area_m2 > 0 and geom_area_m2 / bbox_area_m2 > BBOX_OVERFLOW_LIMIT:
+        return False
+    return True
+
+
 # ─── ФГИС API endpoints ───────────────────────────────────────────────────
 def fetch_attrs(object_id: int) -> dict | None:
     """Returns payload dict or None if not found / not a real object."""
@@ -300,6 +381,7 @@ def _wms_query(bbox_str: str, i: int, j: int, w: int = 512) -> dict | None:
 def fetch_polygon_verified(
     bbox_3857: tuple[float, float, float, float],
     expected_externalid: str,
+    expected_square_ha: float | None = None,
 ) -> dict | None:
     """
     WMS GetFeatureInfo с verify-externalid logic.
@@ -366,9 +448,15 @@ def fetch_polygon_verified(
         geom = feat.get("geometry")
         if not geom:
             continue
+        # Sanity-check: ФГИС WMS scale-dependent rendering иногда возвращает
+        # контур слоя выше (квартал/лесничество) вместо запрошенного выдела.
+        # Если real_area > 3×square_ha из attrs ИЛИ > 2×bbox_area —
+        # geometry inflated, skip эту попытку и пробуем следующую click-point.
+        if not _geom_passes_sanity(geom, expected_square_ha, bbox_3857):
+            continue
         if got_extid == expected_externalid:
             return {"geometry": geom, "extid_mismatch": False, "got_extid": got_extid}
-        # Сохраняем первую попавшуюся feature как fallback
+        # Сохраняем первую sane feature как fallback
         if fallback_geom is None:
             fallback_geom = geom
             fallback_extid = got_extid
@@ -412,7 +500,14 @@ def process_one(object_id: int, region_prefix: str) -> dict | None:
     bbox = fetch_bbox(object_id)
     if not bbox:
         return None
-    wms_result = fetch_polygon_verified(bbox, cadastral)
+    # Передаём ФГИС-declared square для sanity-check внутри WMS-loop:
+    # если returned геометрия > 3× square_ha, пробуем next click-point,
+    # не сохраняем bogus в progress.db.
+    try:
+        expected_square_ha = float(attrs.get("square")) if attrs.get("square") else None
+    except (ValueError, TypeError):
+        expected_square_ha = None
+    wms_result = fetch_polygon_verified(bbox, cadastral, expected_square_ha)
     if not wms_result:
         return None
     geom_3857 = wms_result["geometry"]
