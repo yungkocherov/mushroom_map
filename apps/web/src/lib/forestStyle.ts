@@ -31,8 +31,7 @@ export const FOREST_COLORS: Record<ForestSlug, string> = {
   fir: "#56564e",
   cedar: "#5c3a24",
   // Бывший #eee8da — bark-кремовый — сливался с paper-фоном на низком
-  // zoom (особенно после forest_lo который рисует большие single-color
-  // блобы). Сдвинут в olive/sage, остаётся «светлым» среди тёмных пород.
+  // zoom. Сдвинут в olive/sage, остаётся «светлым» среди тёмных пород.
   birch: "#c8b890",
   aspen: "#9ea48c",
   alder: "#6c5844",

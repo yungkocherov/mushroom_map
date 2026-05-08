@@ -87,7 +87,7 @@ python pipelines/ingest_forest.py --source rosleshoz --region lenoblast \
     --rosleshoz-version fgislk-2026
 
 # Шаг 6: перегенерация PMTiles
-python pipelines/build_tiles.py
+bash pipelines/build_forest_tiles.sh
 ```
 
 ### VPN и Claude Code
@@ -333,7 +333,7 @@ python pipelines/ingest_forest.py --source rosleshoz --region lenoblast \
 ## Шаг 6. Перегенерация PMTiles
 
 ```bash
-python pipelines/build_tiles.py
+bash pipelines/build_forest_tiles.sh
 ```
 
 ---

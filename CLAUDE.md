@@ -189,11 +189,13 @@ export PATH="/c/Program Files/nodejs:$PATH" && npm run dev
   --rosleshoz-version fgislk-attrinfo-2026-05 \
   --dsn "postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map"
 
-# Rebuild forest.pmtiles (use DATABASE_URL env, NOT --dsn)
-DATABASE_URL="postgresql://mushroom:mushroom_dev@127.0.0.1:5434/mushroom_map" \
-  .venv/Scripts/python.exe -u pipelines/build_tiles.py --region lenoblast
-# minzoom=5, maxzoom=13. z<=8 — coarse-путь (ST_Union в один 'mixed' полигон,
-# сплошной зелёный массив без дырок при отдалении). z>=9 — per-species.
+# Rebuild forest.pmtiles (psql → tippecanoe → pmtiles, ~3-5 мин)
+bash pipelines/build_forest_tiles.sh
+# minzoom=5, maxzoom=13. Один source-layer 'forest' на всех zoom'ах,
+# tippecanoe coalesce-densest-as-needed сам делает per-zoom drop'ы
+# крупнейших полигонов. Раньше был отдельный coarse-путь z<=8 через
+# Python-pipeline (build_tiles.py — удалён 2026-05-08) + отдельный
+# forest_lo.pmtiles — теперь не нужны.
 
 # Terrain (one-time): 81 Copernicus DEM tiles → mosaic → hillshade.pmtiles (~453 MB)
 .venv/Scripts/python.exe -u scripts/download_copernicus_dem.py

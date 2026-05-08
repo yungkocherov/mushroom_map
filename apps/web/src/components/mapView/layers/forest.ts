@@ -8,10 +8,12 @@ import { findFirstSymbolLayerId } from "../utils/findSymbolLayer";
 export const FOREST_PMTILES_URL = `pmtiles://${TILES_BASE}/forest.pmtiles`;
 
 /**
- * forest.pmtiles покрывает z=5..13. На z<=8 build_tiles.py идёт coarse-путь
- * (per-species ST_Union по `forest_3857_low`) — цвета пород сохраняются,
- * bonitet/age_group теряются. На z>=9 — реальные выделы Рослесхоза с
- * полным набором properties. Один source + один layer на всех зумах.
+ * forest.pmtiles покрывает z=5..13. Сборка через `build_forest_tiles.sh`
+ * (tippecanoe + pmtiles convert): один source-layer 'forest' с полным
+ * набором properties (dominant_species + bonitet + age_group + area_m2)
+ * на всех зумах. tippecanoe coalesce-densest-as-needed сам решает
+ * сколько polygon'ов поместить в каждый тайл. Один source + один layer
+ * на фронте.
  */
 export function addForestLayer(m: Map): void {
   if (m.getLayer("forest-fill")) return;

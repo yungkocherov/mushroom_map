@@ -162,12 +162,12 @@ export function SpikeMap() {
       }));
     }
     if (online) {
+      // Single forest.pmtiles на все зумы (z=5..13). До 2026-05 был
+      // dual-source — forest_lo для z=5-8 + forest для z>=9, но web
+      // ушёл на single, mobile следом. tippecanoe coalesce-densest сам
+      // делает per-zoom drop'ы крупнейших полигонов на низких zoom'ах,
+      // отдельный forest_lo больше не нужен.
       return [
-        {
-          id: "forest-remote-lo",
-          pmtilesFileUri: `${getApiBaseUrl()}/tiles/forest_lo.pmtiles`,
-          sourceLayer: "forest_lo",
-        },
         {
           id: "forest-remote",
           pmtilesFileUri: `${getApiBaseUrl()}/tiles/forest.pmtiles`,
@@ -241,7 +241,7 @@ export function SpikeMap() {
           const sx = (feature.properties as { screenPointX?: number })?.screenPointX;
           const sy = (feature.properties as { screenPointY?: number })?.screenPointY;
           if (sx == null || sy == null || !mapRef.current) return;
-          const layerIds = sources.flatMap((s) => [`${s.id}-fill`, `${s.id}-lo-fill`]);
+          const layerIds = sources.map((s) => `${s.id}-fill`);
           try {
             const fc = await mapRef.current.queryRenderedFeaturesAtPoint(
               [sx, sy],

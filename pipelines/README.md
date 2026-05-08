@@ -15,7 +15,7 @@ ETL-скрипты. Каждый — один шаг, запускается о�
 | `extract_vk_districts.py` | Natasha NER + regex → vk_post.district_admin_area_id. |
 | `ingest_vk.py` | VK-flow: collect → dates → photos (LM Studio classify). |
 | `seed_vk_posts.py` | Импорт исторических постов из дампа. |
-| `build_tiles.py` | forest_unified → data/tiles/forest.pmtiles. |
+| `build_forest_tiles.sh` | forest_unified → data/tiles/forest.pmtiles (psql → tippecanoe → pmtiles). Single source-layer 'forest' на zoom'ах 5..13. |
 | `build_*_tiles.py` | Прочие PMTiles (oopt, roads, waterway, wetlands, soil, terrain, hillshade, felling, protective, district). |
 | `build_basemap.py` | OpenMapTiles bundled basemap для мобилки. |
 | `vk_photos_report.py` | HTML-отчёт по случайным постам с photo-классификацией. |

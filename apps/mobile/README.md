@@ -71,9 +71,10 @@ workspace-локальном).
 1. **Скачанные районы** (per-district pmtiles в FileSystem.documentDirectory)
    — основной режим offline. Onboarding заставляет скачать минимум
    один регион при первом запуске.
-2. **Online через api.geobiom.ru** (forest.pmtiles + forest_lo.pmtiles
-   через HTTP Range) — fallback когда нет скачанных регионов и есть
-   интернет.
+2. **Online через api.geobiom.ru** (`forest.pmtiles` через HTTP Range) —
+   fallback когда нет скачанных регионов и есть интернет. Single
+   pmtiles на все zoom'ы (раньше был отдельный `forest_lo.pmtiles`
+   для z=5-8 — убран в 2026-05 ради единого pipeline'а с web).
 3. **Offline без скачанного региона** — лес не показывается, только
    paper-фон + basemap. UI status-overlay показывает «offline · нет
    региона». В нормальном flow эта ветка недостижима благодаря

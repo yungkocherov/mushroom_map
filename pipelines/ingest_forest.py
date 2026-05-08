@@ -216,7 +216,7 @@ def main() -> None:
             if args.source in ("copernicus", "terranorte", "rosleshoz"):
                 print(
                     "\nНапоминание: после этого нужно перегенерировать PMTiles:\n"
-                    "    python pipelines/build_tiles.py"
+                    "    bash pipelines/build_forest_tiles.sh"
                 )
 
 

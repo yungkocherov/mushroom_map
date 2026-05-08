@@ -47,7 +47,7 @@ export const LAYER_REGISTRY: ReadonlyArray<LayerEntry> = [
   {
     id: "forest",
     pmtiles: "forest.pmtiles",
-    missingMsg: "Леса не собраны — запустите ingest_forest.py + build_tiles.py",
+    missingMsg: "Леса не собраны — запустите ingest_forest.py + build_forest_tiles.sh",
     add: addForestLayer,
     setVisibility: setForestVisibility,
     // forest.pmtiles покрывает z=5..13 одним source-layer'ом.

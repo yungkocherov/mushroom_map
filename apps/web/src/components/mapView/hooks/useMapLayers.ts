@@ -123,10 +123,10 @@ export function useMapLayers(
     }
   }, [visible, loaded, mapRef, ready, setLoaded, setVisible, setErrorMsg]);
 
-  // forestColorMode + speciesFilter применяются к forest-fill — единственному
-  // forest-слою (purges z=5..13 включая coarse-путь на z<=8).
-  // На z<=8 build_tiles.py пишет NULL для bonitet/age_group/area_m2; в
-  // соответствующих режимах раскраски тайлы fall back на default colour.
+  // forestColorMode + speciesFilter применяются к forest-fill —
+  // единственному forest-слою на всех зумах z=5..13 (single
+  // forest.pmtiles, tippecanoe coalesce-densest сам делает per-zoom
+  // drop'ы крупнейших полигонов).
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;

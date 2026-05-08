@@ -64,7 +64,7 @@ admin_area              -- административные районы Лен�
 ## Поток данных
 
 ```
-ФГИС ЛК GeoJSON ──→ ingest_forest.py ──→ forest_polygon ──→ build_tiles.py ──→ forest.pmtiles
+ФГИС ЛК GeoJSON ──→ ingest_forest.py ──→ forest_polygon ──→ build_forest_tiles.sh ──→ forest.pmtiles
                                                  │
                                          forest_unified VIEW
                                                  │

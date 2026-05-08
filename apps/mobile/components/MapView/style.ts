@@ -68,11 +68,16 @@ export type ForestSource = {
   id: string;
   /** Either bundled file:// URI или path в FileSystem.documentDirectory. */
   pmtilesFileUri: string;
-  /** MVT source-layer name (default 'forest'). Lo-zoom форест использует 'forest_lo'. */
+  /**
+   * MVT source-layer name внутри pmtiles. По умолчанию 'forest' — все
+   * наши forest-сборки (online forest.pmtiles + per-region offline)
+   * пишут именно его. Поле оставлено опциональным для будущих случаев
+   * (другая внутренняя layer-name в стороннем pmtiles).
+   */
   sourceLayer?: string;
-  /** Layer minzoom (default 8). undefined для lo-zoom (рисует с 0). */
+  /** Override min-zoom для слоя (default — без ограничения, pmtiles сам диктует z=5..13). */
   minzoom?: number;
-  /** Layer maxzoom (default undefined = до z=24). 9 для lo-zoom (renders <9). */
+  /** Override max-zoom для слоя. */
   maxzoom?: number;
 };
 
@@ -598,7 +603,6 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
       type: "vector",
       url: `pmtiles://${normalizeFileUri(src.pmtilesFileUri)}`,
     };
-    const isLowZoom = src.sourceLayer === "forest_lo";
     const layer: Record<string, unknown> = {
       id: `${src.id}-fill`,
       type: "fill",
@@ -610,13 +614,10 @@ export function buildMapStyle(input: StyleInput | ForestSource[]): Style {
         "fill-outline-color": "rgba(0,0,0,0)",
       },
     };
-    // Hard cutoff на z=9 — без overlap'а forest_lo + forest.
-    // MapLibre maxzoom = exclusive, minzoom = inclusive.
-    // forest_lo: maxzoom 9 (видим z=5-8). forest: minzoom 9 (видим z>=9).
+    // forest.pmtiles покрывает z=5..13. Min/max-zoom оставляем pmtiles'у —
+    // только если caller явно пробросил override'ы.
     if (src.minzoom !== undefined) layer.minzoom = src.minzoom;
-    else if (!isLowZoom) layer.minzoom = 9;
     if (src.maxzoom !== undefined) layer.maxzoom = src.maxzoom;
-    else if (isLowZoom) layer.maxzoom = 9;
     layers.push(layer);
   }
 
