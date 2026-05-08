@@ -234,9 +234,9 @@ BBOX_OVERFLOW_LIMIT = 2.0  # real_area / bbox_area > 2 → bogus
 def _polygon_area_3857_m2(geom: dict) -> float:
     """Площадь Polygon/MultiPolygon в EPSG:3857 (м²) через shoelace.
 
-    EPSG:3857 в high-lat (60°N для ЛО) растягивает area в ~4×, но для
-    sanity-check ratio'ов это не важно — числитель и знаменатель оба в
-    той же проекции.
+    ВНИМАНИЕ: возвращает MERCATOR-distorted area, не real area. На широте
+    58.8°N (середина ЛО) растяжение ~3.7× (1/cos²(lat)). Для сравнения с
+    real-world `square_ha` нужна коррекция (см. `_mercator_to_real_ha`).
     """
     if not geom:
         return 0.0
@@ -262,6 +262,18 @@ def _polygon_area_3857_m2(geom: dict) -> float:
     return total
 
 
+def _mercator_to_real_ha(area_3857_m2: float, center_y_3857: float) -> float:
+    """Конвертирует mercator-area (3857 м²) в real-world ha.
+
+    Mercator на широте φ растягивает area в `1/cos²(φ)`. На центре ЛО
+    (58.8°N) это ~3.7×. Без коррекции sanity-check vs `square_ha` ложно
+    отвергает легитимные узкие выделы.
+    """
+    lat = 2.0 * math.atan(math.exp(center_y_3857 / R_EQ * math.pi)) - math.pi / 2
+    cos_lat = math.cos(lat)
+    return area_3857_m2 * cos_lat * cos_lat / 10000.0
+
+
 def _geom_passes_sanity(
     geom: dict,
     expected_square_ha: float | None,
@@ -270,21 +282,28 @@ def _geom_passes_sanity(
     """Возвращает True если геометрия не похожа на bogus inflate.
 
     Two checks:
-      1. real_area / declared square_ha > INFLATE_RATIO_LIMIT → reject
-         (ФГИС attrs square_ha из attributesinfo — ground truth)
-      2. real_area / bbox_area > BBOX_OVERFLOW_LIMIT → reject
-         (геометрия выдела не должна сильно вылазить за свой bbox)
+      1. real_area_ha / declared square_ha > INFLATE_RATIO_LIMIT → reject
+         (ФГИС attrs square_ha из attributesinfo — ground truth).
+         КРИТИЧНО: real_area_ha считается с mercator-коррекцией —
+         `_polygon_area_3857_m2` отдаёт mercator-distorted area, на
+         58.8°N это в 3.7× больше real. Без коррекции легитимные выделы
+         3-7 ha ложно flagged как inflate (12-26 ha mercator vs 3-7 real).
+      2. mercator_area / bbox_area > BBOX_OVERFLOW_LIMIT → reject
+         (геометрия не должна сильно вылазить за свой bbox; обе площади
+         в mercator → ratio robust к проекции).
     """
     geom_area_m2 = _polygon_area_3857_m2(geom)
     if geom_area_m2 <= 0:
         return False
-    # Check 1: vs ФГИС-declared square (если есть)
-    if expected_square_ha and expected_square_ha > 0:
-        geom_area_ha = geom_area_m2 / 10000.0
-        if geom_area_ha / expected_square_ha > INFLATE_RATIO_LIMIT:
-            return False
-    # Check 2: vs bbox sanity
     xmin, ymin, xmax, ymax = bbox_3857
+    cy = (ymin + ymax) / 2
+    # Check 1: vs ФГИС-declared square (если есть). real-ha сравниваем
+    # с real-ha — нужна mercator-коррекция через широту.
+    if expected_square_ha and expected_square_ha > 0:
+        real_ha = _mercator_to_real_ha(geom_area_m2, cy)
+        if real_ha / expected_square_ha > INFLATE_RATIO_LIMIT:
+            return False
+    # Check 2: vs bbox sanity (обе в mercator, проекция cancels)
     bbox_area_m2 = (xmax - xmin) * (ymax - ymin)
     if bbox_area_m2 > 0 and geom_area_m2 / bbox_area_m2 > BBOX_OVERFLOW_LIMIT:
         return False
@@ -417,20 +436,23 @@ def fetch_polygon_verified(
     half = max((xmax - xmin), (ymax - ymin)) / 2 + 1.0
     bbox_str = f"{cx - half},{cy - half},{cx + half},{cy + half}"
 
-    # 9 кандидатов click-pixel: центр + 8 точек 25/50/75% по двум осям.
-    # Для convex polygon чаще всего хватит центра. Для irregular —
-    # один из corners/mid-edges попадёт.
+    # 49 кандидатов click-pixel: 7x7 регулярная сетка по (W/8, 2W/8, ..., 7W/8).
+    # 2026-05-08: подняли с 9 до 49. Старый набор (центр + 4 mid-edges +
+    # 4 corners) промахивался по узким slivers (~50m шириной vydels) —
+    # все 9 точек попадали в соседние полигоны. На irregular shape WMS
+    # отдавал контур соседа, scraper флагил `wms_extid_mismatch=true`,
+    # ingest такие записи дропал → дыры на карте. Эмпирика для :26
+    # (sliver 50×600m в kv 47:11:17:13): 9 кликов = 0 hits, 49 кликов =
+    # 6 hits. Early-exit на первом match'е → для convex polygon overhead
+    # минимальный (1-2 запроса), для slivers'ов — экономит данные.
+    # Сетка плотности 7x7 на squared bbox даёт ~14% площади покрытия;
+    # для shape'ов толщиной < 7% bbox-side всё ещё может не попасть.
     W = 512
+    GRID = 7
     candidates = [
-        (W // 2, W // 2),       # center
-        (W // 4, W // 2),       # left-mid
-        (W * 3 // 4, W // 2),   # right-mid
-        (W // 2, W // 4),       # top-mid
-        (W // 2, W * 3 // 4),   # bottom-mid
-        (W // 4, W // 4),       # tl
-        (W * 3 // 4, W // 4),   # tr
-        (W // 4, W * 3 // 4),   # bl
-        (W * 3 // 4, W * 3 // 4),  # br
+        (W * (i + 1) // (GRID + 1), W * (j + 1) // (GRID + 1))
+        for i in range(GRID)
+        for j in range(GRID)
     ]
 
     fallback_geom: dict | None = None
@@ -599,6 +621,12 @@ def main():
                          "Запускать вместе с расширенным --region-prefix=47:"))
     p.add_argument("--rerun-empty", action="store_true",
                    help="Перепрогнать ID со статусом 'empty' (для проверки)")
+    p.add_argument("--rerun-mismatch", action="store_true",
+                   help=("Перепрогнать только object_id'ы из --ids-file "
+                         "ИГНОРИРУЯ done-set (нужен для re-scrape mismatch'ей "
+                         "после улучшения click-grid с 9 до 49 точек). "
+                         "Существующие feature'ы перезаписываются "
+                         "новыми результатами. Без --ids-file — no-op."))
     p.add_argument("--ids-file", default=None,
                    help=("Путь к файлу с object_id'ами (один на строку). "
                          "Если указан — заменяет --start/--end диапазон. "
@@ -642,7 +670,7 @@ def main():
         print(f"Rerun mode: reprocessing {len(rerun_ids):,} {statuses_to_rerun} IDs")
 
     if args.ids_file:
-        # Phase-2 mode: ID-список из файла (grid-discovered ∪ wrong_region)
+        # Phase-2 mode: ID-список из файла (grid-discovered ∪ wrong_region).
         ids_from_file: list[int] = []
         with open(args.ids_file, "r", encoding="utf-8") as f:
             for line in f:
@@ -654,6 +682,23 @@ def main():
                 except ValueError:
                     continue
         unique_ids = set(ids_from_file)
+        if args.rerun_mismatch:
+            # Удаляем эти oid'ы из done — заставляем re-scrape с новым
+            # click-grid'ом, перезаписываем feature.
+            with sqlite3.connect(str(progress_path)) as c:
+                # SQLite не любит огромный IN (...). Делаем chunks по 500.
+                deleted = 0
+                ids_list = list(unique_ids)
+                for chunk_start in range(0, len(ids_list), 500):
+                    chunk = ids_list[chunk_start:chunk_start + 500]
+                    placeholders = ",".join("?" for _ in chunk)
+                    cur = c.execute(
+                        f"DELETE FROM done WHERE object_id IN ({placeholders})",
+                        chunk,
+                    )
+                    deleted += cur.rowcount
+            done = done - unique_ids
+            print(f"Rerun-mismatch: cleared {deleted:,} rows from progress.db")
         todo = sorted(unique_ids - done)
         print(f"IDs from file: {len(unique_ids):,} unique (out of {len(ids_from_file):,} lines)")
     else:
