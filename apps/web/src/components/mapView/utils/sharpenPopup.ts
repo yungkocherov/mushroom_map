@@ -6,10 +6,12 @@
  * композитный слой с ClearType (subpixel AA).
  *
  * Решение: после каждого MapLibre-обновления попапа парсим его transform
- * (формат `translate(-50%,-100%) translate(Xpx,Ypx)`), вычисляем итоговые
- * top/left в integer-px и перезаписываем стиль: `transform: none` +
- * `top/left`. Без transform композитный слой не создаётся → Chrome
- * возвращает ClearType, текст становится чётким как у Yandex.
+ * (формат `translate(<anchor>) translate(Xpx,Ypx)`, где <anchor>
+ * комбинирует %-доли и/или bare-нули в зависимости от стороны),
+ * вычисляем итоговые top/left в integer-px и перезаписываем стиль:
+ * `transform: none` + `top/left`. Без transform композитный слой не
+ * создаётся → Chrome возвращает ClearType, текст становится чётким
+ * как у Yandex.
  *
  * Слушаем style-атрибут MutationObserver'ом, чтобы реагировать на
  * MapLibre `_update` (срабатывает на каждый `move` карты + при setHTML).
@@ -17,7 +19,19 @@
  */
 import type { Popup } from "maplibre-gl";
 
-const TR_RE = /translate\(\s*(-?[\d.]+)%\s*,\s*(-?[\d.]+)%\s*\)\s*translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/;
+// MapLibre выставляет popup-transform в виде:
+//   translate(<num>%|<num>, <num>%|<num>) translate(<x>px,<y>px)
+// Anchor-translate'ы из maplibre-gl/src/ui/popup.ts:
+//   bottom        = (-50%, -100%)   bottom-left  = (0, -100%)
+//   bottom-right  = (-100%,-100%)   top          = (-50%, 0)
+//   top-left      = (0, 0)          top-right    = (-100%, 0)
+//   left          = (0, -50%)       right        = (-100%, -50%)
+//   center        = (-50%, -50%)
+// `0` пишется БЕЗ процента, поэтому регулярка должна допускать как `%`,
+// так и его отсутствие; иначе для не-bottom анкоров parse валится и
+// наш inline `top/left` от прошлого apply остаётся вместе с новым
+// MapLibre-transform — попап улетает на (X+old_left, Y+old_top).
+const TR_RE = /translate\(\s*(-?[\d.]+)(%?)\s*,\s*(-?[\d.]+)(%?)\s*\)\s*translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/;
 
 export function sharpenPopup(popup: Popup): void {
   const el = popup.getElement();
@@ -25,23 +39,40 @@ export function sharpenPopup(popup: Popup): void {
 
   let suppress = false;
 
+  const clearOverrides = () => {
+    if (!el.style.left && !el.style.top) return;
+    suppress = true;
+    el.style.left = "";
+    el.style.top = "";
+    suppress = false;
+  };
+
   const apply = () => {
     if (suppress) return;
     const tr = el.style.transform;
     if (!tr || tr === "none") return;
     const m = tr.match(TR_RE);
-    if (!m) return;
+    if (!m) {
+      // Незнакомый формат — снимаем наш inline `top/left`, пусть
+      // MapLibre позиционирует через transform как обычно (текст будет
+      // менее crisp, но позиция корректная — это важнее).
+      clearOverrides();
+      return;
+    }
 
-    const ax = parseFloat(m[1]) / 100;
-    const ay = parseFloat(m[2]) / 100;
-    const x = parseFloat(m[3]);
-    const y = parseFloat(m[4]);
     const w = el.offsetWidth;
     const h = el.offsetHeight;
     if (w === 0 || h === 0) return;
 
-    const left = Math.round(x + ax * w);
-    const top = Math.round(y + ay * h);
+    // Без `%` у MapLibre всегда стоит ноль (bare `0`), что эквивалентно
+    // 0px смещения; трактуем именно так. С `%` — доля от размера попапа.
+    const dx = m[2] === "%" ? (parseFloat(m[1]) / 100) * w : parseFloat(m[1]);
+    const dy = m[4] === "%" ? (parseFloat(m[3]) / 100) * h : parseFloat(m[3]);
+    const x = parseFloat(m[5]);
+    const y = parseFloat(m[6]);
+
+    const left = Math.round(x + dx);
+    const top = Math.round(y + dy);
 
     suppress = true;
     el.style.transform = "none";
