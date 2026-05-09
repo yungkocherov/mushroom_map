@@ -75,12 +75,17 @@ def main() -> None:
                 skipped += 1
                 continue
 
-            area_m2 = geom.area * (111_320 ** 2)  # грубая оценка в м²
-
+            # area_m2 считаем в SQL через ::geography (geodesic m^2). Раньше
+            # тут было geom.area * 111320^2 — без cos-correction по широте,
+            # инфляция ~2x на 60N (фикс в миграции 033).
             conn.execute(
                 """
                 INSERT INTO water_zone (region_id, externalid, zone_type, layer_name, geometry, area_m2)
-                VALUES (%s, %s, %s, %s, ST_Multi(ST_SetSRID(ST_GeomFromText(%s), 4326)), %s)
+                VALUES (
+                    %s, %s, %s, %s,
+                    ST_Multi(ST_SetSRID(ST_GeomFromText(%s), 4326)),
+                    ST_Area(ST_SetSRID(ST_GeomFromText(%s), 4326)::geography)
+                )
                 ON CONFLICT (externalid) DO UPDATE SET
                     region_id = EXCLUDED.region_id,
                     zone_type = EXCLUDED.zone_type,
@@ -89,7 +94,7 @@ def main() -> None:
                     area_m2 = EXCLUDED.area_m2,
                     ingested_at = now()
                 """,
-                (region_id, eid, zone_type, layer_name, geom.wkt, round(area_m2, 1)),
+                (region_id, eid, zone_type, layer_name, geom.wkt, geom.wkt),
             )
             inserted += 1
             if inserted % 500 == 0:

@@ -77,7 +77,7 @@ def main() -> None:
                             VALUES (
                                 %s, %s, %s, %s,
                                 ST_Multi(ST_MakeValid(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326))),
-                                ST_Area(ST_Transform(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326), 3857))
+                                ST_Area(ST_SetSRID(ST_GeomFromGeoJSON(%s), 4326)::geography)
                             )
                             ON CONFLICT (externalid) DO UPDATE SET
                                 region_id = EXCLUDED.region_id,

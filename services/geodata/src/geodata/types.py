@@ -64,8 +64,10 @@ class NormalizedForestPolygon:
           используется rosleshoz/pyogrio, обходит shapely целиком. Hex потому
           что psycopg3 COPY text format не любит сырые bytes)
 
-    area_m2: если None, вычисляется в SQL через ST_Area(ST_Transform(geom, 3857))
-    в момент INSERT'а. Это позволяет источникам вообще не парсить геометрию.
+    area_m2: если None, вычисляется в SQL через ST_Area(geom::geography)
+    в момент INSERT'а — geodesic m^2 в WGS84. Это позволяет источникам
+    вообще не парсить геометрию. Раньше тут был ST_Area(ST_Transform(geom,
+    3857)) — Web Mercator, инфляция ~4x на 60N (фикс в миграции 033).
     """
     source: str                                 # 'osm' | 'copernicus' | 'rosleshoz'
     source_feature_id: str                      # id в исходной системе

@@ -72,8 +72,9 @@ _COPY_SQL = """
 #: потому что raw WKB из pyogrio может иметь self-intersections.
 #:
 #: area_m2: если источник прислал — берём его; иначе считаем в SQL через
-#: ST_Area(ST_Transform(..., 3857)). Это ещё один проход по координатам,
-#: но C-код PostGIS сильно быстрее shapely.
+#: ST_Area(geometry::geography) — geodesic m^2 в WGS84. Раньше тут было
+#: ST_Area(ST_Transform(geom, 3857)) — Web Mercator, инфляция ~4x на 60N
+#: (фикс в миграции 033, 2026-05-09). C-код PostGIS быстрее shapely.
 #: Два фильтра применяются ПЕРЕД INSERT — bogus / dup строки не должны
 #: появляться в forest_polygon вообще, не убираться post-factum.
 #:
@@ -157,7 +158,7 @@ _INSERT_SQL = """
     )
         region_id, source, source_feature_id, source_version,
         geom,
-        COALESCE(area_m2, ST_Area(ST_Transform(geom, 3857))),
+        COALESCE(area_m2, ST_Area(geom::geography)),
         dominant_species, species_composition,
         canopy_cover, tree_cover_density, confidence, meta
     FROM by_cadastral
