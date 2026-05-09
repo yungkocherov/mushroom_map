@@ -9,9 +9,11 @@
 -- structure. This migration adds explicit guard triggers.
 --
 -- Approach: BEFORE INSERT/UPDATE trigger that raises if NEW.<col>
--- references an admin_area with level != 6. Cheaper alternatives
--- (partial unique index for FK target, generated column) all add more
--- moving parts than a single function.
+-- references an admin_area with level != 6.
+--
+-- forecast.* tables are owned by the sister repo mushroom-forecast
+-- and are absent in this repo's CI test stack. Forecast triggers are
+-- created conditionally — IF the schema/tables exist.
 
 CREATE OR REPLACE FUNCTION public.assert_district_is_lo_level6()
 RETURNS TRIGGER AS $$
@@ -35,43 +37,57 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- vk_post.district_admin_area_id
+-- vk_post.district_admin_area_id (always present in this repo)
 DROP TRIGGER IF EXISTS trg_vk_post_district_level6 ON public.vk_post;
 CREATE TRIGGER trg_vk_post_district_level6
     BEFORE INSERT OR UPDATE OF district_admin_area_id ON public.vk_post
     FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6('district_admin_area_id');
 
--- forecast.* tables: 5 tables, all use district_id as the LO-district FK
-DROP TRIGGER IF EXISTS trg_weather_features_district_level6 ON forecast.weather_features;
-CREATE TRIGGER trg_weather_features_district_level6
-    BEFORE INSERT OR UPDATE OF district_id ON forecast.weather_features
-    FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6('district_id');
+-- forecast.* tables — conditional. The forecast schema is migrated by
+-- the sister repo (mushroom-forecast). Skip silently if absent.
+DO $do$
+BEGIN
+    IF to_regclass('forecast.weather_features') IS NOT NULL THEN
+        EXECUTE 'DROP TRIGGER IF EXISTS trg_weather_features_district_level6 ON forecast.weather_features';
+        EXECUTE 'CREATE TRIGGER trg_weather_features_district_level6
+                 BEFORE INSERT OR UPDATE OF district_id ON forecast.weather_features
+                 FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6(''district_id'')';
+    END IF;
 
-DROP TRIGGER IF EXISTS trg_weather_daily_district_level6 ON forecast.weather_daily;
-CREATE TRIGGER trg_weather_daily_district_level6
-    BEFORE INSERT OR UPDATE OF district_id ON forecast.weather_daily
-    FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6('district_id');
+    IF to_regclass('forecast.weather_daily') IS NOT NULL THEN
+        EXECUTE 'DROP TRIGGER IF EXISTS trg_weather_daily_district_level6 ON forecast.weather_daily';
+        EXECUTE 'CREATE TRIGGER trg_weather_daily_district_level6
+                 BEFORE INSERT OR UPDATE OF district_id ON forecast.weather_daily
+                 FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6(''district_id'')';
+    END IF;
 
-DROP TRIGGER IF EXISTS trg_prediction_district_level6 ON forecast.prediction;
-CREATE TRIGGER trg_prediction_district_level6
-    BEFORE INSERT OR UPDATE OF district_id ON forecast.prediction
-    FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6('district_id');
+    IF to_regclass('forecast.prediction') IS NOT NULL THEN
+        EXECUTE 'DROP TRIGGER IF EXISTS trg_prediction_district_level6 ON forecast.prediction';
+        EXECUTE 'CREATE TRIGGER trg_prediction_district_level6
+                 BEFORE INSERT OR UPDATE OF district_id ON forecast.prediction
+                 FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6(''district_id'')';
 
-DROP TRIGGER IF EXISTS trg_training_sample_district_level6 ON forecast.training_sample;
-CREATE TRIGGER trg_training_sample_district_level6
-    BEFORE INSERT OR UPDATE OF district_id ON forecast.training_sample
-    FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6('district_id');
+        -- Tighten ON DELETE behaviour to CASCADE for consistency with
+        -- the other forecast.* tables. prediction was the odd one out.
+        EXECUTE 'ALTER TABLE forecast.prediction
+                 DROP CONSTRAINT IF EXISTS prediction_district_id_fkey';
+        EXECUTE 'ALTER TABLE forecast.prediction
+                 ADD CONSTRAINT prediction_district_id_fkey
+                 FOREIGN KEY (district_id) REFERENCES public.admin_area(id) ON DELETE CASCADE';
+    END IF;
 
-DROP TRIGGER IF EXISTS trg_district_features_district_level6 ON forecast.district_features;
-CREATE TRIGGER trg_district_features_district_level6
-    BEFORE INSERT OR UPDATE OF district_id ON forecast.district_features
-    FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6('district_id');
+    IF to_regclass('forecast.training_sample') IS NOT NULL THEN
+        EXECUTE 'DROP TRIGGER IF EXISTS trg_training_sample_district_level6 ON forecast.training_sample';
+        EXECUTE 'CREATE TRIGGER trg_training_sample_district_level6
+                 BEFORE INSERT OR UPDATE OF district_id ON forecast.training_sample
+                 FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6(''district_id'')';
+    END IF;
 
--- Belt-and-suspenders: also tighten forecast.prediction FK to ON DELETE
--- CASCADE for consistency with the other forecast tables (weather_*,
--- training_sample, district_features all CASCADE; prediction was the
--- odd one out — orphan-FK risk if a district row were ever deleted).
-ALTER TABLE forecast.prediction
-    DROP CONSTRAINT prediction_district_id_fkey,
-    ADD CONSTRAINT prediction_district_id_fkey
-        FOREIGN KEY (district_id) REFERENCES public.admin_area(id) ON DELETE CASCADE;
+    IF to_regclass('forecast.district_features') IS NOT NULL THEN
+        EXECUTE 'DROP TRIGGER IF EXISTS trg_district_features_district_level6 ON forecast.district_features';
+        EXECUTE 'CREATE TRIGGER trg_district_features_district_level6
+                 BEFORE INSERT OR UPDATE OF district_id ON forecast.district_features
+                 FOR EACH ROW EXECUTE FUNCTION public.assert_district_is_lo_level6(''district_id'')';
+    END IF;
+END;
+$do$;

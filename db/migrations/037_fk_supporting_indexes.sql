@@ -12,8 +12,15 @@ CREATE INDEX IF NOT EXISTS idx_gazetteer_admin_area_id
     ON public.gazetteer_entry (admin_area_id)
     WHERE admin_area_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_forecast_prediction_group_key
-    ON forecast.prediction (group_key);
+-- forecast.* is owned by sister repo mushroom-forecast — skip if absent
+DO $do$
+BEGIN
+    IF to_regclass('forecast.prediction') IS NOT NULL THEN
+        EXECUTE 'CREATE INDEX IF NOT EXISTS idx_forecast_prediction_group_key
+                 ON forecast.prediction (group_key)';
+    END IF;
+END;
+$do$;
 
 CREATE INDEX IF NOT EXISTS idx_soil_polygon_soil0
     ON public.soil_polygon (soil0_id);
