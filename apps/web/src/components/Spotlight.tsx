@@ -126,9 +126,11 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
     const out: Array<{ key: string; href: string }> = [];
     for (const s of species) out.push({ key: `s:${s.slug}`, href: `/species/${s.slug}` });
     for (const p of places) {
+      // После Phase W2 (redesign-2026-05) карта переехала на `/map`.
+      // Раньше поиск fly-to'ил на `/`, который тогда был картой.
       out.push({
         key: `p:${p.id}`,
-        href: `/?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&z=11`,
+        href: `/map?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&z=11`,
       });
     }
     return out;
@@ -247,7 +249,7 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
                   {places.map((p, i) => {
                     const flatIdx = species.length + i;
                     const isActive = flatIdx === activeIdx;
-                    const href = `/?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&z=11`;
+                    const href = `/map?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&z=11`;
                     return (
                       <li key={p.id}>
                         <a

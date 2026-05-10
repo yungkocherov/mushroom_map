@@ -74,6 +74,34 @@
   flex-shrink: 0;
 }
 
+.spots {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--cream);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  text-decoration: none;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+.spots:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus), var(--shadow-card);
+}
+
+.spotsIcon {
+  color: var(--chanterelle);
+  flex-shrink: 0;
+}
+
+.spotsLabel {
+  /* Шире 720px — текст; уже — иконка только. */
+}
+
 .user {
   display: inline-flex;
   align-items: center;
@@ -99,6 +127,12 @@
   }
   .searchPlaceholder {
     font-size: var(--fs-xs);
+  }
+  .spots {
+    padding: 8px 10px;
+  }
+  .spotsLabel {
+    display: none;
   }
   .user {
     padding: 6px 10px;

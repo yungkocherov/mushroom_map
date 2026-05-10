@@ -10,6 +10,7 @@
 import { Link } from "react-router-dom";
 import { Wordmark } from "../Wordmark";
 import { HeaderAuth } from "../layout/HeaderAuth";
+import { useAuth } from "../../auth/useAuth";
 import styles from "./MapTopBar.module.css";
 
 function dispatchSpotlightOpen() {
@@ -24,6 +25,8 @@ function dispatchSpotlightOpen() {
 }
 
 export function MapTopBar() {
+  const { status } = useAuth();
+
   return (
     <div className={styles.bar}>
       <Link
@@ -60,6 +63,27 @@ export function MapTopBar() {
         </span>
         <span className={styles.searchKbd}>⌘ K</span>
       </button>
+
+      {status === "authenticated" && (
+        <Link
+          to="/spots"
+          className={`${styles.spots} card-interactive`}
+          aria-label="Сохранённые споты"
+          title="Сохранённые споты"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className={styles.spotsIcon}
+            aria-hidden="true"
+          >
+            <path d="m12 2 3 7 7 .7-5.3 4.6 1.6 7L12 17.7 5.7 21.3 7.3 14.3 2 9.7 9 9z" />
+          </svg>
+          <span className={styles.spotsLabel}>Споты</span>
+        </Link>
+      )}
 
       <div className={`${styles.user} card-interactive`}>
         <HeaderAuth />

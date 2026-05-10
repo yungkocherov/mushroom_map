@@ -169,18 +169,23 @@
   display: none;
 }
 
+/* Phase W4 (redesign-2026-05): сводим к стилю остальных floating-cards
+   (MapTopBar / MapForecastPanel) — cream + shadow-card + radius-lg.
+   top:90px чтобы не залезать под MapTopBar (top:18px + 50ish высота). */
 .floating {
   position: absolute;
-  top: 60px;
-  left: 12px;
+  top: 90px;
+  left: 18px;
   z-index: 10;
-  width: 300px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(6px);
-  border-radius: 8px;
-  padding: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  width: 286px;
+  max-height: calc(100vh - 180px);
+  overflow-y: auto;
+  background: var(--cream);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  box-shadow: var(--shadow-card);
+  font-family: var(--font-body);
+  color: var(--ink);
 }
 
 .footer {
@@ -290,13 +295,16 @@
 }
 
 @media (max-width: 768px) {
+  /* На мобайле LayerGrid остаётся под MapTopBar, занимает почти всю
+     ширину; MapForecastPanel живёт в bottom-sheet'е, поэтому bottom
+     резервируем под него (см. MapBottomNav на bottom:10/18px). */
   .floating {
-    top: auto;
-    bottom: 12px;
-    left: 8px;
-    right: 8px;
+    top: 64px;
+    left: 10px;
+    right: 10px;
     width: auto;
-    padding: 8px;
+    max-height: 45vh;
+    padding: 14px;
   }
 
   .floating .grid {
