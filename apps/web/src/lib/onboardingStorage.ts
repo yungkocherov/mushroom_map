@@ -12,6 +12,7 @@
  */
 
 const KEY = "geobiom_onboarded";
+const POST_AUTH_KEY = "geobiom_post_auth_redirect";
 
 export function isOnboarded(): boolean {
   try {
@@ -36,5 +37,40 @@ export function resetOnboarded(): void {
     window.localStorage.removeItem(KEY);
   } catch {
     // ignore
+  }
+}
+
+/**
+ * Set a one-shot redirect target read by AuthCompletePage after a
+ * successful Yandex OAuth round-trip. We need this because the backend
+ * OAuth flow does not preserve `?next=` from the frontend `/auth` page
+ * across the Yandex redirect chain — by the time the user lands on
+ * `/auth/complete`, the original target is gone from the URL.
+ *
+ * The value is consumed (cleared) on the first read.
+ *
+ * Validation: same `safeNext` rules as `?next=` URL param — only
+ * relative same-origin paths (starting with `/` and not `//evil.com`).
+ */
+export function setPostAuthRedirect(path: string): void {
+  if (!path.startsWith("/") || path.startsWith("//")) return;
+  try {
+    window.localStorage.setItem(POST_AUTH_KEY, path);
+  } catch {
+    // ignore
+  }
+}
+
+export function consumePostAuthRedirect(): string | null {
+  try {
+    const raw = window.localStorage.getItem(POST_AUTH_KEY);
+    if (raw) {
+      window.localStorage.removeItem(POST_AUTH_KEY);
+      // safety re-check at read time too
+      if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
+    }
+    return null;
+  } catch {
+    return null;
   }
 }

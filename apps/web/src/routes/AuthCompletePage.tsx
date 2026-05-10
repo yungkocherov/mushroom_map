@@ -8,11 +8,12 @@
  *      на /auth/error (что-то пошло не так на последнем шаге).
  */
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Container } from "../components/layout/Container";
 import { useAuth } from "../auth/useAuth";
 import { safeNext } from "../auth/safeNext";
+import { consumePostAuthRedirect } from "../lib/onboardingStorage";
 import styles from "./Prose.module.css";
 
 
@@ -20,7 +21,11 @@ export function AuthCompletePage() {
   const { status } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const next = safeNext(searchParams.get("next"), "/cabinet");
+  // ?next= is the conventional path; if absent, fall back to the
+  // one-shot localStorage flag set by /onboarding step 4 «Войти», which
+  // the backend OAuth chain doesn't get to preserve.
+  const stored = useMemo(() => consumePostAuthRedirect(), []);
+  const next = safeNext(searchParams.get("next") ?? stored, "/cabinet");
 
   useEffect(() => {
     if (status === "authenticated") {

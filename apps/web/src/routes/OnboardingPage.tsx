@@ -1,61 +1,78 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Wordmark } from "../components/Wordmark";
-import { Pill } from "../components/Pill";
-import { PulsePin } from "../components/PulsePin";
-import { setOnboarded } from "../lib/onboardingStorage";
+import {
+  setOnboarded,
+  setPostAuthRedirect,
+} from "../lib/onboardingStorage";
 import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./OnboardingPage.module.css";
 
 /**
- * Onboarding — `/onboarding`. Phase W3 full port of D1VOnboarding.
- * Source: docs/redesign-2026-05/claude-design/src/d1v2-suite.jsx:314-411
+ * Onboarding — `/onboarding`. 4-step wizard:
+ *   1. Приветствие — что такое Geobiom.
+ *   2. Слой «Породы» — как включить + что значат цвета.
+ *   3. Другие важные слои — бонитет, возраст, болота, водотоки.
+ *   4. Сохранённые места — требуют входа; 3 кнопки: «Войти»,
+ *      «Войду позже» (skip без логина), «Назад».
  *
- * 3-step wizard:
- *   1. Геолокация — "Привет, грибник." + 2 кнопки
- *   2. Район — pill-list из ЛО-районов
- *   3. Готово — 4 feature cards + "Открыть карту"
- *
- * После step 3 ставится `localStorage.geobiom_onboarded = "1"` через
- * `setOnboarded()` и редирект на `/`.
+ * После любого варианта прохождения step 4 — `setOnboarded()` +
+ * редирект на `/map`. При выборе «Войти» дополнительно
+ * `setPostAuthRedirect('/map')` чтобы AuthCompletePage вернул юзера
+ * на карту, а не на /cabinet.
  */
 
-const DISTRICTS_FIRST_TWELVE = [
-  "Всеволожский",
-  "Приозерский",
-  "Выборгский",
-  "Лужский",
-  "Гатчинский",
-  "Тосненский",
-  "Кировский",
-  "Волховский",
-  "Лодейнопольский",
-  "Подпорожский",
-  "Тихвинский",
-  "Бокситогорский",
-];
+const TOTAL_STEPS = 4;
 
-const FEATURE_CARDS = [
-  ["Виды",      "25 в каталоге"],
-  ["Споты",     "твоё личное"],
-  ["Индекс",    "прогноз 72ч"],
-  ["Календарь", "сезон по месяцам"],
+const FOREST_SPECIES = [
+  { name: "Сосна",   color: "#9bb070" },
+  { name: "Ель",     color: "#5e7042" },
+  { name: "Берёза",  color: "#cdb86a" },
+  { name: "Осина",   color: "#b8895a" },
+  { name: "Смешан.", color: "#84a079" },
+] as const;
+
+const SECONDARY_LAYERS = [
+  {
+    name: "Бонитет",
+    sub: "качество древостоя",
+    body: "От Iа («отлично», богатая почва) до IV («слабо», скудная). Чем выше класс — тем лучше условия для роста и плодоношения.",
+  },
+  {
+    name: "Возраст",
+    sub: "возрастные группы",
+    body: "Молодняк (<20 лет) → спелый (>120 лет). Старый сосняк / ельник — лучший белый и подберёзовик; молодняк — лисичка, опёнок.",
+  },
+  {
+    name: "Болота",
+    sub: "верховые и низинные",
+    body: "Клюква, морошка, голубика — у краёв и по гриве. По центру обычно мхи без грибов, но края — продуктивная зона.",
+  },
+  {
+    name: "Водотоки",
+    sub: "реки, ручьи, канавы",
+    body: "Считаем минимум по три источника (waterway / water / wetland). Чем ближе к воде, тем сырее почва — хорошо для груздей и подосиновиков.",
+  },
 ] as const;
 
 export function OnboardingPage() {
   usePageTitle("Привет, грибник — Geobiom");
   const navigate = useNavigate();
-  const [step, setStep] = useState<1 | 2 | 3>(1);
-  const [district, setDistrict] = useState<string>("Всеволожский");
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
 
-  const finish = () => {
+  const finishAndOpenMap = () => {
     setOnboarded();
-    navigate("/", { replace: true });
+    navigate("/map", { replace: true });
+  };
+
+  const finishAndLogin = () => {
+    setOnboarded();
+    setPostAuthRedirect("/map");
+    navigate("/auth?next=/map");
   };
 
   return (
     <div className={styles.root}>
-      {/* Decorative contour wash, same family as Landing. */}
       <svg
         className={styles.wash}
         viewBox="0 0 1280 800"
@@ -72,18 +89,17 @@ export function OnboardingPage() {
         </g>
       </svg>
 
-      {/* Top bar — wordmark + stepper. Layout's Header is hidden via root class. */}
       <div className={styles.topBar}>
         <Wordmark size="md" />
         <div className={styles.stepper}>
-          {[1, 2, 3].map((s, i) => (
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map((s, i) => (
             <span key={s} className={styles.stepperGroup}>
               <span
                 className={`${styles.stepDot}${s <= step ? ` ${styles.stepDotActive}` : ""}`}
               >
                 {s}
               </span>
-              {i < 2 && (
+              {i < TOTAL_STEPS - 1 && (
                 <span
                   className={`${styles.stepLine}${s < step ? ` ${styles.stepLineActive}` : ""}`}
                 />
@@ -98,32 +114,31 @@ export function OnboardingPage() {
           {step === 1 && <Step1 onContinue={() => setStep(2)} />}
           {step === 2 && (
             <Step2
-              district={district}
-              setDistrict={setDistrict}
               onBack={() => setStep(1)}
               onContinue={() => setStep(3)}
             />
           )}
-          {step === 3 && <Step3 district={district} onFinish={finish} />}
+          {step === 3 && (
+            <Step3
+              onBack={() => setStep(2)}
+              onContinue={() => setStep(4)}
+            />
+          )}
+          {step === 4 && (
+            <Step4
+              onBack={() => setStep(3)}
+              onLogin={finishAndLogin}
+              onSkip={finishAndOpenMap}
+            />
+          )}
         </div>
 
-        {/* Right cameo — pins appear progressively */}
         <div className={styles.bodyRight}>
           <div className={styles.cameo}>
             <CameoMap />
-            {step >= 2 && (
-              <div className={styles.pin1}>
-                <PulsePin color="var(--chanterelle)" size={14} />
-              </div>
-            )}
-            {step === 3 && (
-              <div className={styles.pin2}>
-                <PulsePin color="var(--moss)" size={11} delay={0.4} />
-              </div>
-            )}
             <div className={styles.cameoFooter}>
-              <span>{district}</span>
-              <span>z 8.4</span>
+              <span>Ленобласть · обзор</span>
+              <span>z 7.2</span>
             </div>
           </div>
         </div>
@@ -132,15 +147,16 @@ export function OnboardingPage() {
   );
 }
 
+// ───── Step components ─────────────────────────────────────────────
+
 function Step1({ onContinue }: { onContinue: () => void }) {
   return (
     <>
       <div className={styles.crumb}>шаг 1 · знакомство</div>
-      <h1 className={styles.headline}>Привет, грибник.</h1>
+      <h1 className={styles.headline}>Привет!</h1>
       <p className={styles.lead}>
-        Geobiom — это карта леса Ленобласти и календарь сезонов. Чтобы начать,
-        разреши доступ к геолокации — мы покажем, что растёт{" "}
-        <em className={styles.handAccent}>рядом с тобой</em>.
+        <strong>Geobiom</strong> — это карта леса, почвы и водоёмов
+        Ленобласти. Сейчас мы коротко расскажем о функционале нашего сервиса.
       </p>
       <div className={styles.ctaRow}>
         <button
@@ -148,14 +164,7 @@ function Step1({ onContinue }: { onContinue: () => void }) {
           onClick={onContinue}
           className={`${styles.btn} ${styles.btnPrimary} btn-interactive`}
         >
-          Разрешить геолокацию
-        </button>
-        <button
-          type="button"
-          onClick={onContinue}
-          className={`${styles.btn} ${styles.btnGhost} btn-interactive`}
-        >
-          Выбрать вручную
+          Дальше
         </button>
       </div>
     </>
@@ -163,38 +172,39 @@ function Step1({ onContinue }: { onContinue: () => void }) {
 }
 
 function Step2({
-  district,
-  setDistrict,
   onBack,
   onContinue,
 }: {
-  district: string;
-  setDistrict: (s: string) => void;
   onBack: () => void;
   onContinue: () => void;
 }) {
   return (
     <>
-      <div className={styles.crumb}>шаг 2 · район</div>
+      <div className={styles.crumb}>шаг 2 · породы леса</div>
       <h1 className={styles.headlineCompact}>
-        Где ты <em className={styles.headlineEm}>обычно</em> ходишь в лес?
+        Сначала <em className={styles.headlineEm}>включи породы</em>.
       </h1>
       <p className={styles.leadCompact}>
-        Подберём индекс плодоношения и виды, типичные для района. Можно
-        поменять в любой момент.
+        В панели слева на карте — секция <strong>«Лес»</strong> с чипом{" "}
+        <span className={styles.chip}>Породы</span>. Включи его — карта
+        раскрасится по преобладающей породе леса в каждом выделе.
       </p>
-      <div className={styles.pillRow}>
-        {DISTRICTS_FIRST_TWELVE.map((d) => (
-          <Pill
-            key={d}
-            on={district === d}
-            onToggle={() => setDistrict(d)}
-            ariaLabel={`Выбрать район ${d}`}
-          >
-            {d}
-          </Pill>
+      <div className={styles.swatches}>
+        {FOREST_SPECIES.map((s) => (
+          <span key={s.name} className={styles.swatchItem}>
+            <span
+              className={styles.swatchDot}
+              style={{ background: s.color }}
+              aria-hidden="true"
+            />
+            {s.name}
+          </span>
         ))}
       </div>
+      <p className={styles.leadCompact}>
+        Так сразу видно, где сосновый бор, где ельник, а где смешанный
+        лес — три разных биотопа с разными грибами.
+      </p>
       <div className={styles.ctaRow}>
         <button
           type="button"
@@ -215,36 +225,107 @@ function Step2({
   );
 }
 
-function Step3({ district, onFinish }: { district: string; onFinish: () => void }) {
+function Step3({
+  onBack,
+  onContinue,
+}: {
+  onBack: () => void;
+  onContinue: () => void;
+}) {
   return (
     <>
-      <div className={styles.crumb}>шаг 3 · готово</div>
-      <h1 className={styles.headline}>
-        Всё, лес <em className={styles.headlineEm}>ждёт</em>.
+      <div className={styles.crumb}>шаг 3 · другие слои</div>
+      <h1 className={styles.headlineCompact}>
+        Что ещё <em className={styles.headlineEm}>смотрим</em>.
       </h1>
-      <p className={styles.lead}>
-        Сейчас откроется карта <strong>{district}</strong> района. Можешь сразу
-        отметить любимый спот — кнопкой <span className={styles.cta}>+ место</span>{" "}
-        в правом нижнем углу.
+      <p className={styles.leadCompact}>
+        Кроме пород на карте есть ещё четыре важных слоя — переключаются
+        в той же левой панели:
       </p>
-      <div className={styles.featureGrid}>
-        {FEATURE_CARDS.map(([title, sub]) => (
-          <div key={title} className={styles.featureCard}>
-            <div className={styles.featureTitle}>{title}</div>
-            <div className={styles.featureSub}>{sub}</div>
-          </div>
+      <ul className={styles.layerList}>
+        {SECONDARY_LAYERS.map((l) => (
+          <li key={l.name} className={styles.layerItem}>
+            <div className={styles.layerHead}>
+              <span className={styles.layerName}>{l.name}</span>
+              <span className={styles.layerSub}>{l.sub}</span>
+            </div>
+            <p className={styles.layerBody}>{l.body}</p>
+          </li>
         ))}
+      </ul>
+      <div className={styles.ctaRow}>
+        <button
+          type="button"
+          onClick={onContinue}
+          className={`${styles.btn} ${styles.btnPrimary} btn-interactive`}
+        >
+          Дальше
+        </button>
+        <button
+          type="button"
+          onClick={onBack}
+          className={`${styles.btn} ${styles.btnText} btn-interactive`}
+        >
+          ← назад
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={onFinish}
-        className={`${styles.btn} ${styles.btnPrimary} btn-interactive`}
-      >
-        Открыть карту
-      </button>
     </>
   );
 }
+
+function Step4({
+  onBack,
+  onLogin,
+  onSkip,
+}: {
+  onBack: () => void;
+  onLogin: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <>
+      <div className={styles.crumb}>шаг 4 · сохранённые места</div>
+      <h1 className={styles.headline}>
+        Сохрани свои <em className={styles.headlineEm}>споты</em>.
+      </h1>
+      <p className={styles.lead}>
+        Любимые поляны, удачные находки, тайные маршруты — отмечай прямо
+        на карте, и они останутся на твоём аккаунте между визитами.
+        Видны только тебе.
+      </p>
+      <p className={styles.leadCompact}>
+        Для этого нужно войти через <strong>Яндекс ID</strong> — без
+        пароля, в один клик. Если пока не готов — посмотришь карту и
+        зайдёшь, когда захочешь.
+      </p>
+      <div className={styles.ctaRow}>
+        <button
+          type="button"
+          onClick={onLogin}
+          className={`${styles.btn} ${styles.btnPrimary} btn-interactive`}
+        >
+          Войти
+        </button>
+        <button
+          type="button"
+          onClick={onSkip}
+          className={`${styles.btn} ${styles.btnGhost} btn-interactive`}
+        >
+          Войду позже
+        </button>
+        <button
+          type="button"
+          onClick={onBack}
+          className={`${styles.btn} ${styles.btnText} btn-interactive`}
+        >
+          ← назад
+        </button>
+      </div>
+    </>
+  );
+}
+
+// ───── Cameo (placeholder, share with future real-map preview) ─────
 
 function CameoMap() {
   return (
