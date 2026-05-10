@@ -1,3 +1,11 @@
+/**
+ * Legend — bottom-left floating card отображающий список свотчей для
+ * активного слоя (порода / бонитет / возраст / почва).
+ *
+ * После Phase W4/V2 (redesign-2026-05) переписан на cream-card стиль
+ * c CSS Modules — гармонизирует с LayerGrid и MapForecastPanel.
+ */
+
 import { useState } from "react";
 import {
   FOREST_COLORS,
@@ -7,6 +15,7 @@ import {
 import { SOIL_LEGEND } from "../lib/soilStyle";
 import { useIsMobile } from "../lib/useIsMobile";
 import { useLayerVisibility } from "../store/useLayerVisibility";
+import styles from "./Legend.module.css";
 
 const SPECIES_LEGEND = [
   { slug: "pine",             label: "Сосна" },
@@ -25,37 +34,6 @@ const SPECIES_LEGEND = [
 // (перекрывает лес визуально), иначе — лес по выбранному режиму.
 type LegendMode = "soil" | "forest";
 
-const WRAP: React.CSSProperties = {
-  position: "absolute",
-  bottom: 28,
-  left: 12,
-  zIndex: 10,
-  background: "rgba(255,255,255,0.92)",
-  backdropFilter: "blur(6px)",
-  borderRadius: 8,
-  padding: "8px 10px",
-  boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-  border: "1px solid rgba(0,0,0,0.08)",
-  fontFamily: "system-ui, sans-serif",
-  fontSize: 11,
-  minWidth: 140,
-};
-
-const ROW: React.CSSProperties = {
-  display: "flex",
-  alignItems: "center",
-  gap: 6,
-  padding: "2px 0",
-};
-
-const SWATCH = (color: string): React.CSSProperties => ({
-  width: 12,
-  height: 12,
-  borderRadius: 2,
-  background: color,
-  flexShrink: 0,
-});
-
 export function Legend() {
   const colorMode = useLayerVisibility((s) => s.forestColorMode);
   const forestLoaded = useLayerVisibility((s) => s.loaded.forest);
@@ -63,7 +41,7 @@ export function Legend() {
   const soilLoaded = useLayerVisibility((s) => s.loaded.soil);
   const soilVisible = useLayerVisibility((s) => s.visible.soil);
   const mobile = useIsMobile();
-  // На мобильном легенда сворачивается в иконку, чтобы не закрывать карту.
+  // На мобильном легенда сворачивается в кнопку-чип, чтобы не закрывать карту.
   const [open, setOpen] = useState(!mobile);
 
   // Легенда рисуется только когда соответствующий слой и загружен, и
@@ -97,17 +75,9 @@ export function Legend() {
   if (mobile && !open) {
     return (
       <button
+        type="button"
         onClick={() => setOpen(true)}
-        style={{
-          ...WRAP,
-          minWidth: 0,
-          padding: "8px 10px",
-          cursor: "pointer",
-          fontSize: 12,
-          fontWeight: 600,
-          color: "#333",
-          border: "1px solid rgba(0,0,0,0.08)",
-        }}
+        className={`${styles.wrap} ${styles.collapsed}`}
         title="Показать легенду"
       >
         {title} ▴
@@ -116,23 +86,14 @@ export function Legend() {
   }
 
   return (
-    <div style={WRAP}>
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: 4,
-      }}>
-        <span style={{ fontSize: 10, color: "#888", textTransform: "uppercase", letterSpacing: 0.5 }}>
-          {title}
-        </span>
+    <aside className={styles.wrap} aria-label={`Легенда: ${title}`}>
+      <div className={styles.head}>
+        <span className={styles.eyebrow}>{title}</span>
         {mobile && (
           <button
+            type="button"
             onClick={() => setOpen(false)}
-            style={{
-              border: "none", background: "transparent", color: "#888",
-              cursor: "pointer", fontSize: 14, padding: "0 0 0 8px",
-            }}
+            className={styles.collapseBtn}
             title="Свернуть"
           >
             ✕
@@ -140,11 +101,11 @@ export function Legend() {
         )}
       </div>
       {items.map(({ label, color }) => (
-        <div key={label} style={ROW}>
-          <span style={SWATCH(color)} />
-          <span style={{ color: "#333" }}>{label}</span>
+        <div key={label} className={styles.row}>
+          <span className={styles.swatch} style={{ background: color }} />
+          <span>{label}</span>
         </div>
       ))}
-    </div>
+    </aside>
   );
 }

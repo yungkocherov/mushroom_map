@@ -28,7 +28,6 @@ import { MapView } from "../components/MapView";
 import { SaveSpotModal } from "../components/SaveSpotModal";
 import { MapTopBar } from "../components/mapView/MapTopBar";
 import { MapForecastPanel } from "../components/mapView/MapForecastPanel";
-import { MapBottomNav } from "../components/mapView/MapBottomNav";
 import { useAuth } from "../auth/useAuth";
 import styles from "./MapHomePage.module.css";
 
@@ -106,7 +105,6 @@ export function MapHomePage() {
       <MapView userSpots={spots} />
       <MapTopBar />
       <MapForecastPanel />
-      <MapBottomNav />
       {speciesName && speciesSlug && (
         <div className={styles.contextChip} role="status" aria-live="polite">
           <span className={styles.contextChipLabel}>Контекст:</span>
