@@ -170,7 +170,7 @@ export function useMapLayers(
     const m = mapRef.current;
     if (!m) return;
     const filter = buildForestFilter(forestColorMode, speciesFilter, legendFilter);
-    if (m.getLayer("forest-fill")) m.setFilter("forest-fill", filter);
+    if (m.getLayer("forest-fill")) m.setFilter("forest-fill", filter as never);
   }, [speciesFilter, legendFilter, forestColorMode, mapRef, ready]);
 
   const reapplyAll = useCallback(() => {
@@ -194,7 +194,7 @@ export function useMapLayers(
     const filter = buildForestFilter(forestColorMode, speciesFilter, legendFilter);
     if (m.getLayer("forest-fill")) {
       m.setPaintProperty("forest-fill", "fill-color", color);
-      m.setFilter("forest-fill", filter);
+      m.setFilter("forest-fill", filter as never);
     }
   }, [mapRef, loaded, visible, forestColorMode, speciesFilter, legendFilter]);
 
