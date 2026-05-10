@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useIsMobile } from "../lib/useIsMobile";
 import { Legend } from "./Legend";
@@ -74,6 +74,21 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
 
   useUserSpotsSync(map, userSpots);
   useToastLifecycles();
+
+  // `mm:fly-to` event from Spotlight — летим на выбранный топоним.
+  // Slowdown via `essential: true` чтобы prefers-reduced-motion не
+  // прерывал navigation.
+  useEffect(() => {
+    const onFly = (e: Event) => {
+      const ce = e as CustomEvent<{ lat: number; lon: number; zoom?: number }>;
+      const m = map.current;
+      if (!m || !ce.detail) return;
+      const { lat, lon, zoom = 11 } = ce.detail;
+      m.flyTo({ center: [lon, lat], zoom, speed: 1.5, essential: true });
+    };
+    window.addEventListener("mm:fly-to", onFly as EventListener);
+    return () => window.removeEventListener("mm:fly-to", onFly as EventListener);
+  }, [map]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

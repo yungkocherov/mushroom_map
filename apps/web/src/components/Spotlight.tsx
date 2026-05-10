@@ -41,6 +41,20 @@ const KIND_LABEL: Record<string, string> = {
   district: "район",
 };
 
+/**
+ * Уведомить активную карту что нужно fly-to. MapView подписывается на
+ * `mm:fly-to` и вызывает `map.flyTo(...)`. Это работает даже когда мы
+ * уже на `/map` и `<MapView />` не пересоздаётся (иначе URL-only
+ * navigation просто меняет search-string без перерисовки).
+ */
+function flyToPlace(p: GazetteerSearchResult): void {
+  window.dispatchEvent(
+    new CustomEvent("mm:fly-to", {
+      detail: { lat: p.lat, lon: p.lon, zoom: 11 },
+    }),
+  );
+}
+
 export interface SpotlightProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -123,7 +137,7 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
   // нужен handleKey'ю для Enter-навигации. Метку строки рендерим в JSX
   // ниже отдельно по типу источника.
   const flatResults = useMemo(() => {
-    const out: Array<{ key: string; href: string }> = [];
+    const out: Array<{ key: string; href: string; place?: GazetteerSearchResult }> = [];
     for (const s of species) out.push({ key: `s:${s.slug}`, href: `/species/${s.slug}` });
     for (const p of places) {
       // После Phase W2 (redesign-2026-05) карта переехала на `/map`.
@@ -131,6 +145,7 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
       out.push({
         key: `p:${p.id}`,
         href: `/map?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&z=11`,
+        place: p,
       });
     }
     return out;
@@ -158,7 +173,12 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
       const r = flatResults[activeIdx];
       if (r) {
         setOpen(false);
-        navigate(r.href);
+        if (r.place) {
+          flyToPlace(r.place);
+          navigate(r.href, { replace: true });
+        } else {
+          navigate(r.href);
+        }
       }
     }
   };
@@ -258,14 +278,17 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
                           onClick={(e) => {
                             e.preventDefault();
                             setOpen(false);
-                            navigate(href);
+                            flyToPlace(p);
+                            // navigate with replace — URL update for share/
+                            // bookmark, без повторного mount'а карты.
+                            navigate(href, { replace: true });
                           }}
                           onMouseEnter={() => setActiveIdx(flatIdx)}
                         >
                           <span className={styles.kind}>
                             {KIND_LABEL[p.kind] ?? p.kind}
                           </span>
-                          <span className={styles.name}>{p.name_ru}</span>
+                          <span className={styles.name}>{p.name}</span>
                           <span className={styles.coords}>
                             {p.lat.toFixed(2)}, {p.lon.toFixed(2)}
                           </span>

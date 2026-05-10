@@ -24,34 +24,35 @@ import styles from "./OnboardingPage.module.css";
 
 const TOTAL_STEPS = 4;
 
+// Цвета синхронизированы с apps/web/src/lib/forestStyle.ts FOREST_COLORS —
+// палитра коры дерева, как реально на карте.
 const FOREST_SPECIES = [
-  { name: "Сосна",   color: "#9bb070" },
-  { name: "Ель",     color: "#5e7042" },
-  { name: "Берёза",  color: "#cdb86a" },
-  { name: "Осина",   color: "#b8895a" },
-  { name: "Смешан.", color: "#84a079" },
+  { name: "Сосна",  color: "#8b5a34" },
+  { name: "Ель",    color: "#3e2e1c" },
+  { name: "Берёза", color: "#c8b890" },
+  { name: "Осина",  color: "#9ea48c" },
 ] as const;
 
 const SECONDARY_LAYERS = [
   {
     name: "Бонитет",
     sub: "качество древостоя",
-    body: "От Iа («отлично», богатая почва) до IV («слабо», скудная). Чем выше класс — тем лучше условия для роста и плодоношения.",
+    body: "От I («отлично», богатая почва) до IV («слабо», скудная). Чем выше класс — тем лучше условия для роста леса.",
   },
   {
     name: "Возраст",
     sub: "возрастные группы",
-    body: "Молодняк (<20 лет) → спелый (>120 лет). Старый сосняк / ельник — лучший белый и подберёзовик; молодняк — лисичка, опёнок.",
+    body: "От молодняка (<20 лет) до перестойного (>120 лет). Группы помогают понять, давно ли стоит лес и в какой он стадии.",
   },
   {
     name: "Болота",
     sub: "верховые и низинные",
-    body: "Клюква, морошка, голубика — у краёв и по гриве. По центру обычно мхи без грибов, но края — продуктивная зона.",
+    body: "Заболоченные участки. По краям — ягодные зоны (клюква, морошка), в центре обычно мхи и сфагнум.",
   },
   {
     name: "Водотоки",
     sub: "реки, ручьи, канавы",
-    body: "Считаем минимум по три источника (waterway / water / wetland). Чем ближе к воде, тем сырее почва — хорошо для груздей и подосиновиков.",
+    body: "Близость воды задаёт влажность почвы вокруг. Около ручьёв и низин лес сырой — другие условия для грибов.",
   },
 ] as const;
 
@@ -153,10 +154,16 @@ function Step1({ onContinue }: { onContinue: () => void }) {
   return (
     <>
       <div className={styles.crumb}>шаг 1 · знакомство</div>
-      <h1 className={styles.headline}>Привет!</h1>
+      <h1 className={styles.headline}>
+        Добро пожаловать на{" "}
+        <em className={styles.headlineEm}>Geobiom</em>
+      </h1>
       <p className={styles.lead}>
-        <strong>Geobiom</strong> — это карта леса, почвы и водоёмов
-        Ленобласти. Сейчас мы коротко расскажем о функционале нашего сервиса.
+        Geobiom — это карта леса, почвы и водоёмов Ленобласти. Сейчас мы
+        коротко расскажем о функционале нашего сервиса.
+      </p>
+      <p className={styles.leadCompact}>
+        Это займёт меньше минуты.
       </p>
       <div className={styles.ctaRow}>
         <button
@@ -182,12 +189,12 @@ function Step2({
     <>
       <div className={styles.crumb}>шаг 2 · породы леса</div>
       <h1 className={styles.headlineCompact}>
-        Сначала <em className={styles.headlineEm}>включи породы</em>.
+        Сначала <em className={styles.headlineEm}>включи породы</em>
       </h1>
       <p className={styles.leadCompact}>
-        В панели слева на карте — секция <strong>«Лес»</strong> с чипом{" "}
-        <span className={styles.chip}>Породы</span>. Включи его — карта
-        раскрасится по преобладающей породе леса в каждом выделе.
+        В панели слева на карте — секция <strong>«Лес»</strong> с чипом
+        «Породы». Включи его — карта раскрасится по преобладающей породе
+        леса в каждом выделе.
       </p>
       <div className={styles.swatches}>
         {FOREST_SPECIES.map((s) => (
@@ -236,7 +243,7 @@ function Step3({
     <>
       <div className={styles.crumb}>шаг 3 · другие слои</div>
       <h1 className={styles.headlineCompact}>
-        Что ещё <em className={styles.headlineEm}>смотрим</em>.
+        Что ещё <em className={styles.headlineEm}>смотрим</em>
       </h1>
       <p className={styles.leadCompact}>
         Кроме пород на карте есть ещё четыре важных слоя — переключаются
@@ -286,7 +293,7 @@ function Step4({
     <>
       <div className={styles.crumb}>шаг 4 · сохранённые места</div>
       <h1 className={styles.headline}>
-        Сохрани свои <em className={styles.headlineEm}>споты</em>.
+        Сохрани свои <em className={styles.headlineEm}>точки</em>
       </h1>
       <p className={styles.lead}>
         Любимые поляны, удачные находки, тайные маршруты — отмечай прямо
@@ -294,9 +301,7 @@ function Step4({
         Видны только тебе.
       </p>
       <p className={styles.leadCompact}>
-        Для этого нужно войти через <strong>Яндекс ID</strong> — без
-        пароля, в один клик. Если пока не готов — посмотришь карту и
-        зайдёшь, когда захочешь.
+        Войти можно любым удобным способом.
       </p>
       <div className={styles.ctaRow}>
         <button

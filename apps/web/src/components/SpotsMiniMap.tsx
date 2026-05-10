@@ -154,7 +154,7 @@ export function SpotsMiniMap({ spots, highlightedId, onSelect }: Props) {
     <div
       ref={containerRef}
       style={{ width: "100%", height: "100%", minHeight: 320, borderRadius: 8, overflow: "hidden" }}
-      aria-label="Карта моих спотов"
+      aria-label="Карта моих точек"
       role="region"
     />
   );

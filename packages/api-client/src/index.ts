@@ -221,11 +221,15 @@ export async function deleteSpot(accessToken: string, id: string): Promise<void>
  */
 export interface GazetteerSearchResult {
   id: number;
-  name_ru: string;
+  /** Русское название топонима. API отдаёт ключом `name` (не name_ru). */
+  name: string;
   kind: string;
   lat: number;
   lon: number;
-  admin_area_id: number | null;
+  /** API возвращает `district_admin_area_id`. Раньше тип ошибочно назывался
+   *  `admin_area_id` — на фронт оба не используются, но сохраняем верный
+   *  ключ для type-safety при будущих использованиях. */
+  district_admin_area_id: number | null;
   popularity: number;
   score: number;
 }

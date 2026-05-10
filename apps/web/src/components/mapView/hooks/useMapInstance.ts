@@ -63,7 +63,14 @@ export function useMapInstance(
     });
     mapRef.current = m;
 
-    m.addControl(new maplibregl.NavigationControl(), "top-right");
+    // Phase V3 (redesign-2026-05): nav-controls перенесли в bottom-right
+    // чтобы не пересекались с MapForecastPanel (top-right) и
+    // HeaderAuth/Споты chips (top-bar). Кастомный CSS стилизует группу
+    // под cream-card в global.css.
+    m.addControl(
+      new maplibregl.NavigationControl({ showCompass: true, showZoom: true }),
+      "bottom-right",
+    );
 
     const onStyleReady = () => {
       if (m.isStyleLoaded()) {
