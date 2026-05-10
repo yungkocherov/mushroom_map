@@ -142,7 +142,7 @@ export function CabinetSpotsPage() {
       </p>
       <h1 className={prose.h1}>
         {spots && spots.length > 0
-          ? `${spots.length} сохранённых мест`
+          ? `Сохранённых мест: ${spots.length}`
           : "Мои места"}
       </h1>
       <p className={prose.lead}>

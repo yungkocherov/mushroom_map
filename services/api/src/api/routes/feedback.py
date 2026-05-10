@@ -7,28 +7,28 @@
 Юзер пишет короткое сообщение через FloatingFeedbackButton в правом
 нижнем углу. Опционально оставляет контакт (email/tg/что хочет).
 
-После успешного INSERT'а — best-effort SMTP-нотификация автору
-(`settings.smtp_*` + `feedback_email_to`). Если SMTP-конфиг пуст
-или send упал — лог + тишина для клиента; запись в БД остаётся.
+После успешного INSERT'а — best-effort Telegram-нотификация автору
+через `api.telegram.org/bot<token>/sendMessage` (`settings.tg_bot_token`
++ `tg_chat_id`). Изначально планировалось через SMTP/email, но TimeWeb
+режет outbound 25/465/587 (стандартная anti-spam политика бюджетных
+хостеров). HTTPS на 443 проходит свободно.
+
+Если оба TG-поля заданы — fire-and-forget POST в отдельном thread'е,
+не блокируя HTTP-ответ юзеру. Пустые значения = silent skip; фидбек в
+БД сохраняется в любом случае.
 
 Anti-spam — пока примитивно: rate-limit 5 сообщений в час с одного IP,
 + длина message ∈ [3, 4000]. Если фидбек массово польётся — добавим
 hCaptcha. Сейчас сайт получает ~0 спама, поэтому overengineering.
-
-Для просмотра фидбэка автору: `psql … -c "SELECT created_at, contact,
-page_url, substring(message, 1, 120) FROM user_feedback ORDER BY 1
-DESC LIMIT 50;"` — пока read-only через psql, специальный admin-UI не
-строим (один-два-три сообщения в день максимум).
 """
 
 from __future__ import annotations
 
 import logging
-import smtplib
 import threading
-from email.message import EmailMessage
 from typing import Optional
 
+import httpx
 from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
@@ -61,7 +61,7 @@ def _maybe_user_id(request: Request) -> Optional[str]:
         return None
 
 
-def _send_email_notification_async(
+def _notify_telegram_async(
     feedback_id: int,
     message: str,
     contact: Optional[str],
@@ -69,52 +69,42 @@ def _send_email_notification_async(
     user_agent: Optional[str],
     user_id: Optional[str],
 ) -> None:
-    """Запускает SMTP-отправку в отдельном thread'е, не блокируя
-    HTTP-ответ юзеру. Если SMTP-конфиг пуст или send упал — лог-warn,
-    запись в БД остаётся (главный source-of-truth)."""
-    if not (settings.smtp_host and settings.smtp_user and settings.smtp_password):
-        return  # SMTP не настроен — silent skip
-    to_addr = settings.feedback_email_to or settings.smtp_user
+    """POST'ит сообщение в Telegram через bot API в отдельном thread'е,
+    не блокируя HTTP-ответ юзеру. Если bot_token/chat_id пусты или
+    запрос упал — лог-warn, запись в БД остаётся (source-of-truth).
+
+    Используем plain text (parse_mode=None) — внутри сообщения есть
+    user-controlled текст с произвольным markdown'ом, который ломал бы
+    рендер при parse_mode=Markdown. Длинные UA обрезаем."""
+    if not (settings.tg_bot_token and settings.tg_chat_id):
+        return  # TG не настроен — silent skip
 
     def worker() -> None:
         try:
-            msg = EmailMessage()
-            msg["Subject"] = f"[geobiom] feedback #{feedback_id}"
-            msg["From"] = settings.smtp_user
-            msg["To"] = to_addr
-            if contact:
-                # Reply-To = контакт юзера, если оставил, чтобы можно было
-                # ответить просто Reply из почтового клиента (если контакт
-                # выглядит как email).
-                msg["Reply-To"] = contact
-
-            body_lines = [
-                f"Сообщение #{feedback_id}",
-                "",
-                message,
-                "",
-                "—",
-                f"Контакт:    {contact or '—'}",
-                f"Страница:   {page_url or '—'}",
-                f"User-Agent: {user_agent or '—'}",
-                f"User ID:    {user_id or 'anon'}",
-            ]
-            msg.set_content("\n".join(body_lines))
-
-            # SSL (465) или STARTTLS (587). Gmail допускает оба, Yandex
-            # тоже; 465 проще без отдельного starttls() шага.
-            if settings.smtp_port == 465:
-                with smtplib.SMTP_SSL(settings.smtp_host, settings.smtp_port, timeout=15) as s:
-                    s.login(settings.smtp_user, settings.smtp_password)
-                    s.send_message(msg)
-            else:
-                with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=15) as s:
-                    s.starttls()
-                    s.login(settings.smtp_user, settings.smtp_password)
-                    s.send_message(msg)
-            log.info("feedback #%s emailed to %s", feedback_id, to_addr)
+            text = (
+                f"geobiom feedback #{feedback_id}\n"
+                f"\n"
+                f"{message}\n"
+                f"\n"
+                f"---\n"
+                f"Контакт:  {contact or '-'}\n"
+                f"Страница: {page_url or '-'}\n"
+                f"UA:       {(user_agent or '-')[:120]}\n"
+                f"User:     {user_id or 'anon'}"
+            )
+            r = httpx.post(
+                f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage",
+                json={
+                    "chat_id": settings.tg_chat_id,
+                    "text": text,
+                    "disable_web_page_preview": True,
+                },
+                timeout=10,
+            )
+            r.raise_for_status()
+            log.info("feedback #%s posted to telegram", feedback_id)
         except Exception:  # noqa: BLE001
-            log.exception("feedback #%s email-send failed", feedback_id)
+            log.exception("feedback #%s telegram-send failed", feedback_id)
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -149,7 +139,7 @@ def submit_feedback(payload: FeedbackPayload, request: Request) -> dict:
         ) from exc
 
     feedback_id = int(row[0])
-    _send_email_notification_async(
+    _notify_telegram_async(
         feedback_id=feedback_id,
         message=message,
         contact=contact,

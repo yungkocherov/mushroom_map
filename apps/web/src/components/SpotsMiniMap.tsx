@@ -1,15 +1,18 @@
 /**
  * SpotsMiniMap — лёгкий MapLibre-превью для /spots.
  *
- * V4 (redesign-2026-05-10):
- *   - подложка теперь scheme (Versatiles Colorful), как на /map; раньше
- *     был OSM raster через INLINE_STYLE — несогласованно с остальным UI
- *   - наружу через ref торчит `flyTo(lat, lon, zoom?)` чтобы родитель
- *     мог приближать карту по клику строки в списке (без navigate)
- *   - убрали onSelect: клик по точке больше не уводит на /spots/<id>
+ * V4 (redesign-2026-05-10): scheme-подложка вместо OSM raster.
+ * V4.1 fix: точки перестали отображаться после перехода на scheme.
+ *   Причина — `m.on("load")` ненадёжен после async setStyle (style.json
+ *   фетчится через buildSchemeStyle, к моменту load-handler may have
+ *   already fired). Решение — RAF-poll до `isStyleLoaded`, как в
+ *   useBaseMap.ts. Тот же паттерн закладывает CLAUDE.md гача про
+ *   «MapLibre `load` event может никогда не выстрелить».
  *
- * Не использует общий MapView (954 строк, тащит forest/water/oopt/etc) —
- * собственный экземпляр + один circle-layer с user_spot.
+ * Наружу через ref торчит `flyTo(lat, lon, zoom?)` — родитель приближает
+ * карту по клику на строку списка (без navigate'а).
+ *
+ * Не использует общий MapView — собственный экземпляр + один circle-layer.
  */
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
@@ -37,6 +40,8 @@ export interface SpotsMiniMapHandle {
 
 const LO_CENTER: [number, number] = [30.5, 59.9];
 const LO_DEFAULT_ZOOM = 7.2;
+const SOURCE_ID = "spots-src";
+const LAYER_ID = "spots-circle";
 
 function spotsToGeoJson(spots: UserSpot[]): GeoJSON.FeatureCollection {
   return {
@@ -53,10 +58,49 @@ function spotsToGeoJson(spots: UserSpot[]): GeoJSON.FeatureCollection {
   };
 }
 
+function ensureLayerSetup(m: MaplibreMap) {
+  if (m.getSource(SOURCE_ID)) return;
+  m.addSource(SOURCE_ID, {
+    type: "geojson",
+    data: { type: "FeatureCollection", features: [] },
+  });
+  m.addLayer({
+    id: LAYER_ID,
+    type: "circle",
+    source: SOURCE_ID,
+    paint: {
+      "circle-radius":       ["interpolate", ["linear"], ["zoom"], 5, 5, 12, 9, 16, 13],
+      "circle-color": [
+        "match",
+        ["get", "rating"],
+        1, RATING_HEX[1],
+        2, RATING_HEX[2],
+        3, RATING_HEX[3],
+        4, RATING_HEX[4],
+        5, RATING_HEX[5],
+        RATING_HEX[3],
+      ],
+      "circle-stroke-color": "#ffffff",
+      "circle-stroke-width": 2,
+      "circle-opacity":      0.95,
+    },
+  });
+  m.on("mouseenter", LAYER_ID, () => {
+    m.getCanvas().style.cursor = "pointer";
+  });
+  m.on("mouseleave", LAYER_ID, () => {
+    m.getCanvas().style.cursor = "";
+  });
+}
+
 export const SpotsMiniMap = forwardRef<SpotsMiniMapHandle, Props>(
   function SpotsMiniMap({ spots, highlightedId }, ref) {
     const containerRef = useRef<HTMLDivElement | null>(null);
     const mapRef = useRef<MaplibreMap | null>(null);
+    // Pending data, накопленное между mount'ом и `isStyleLoaded`. Важно
+    // чтобы первая партия spots'ов не потерялась если они пришли раньше
+    // чем style успел загрузиться.
+    const pendingSpotsRef = useRef<UserSpot[] | null>(null);
 
     useImperativeHandle(ref, () => ({
       flyTo: (lat, lon, zoom = 13) => {
@@ -66,7 +110,8 @@ export const SpotsMiniMap = forwardRef<SpotsMiniMapHandle, Props>(
       },
     }), []);
 
-    // init map once — подменяем scheme-style ассинхронно через build*().
+    // init map once — async scheme-style fetch с fallback'ом + RAF-poll
+    // вместо нестабильного `m.on('load')`.
     useEffect(() => {
       if (!containerRef.current || mapRef.current) return;
 
@@ -89,39 +134,22 @@ export const SpotsMiniMap = forwardRef<SpotsMiniMapHandle, Props>(
         });
         mapRef.current = m;
 
-        m.on("load", () => {
-          m.addSource("spots-src", {
-            type: "geojson",
-            data: { type: "FeatureCollection", features: [] },
-          });
-          m.addLayer({
-            id: "spots-circle",
-            type: "circle",
-            source: "spots-src",
-            paint: {
-              "circle-radius":       ["interpolate", ["linear"], ["zoom"], 5, 5, 12, 9, 16, 13],
-              "circle-color": [
-                "match",
-                ["get", "rating"],
-                1, RATING_HEX[1],
-                2, RATING_HEX[2],
-                3, RATING_HEX[3],
-                4, RATING_HEX[4],
-                5, RATING_HEX[5],
-                RATING_HEX[3],
-              ],
-              "circle-stroke-color": "#ffffff",
-              "circle-stroke-width": 2,
-              "circle-opacity":      0.95,
-            },
-          });
-          m.on("mouseenter", "spots-circle", () => {
-            m.getCanvas().style.cursor = "pointer";
-          });
-          m.on("mouseleave", "spots-circle", () => {
-            m.getCanvas().style.cursor = "";
-          });
-        });
+        const onReady = () => {
+          if (cancelled) return;
+          if (!m.isStyleLoaded()) {
+            requestAnimationFrame(onReady);
+            return;
+          }
+          ensureLayerSetup(m);
+          // Применяем накопленные spots (если data-effect успел стрельнуть
+          // до style-готовности).
+          const pending = pendingSpotsRef.current;
+          if (pending) {
+            applySpots(m, pending);
+            pendingSpotsRef.current = null;
+          }
+        };
+        requestAnimationFrame(onReady);
       };
       void init();
 
@@ -132,42 +160,28 @@ export const SpotsMiniMap = forwardRef<SpotsMiniMapHandle, Props>(
       };
     }, []);
 
-    // update spots data + auto-fit bounds
+    // update spots data + auto-fit. Если style ещё не готов — складываем
+    // в ref'у, поднимем как только styledata + isStyleLoaded.
     useEffect(() => {
       const m = mapRef.current;
-      if (!m) return;
-      const apply = () => {
-        const src = m.getSource("spots-src") as maplibregl.GeoJSONSource | undefined;
-        if (!src) return;
-        src.setData(spotsToGeoJson(spots));
-        if (spots.length === 0) return;
-        if (spots.length === 1) {
-          m.easeTo({ center: [spots[0].lon, spots[0].lat], zoom: 11, duration: 400 });
-          return;
-        }
-        const lons = spots.map((s) => s.lon);
-        const lats = spots.map((s) => s.lat);
-        const bounds = new maplibregl.LngLatBounds(
-          [Math.min(...lons), Math.min(...lats)],
-          [Math.max(...lons), Math.max(...lats)],
-        );
-        m.fitBounds(bounds, { padding: 40, maxZoom: 11, duration: 400 });
-      };
-      if (m.isStyleLoaded()) apply();
-      else m.once("load", apply);
+      if (!m || !m.isStyleLoaded() || !m.getSource(SOURCE_ID)) {
+        pendingSpotsRef.current = spots;
+        return;
+      }
+      applySpots(m, spots);
     }, [spots]);
 
     // highlight: пересобираем paint-expressions при смене highlightedId.
     useEffect(() => {
       const m = mapRef.current;
-      if (!m || !m.getLayer("spots-circle")) return;
+      if (!m || !m.getLayer(LAYER_ID)) return;
       const target = highlightedId ?? "__none__";
-      m.setPaintProperty("spots-circle", "circle-stroke-width", [
+      m.setPaintProperty(LAYER_ID, "circle-stroke-width", [
         "case",
         ["==", ["get", "id"], target], 4,
         2,
       ]);
-      m.setPaintProperty("spots-circle", "circle-radius", [
+      m.setPaintProperty(LAYER_ID, "circle-radius", [
         "case",
         ["==", ["get", "id"], target],
         ["interpolate", ["linear"], ["zoom"], 5, 8, 12, 12, 16, 16],
@@ -185,3 +199,21 @@ export const SpotsMiniMap = forwardRef<SpotsMiniMapHandle, Props>(
     );
   },
 );
+
+function applySpots(m: MaplibreMap, spots: UserSpot[]) {
+  const src = m.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  if (!src) return;
+  src.setData(spotsToGeoJson(spots));
+  if (spots.length === 0) return;
+  if (spots.length === 1) {
+    m.easeTo({ center: [spots[0].lon, spots[0].lat], zoom: 11, duration: 400 });
+    return;
+  }
+  const lons = spots.map((s) => s.lon);
+  const lats = spots.map((s) => s.lat);
+  const bounds = new maplibregl.LngLatBounds(
+    [Math.min(...lons), Math.min(...lats)],
+    [Math.max(...lons), Math.max(...lats)],
+  );
+  m.fitBounds(bounds, { padding: 40, maxZoom: 11, duration: 400 });
+}

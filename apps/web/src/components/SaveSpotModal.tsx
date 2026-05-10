@@ -34,6 +34,10 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
   const [rating, setRating] = useState<SpotRating>(3);
   const [tags, setTags] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  // V4.1: после первого нажатия Сохранить с пустым required-полем
+  // включаем валидационную подсветку. Раньше кнопка была silently
+  // disabled, юзер кликал без эффекта и не понимал почему.
+  const [showErrors, setShowErrors] = useState(false);
 
   const toggleTag = (slug: string) => {
     setTags((cur) =>
@@ -42,6 +46,8 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
   };
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const isNameInvalid = showErrors && name.trim().length === 0;
 
   // Esc закрывает.
   useEffect(() => {
@@ -52,6 +58,16 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (name.trim().length === 0) {
+      setShowErrors(true);
+      // Фокус и скролл к первому невалидному полю.
+      const el = document.getElementById("save-spot-name");
+      if (el) {
+        el.focus();
+        el.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+      return;
+    }
     const tok = getAccessToken();
     if (!tok) return;
     setSubmitting(true);
@@ -155,17 +171,21 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
             </div>
           </>
         ) : (
-          <form onSubmit={handleSubmit} style={{ display: "grid", gap: "var(--space-3)" }}>
+          <form onSubmit={handleSubmit} style={{ display: "grid", gap: "var(--space-3)" }} noValidate>
             <label style={fieldLabel}>
-              <span>Название</span>
+              <span style={{ color: isNameInvalid ? "var(--danger)" : "var(--ink-dim)" }}>
+                Название{isNameInvalid && " · обязательно"}
+              </span>
               <input
+                id="save-spot-name"
                 type="text"
                 required
                 maxLength={200}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Поляна за Лемболово"
-                style={inputStyle}
+                style={isNameInvalid ? { ...inputStyle, ...invalidInputStyle } : inputStyle}
+                aria-invalid={isNameInvalid || undefined}
                 autoFocus
               />
             </label>
@@ -241,7 +261,7 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
               </button>
               <button
                 type="submit"
-                disabled={submitting || name.trim().length === 0}
+                disabled={submitting}
                 style={modalBtnStyle("primary")}
               >
                 {submitting ? "Сохраняем…" : "Сохранить"}
@@ -324,6 +344,12 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 6,
   background: "var(--paper)",
   color: "var(--ink)",
+};
+
+// Подсветка required-поля после неуспешной попытки submit'а.
+const invalidInputStyle: React.CSSProperties = {
+  borderColor: "var(--danger)",
+  boxShadow: "0 0 0 3px color-mix(in srgb, var(--danger) 22%, transparent)",
 };
 
 function modalBtnStyle(variant: "primary" | "ghost"): React.CSSProperties {
