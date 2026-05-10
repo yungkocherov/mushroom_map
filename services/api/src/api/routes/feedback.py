@@ -92,15 +92,22 @@ def _notify_telegram_async(
                 f"UA:       {(user_agent or '-')[:120]}\n"
                 f"User:     {user_id or 'anon'}"
             )
-            r = httpx.post(
-                f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage",
-                json={
-                    "chat_id": settings.tg_chat_id,
-                    "text": text,
-                    "disable_web_page_preview": True,
-                },
+            # Force IPv4: docker bridge на TimeWeb не маршрутизирует
+            # IPv6, а api.telegram.org резолвится и в v4 и в v6 —
+            # httpx иногда выбирает v6 и падает с Network unreachable.
+            # local_address=0.0.0.0 биндит socket на IPv4-интерфейс.
+            with httpx.Client(
+                transport=httpx.HTTPTransport(local_address="0.0.0.0"),
                 timeout=10,
-            )
+            ) as client:
+                r = client.post(
+                    f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage",
+                    json={
+                        "chat_id": settings.tg_chat_id,
+                        "text": text,
+                        "disable_web_page_preview": True,
+                    },
+                )
             r.raise_for_status()
             log.info("feedback #%s posted to telegram", feedback_id)
         except Exception:  # noqa: BLE001
