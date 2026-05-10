@@ -86,6 +86,13 @@ services:
       SENTRY_DSN:                    ${SENTRY_DSN:-}
       SENTRY_ENVIRONMENT:            ${SENTRY_ENVIRONMENT:-production}
       GIT_SHA:                       ${GIT_SHA:-unknown}
+      # Feedback email (V4 redesign-2026-05-10). Пустые SMTP_* = silent
+      # skip отправки, фидбек только в `user_feedback` БД-таблице.
+      SMTP_HOST:                     ${SMTP_HOST:-}
+      SMTP_PORT:                     ${SMTP_PORT:-465}
+      SMTP_USER:                     ${SMTP_USER:-}
+      SMTP_PASSWORD:                 ${SMTP_PASSWORD:-}
+      FEEDBACK_EMAIL_TO:             ${FEEDBACK_EMAIL_TO:-}
     volumes:
       # PMTiles локально на VM как read-only mount. На Cloudflare R2
       # переносится отдельно (через Caddy или CDN-rewrite); пока проще
