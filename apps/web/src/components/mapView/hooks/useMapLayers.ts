@@ -31,6 +31,37 @@ function paintForMode(mode: ForestColorMode) {
     : FOREST_LAYER_PAINT_COLOR["fill-color"];
 }
 
+/**
+ * Композирует MapLibre-filter для forest-fill из двух источников:
+ *   - speciesFilter (legacy от Spotlight — массив slug'ов dominant_species)
+ *   - legendFilter (V4.2 от Legend — значения в зависимости от mode:
+ *     species=slug, bonitet=number, age_group=string)
+ *
+ * Оба применяются с AND-семантикой если оба заданы (полигон должен
+ * подходить под все активные критерии). Property name выбирается по
+ * `forestColorMode` для legendFilter.
+ */
+function buildForestFilter(
+  mode: ForestColorMode,
+  species: string[] | null,
+  legend: Array<string | number> | null,
+): unknown {
+  const clauses: unknown[] = [];
+  if (species && species.length > 0) {
+    clauses.push(["in", ["get", "dominant_species"], ["literal", species]]);
+  }
+  if (legend && legend.length > 0) {
+    const prop =
+      mode === "bonitet" ? "bonitet" :
+      mode === "age_group" ? "age_group" :
+      "dominant_species";
+    clauses.push(["in", ["get", prop], ["literal", legend]]);
+  }
+  if (clauses.length === 0) return null;
+  if (clauses.length === 1) return clauses[0];
+  return ["all", ...clauses];
+}
+
 export function useMapLayers(
   mapRef: React.MutableRefObject<Map | null>,
   ready: boolean,
@@ -39,6 +70,7 @@ export function useMapLayers(
   const loaded = useLayerVisibility((s) => s.loaded);
   const forestColorMode = useLayerVisibility((s) => s.forestColorMode);
   const speciesFilter = useLayerVisibility((s) => s.speciesFilter);
+  const legendFilter = useLayerVisibility((s) => s.legendFilter);
   const setLoaded = useLayerVisibility((s) => s.setLoaded);
   const setVisible = useLayerVisibility((s) => s.setVisible);
   const setErrorMsg = useLayerVisibility((s) => s.setErrorMsg);
@@ -137,11 +169,9 @@ export function useMapLayers(
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
-    const filter = speciesFilter
-      ? ["in", ["get", "dominant_species"], ["literal", speciesFilter]] as never
-      : null;
+    const filter = buildForestFilter(forestColorMode, speciesFilter, legendFilter);
     if (m.getLayer("forest-fill")) m.setFilter("forest-fill", filter);
-  }, [speciesFilter, mapRef, ready]);
+  }, [speciesFilter, legendFilter, forestColorMode, mapRef, ready]);
 
   const reapplyAll = useCallback(() => {
     const m = mapRef.current;
@@ -161,14 +191,12 @@ export function useMapLayers(
     });
 
     const color = paintForMode(forestColorMode);
-    const filter = speciesFilter
-      ? ["in", ["get", "dominant_species"], ["literal", speciesFilter]] as never
-      : null;
+    const filter = buildForestFilter(forestColorMode, speciesFilter, legendFilter);
     if (m.getLayer("forest-fill")) {
       m.setPaintProperty("forest-fill", "fill-color", color);
-      if (filter) m.setFilter("forest-fill", filter);
+      m.setFilter("forest-fill", filter);
     }
-  }, [mapRef, loaded, visible, forestColorMode, speciesFilter]);
+  }, [mapRef, loaded, visible, forestColorMode, speciesFilter, legendFilter]);
 
   return { reapplyAll };
 }

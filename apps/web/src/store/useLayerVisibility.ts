@@ -59,6 +59,16 @@ export interface LayerVisibilityState {
   /** Активный species-фильтр для forest-fill: список slug'ов или null = без фильтра. */
   speciesFilter: string[] | null;
   setSpeciesFilter: (slugs: string[] | null, label: string | null) => void;
+  /**
+   * Filter по форестовскому слою, активируемый кликом по легенде (V4.2).
+   * Значения — slug'и (species), числа (bonitet), строки (age_group) в
+   * зависимости от mode. Пустой массив или null = без фильтра. Filter
+   * сбрасывается при смене forestColorMode (значения от другого режима
+   * не имеют смысла).
+   */
+  legendFilter: Array<string | number> | null;
+  toggleLegendFilter: (value: string | number) => void;
+  clearLegendFilter: () => void;
 
   setVisible: (key: LayerKey, value: boolean) => void;
   toggleVisible: (key: LayerKey) => void;
@@ -110,6 +120,7 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
   shareToast: false,
   speciesFilterLabel: null,
   speciesFilter: null,
+  legendFilter: null,
 
   setVisible: (key, value) =>
     set((s) => ({ visible: { ...s.visible, [key]: value } })),
@@ -117,12 +128,27 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
     set((s) => ({ visible: { ...s.visible, [key]: !s.visible[key] } })),
   setLoaded: (key, value) =>
     set((s) => ({ loaded: { ...s.loaded, [key]: value } })),
-  setForestColorMode: (mode) => set({ forestColorMode: mode }),
+  setForestColorMode: (mode) =>
+    // Смена mode → reset legendFilter: значения от предыдущего режима
+    // (например species-slug'и) не имеют смысла в новом (bonitet — числа).
+    set((s) => ({
+      forestColorMode: mode,
+      legendFilter: s.forestColorMode === mode ? s.legendFilter : null,
+    })),
   selectForestMode: (mode) =>
     set((s) => ({
       visible: { ...s.visible, forest: true },
       forestColorMode: mode,
+      legendFilter: s.forestColorMode === mode ? s.legendFilter : null,
     })),
+  toggleLegendFilter: (value) =>
+    set((s) => {
+      const cur = s.legendFilter ?? [];
+      const has = cur.includes(value);
+      const next = has ? cur.filter((v) => v !== value) : [...cur, value];
+      return { legendFilter: next.length > 0 ? next : null };
+    }),
+  clearLegendFilter: () => set({ legendFilter: null }),
   resetAllVisibility: () =>
     set((s) => ({
       visible: Object.fromEntries(

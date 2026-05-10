@@ -1,0 +1,180 @@
+/*
+ * InlineSearch — inline-поиск в MapTopBar (V4.2). Заменил
+ * modal-Spotlight. Ширина ограничена `max-width: 560px` чтобы
+ * dropdown не наезжал на floating LayerGrid card слева (286px +
+ * padding 18+18 = ~322px), и оставалось воздуха справа под User-chip.
+ */
+
+.wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  /* Ограничение растяжения — иначе search-bar заберёт всё свободное
+     место и dropdown под ним перекроет панель ПОДЛОЖКА слева. */
+  max-width: 560px;
+}
+
+.bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  background: var(--cream);
+  border: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  width: 100%;
+  font-family: var(--font-body);
+  cursor: text;
+  transition: box-shadow 120ms ease;
+}
+.bar:focus-within {
+  box-shadow: var(--shadow-focus), var(--shadow-card);
+}
+
+.icon {
+  color: var(--ink-dim);
+  flex-shrink: 0;
+}
+
+.input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  outline: none;
+  font: inherit;
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  min-width: 0;
+}
+.input::placeholder {
+  color: var(--ink-dim);
+}
+
+.kbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  padding: 2px 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--paper-rise);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+  z-index: 20;
+  padding: var(--space-3) 0;
+  font-family: var(--font-body);
+  color: var(--ink);
+  animation: search-fadeup 140ms ease-out;
+}
+
+@keyframes search-fadeup {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.empty {
+  padding: var(--space-3) var(--space-5);
+  text-align: center;
+  color: var(--ink-faint);
+  font-size: var(--fs-sm);
+  margin: 0;
+}
+
+.section {
+  margin: 0 0 var(--space-3);
+}
+.section:last-child {
+  margin-bottom: 0;
+}
+
+.sectionTitle {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0;
+  padding: var(--space-2) var(--space-5);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-5);
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  font: inherit;
+  width: 100%;
+}
+.row:hover,
+.row:focus-visible,
+.rowActive {
+  background: var(--birch);
+  outline: none;
+}
+
+.kind {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  width: 70px;
+  text-align: right;
+}
+
+.name {
+  font-size: var(--fs-sm);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.placeBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.placeContext {
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.coords {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+}

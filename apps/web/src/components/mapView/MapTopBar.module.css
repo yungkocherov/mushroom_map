@@ -30,49 +30,8 @@
   box-shadow: var(--shadow-focus), var(--shadow-card);
 }
 
-.search {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  padding: 13px 16px;
-  background: var(--cream);
-  border: 0;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-card);
-  cursor: pointer;
-  font-family: var(--font-body);
-  text-align: left;
-}
-.search:focus-visible {
-  outline: none;
-  box-shadow: var(--shadow-focus), var(--shadow-card);
-}
-
-.searchIcon {
-  color: var(--ink-dim);
-  flex-shrink: 0;
-}
-
-.searchPlaceholder {
-  font-size: var(--fs-sm);
-  color: var(--ink-dim);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.searchKbd {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--ink-dim);
-  padding: 2px 6px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  border-radius: var(--radius-xs);
-  flex-shrink: 0;
-}
+/* V4.2: .search / .searchIcon / .searchPlaceholder / .searchKbd удалены
+   вместе с trigger-кнопкой. Стили теперь в InlineSearch.module.css. */
 
 .spots {
   display: inline-flex;
@@ -121,12 +80,6 @@
   }
   .brand {
     padding: 8px 10px;
-  }
-  .searchKbd {
-    display: none;
-  }
-  .searchPlaceholder {
-    font-size: var(--fs-xs);
   }
   .spots {
     padding: 8px 10px;

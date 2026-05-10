@@ -73,7 +73,12 @@
   transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
 }
 
-.chip:hover:not(:disabled) {
+/* `:not(.chipActive)` нужен чтобы hover не overridе'ил тёмный фон
+   у активного чипа. Без этого пользователь после клика держит курсор
+   на кнопке и видит paper-rise — кажется что toggle не сработал.
+   Aria-pressed обновляется сразу, и сам клик меняет state, но
+   визуально пропадает на время hover'а — поэтому правим CSS. */
+.chip:not(.chipActive):hover:not(:disabled) {
   background: var(--paper-rise);
   border-color: var(--ink-faint);
   color: var(--ink);
@@ -84,7 +89,8 @@
   box-shadow: var(--shadow-focus);
 }
 
-.chipActive {
+.chipActive,
+.chipActive:hover {
   background: var(--ink);
   border-color: var(--ink);
   color: var(--paper);
@@ -92,11 +98,6 @@
 
 .chipActive .subLabel {
   color: var(--paper-rise);
-}
-
-.chipActive:hover {
-  background: var(--ink);
-  color: var(--paper);
 }
 
 .chip:disabled,

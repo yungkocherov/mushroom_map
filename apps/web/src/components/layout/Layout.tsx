@@ -32,14 +32,14 @@ export function Layout() {
 
   if (isMapShell) {
     // Phase W4 (redesign-2026-05): на /map* Header не нужен — навигация
-    // переезжает в floating MapTopBar (Wordmark + search + user) внутри
-    // MapHomePage. Footer тоже скрыт — карта не должна скроллиться.
+    // переезжает в floating MapTopBar (Wordmark + InlineSearch + user)
+    // внутри MapHomePage. Footer тоже скрыт — карта не скроллится.
+    // V4.2: Spotlight modal убран — поиск теперь inline в MapTopBar.
     return (
       <div className={styles.mapShell}>
         <main className={styles.mapMain}>
           <Outlet />
         </main>
-        <Spotlight />
         {/* Onboarding — собственный step-flow, без feedback'а.
             Map shell — поднимаем над NavigationControl (bottom-right). */}
         {!isOnboarding && <FeedbackButton placement="aboveMapNav" />}
@@ -54,6 +54,8 @@ export function Layout() {
         <Outlet />
       </main>
       <Footer />
+      {/* На не-map страницах нет MapTopBar — Spotlight остаётся как
+          ⌘K modal-fallback. На /map поиск живёт inline в MapTopBar. */}
       <Spotlight />
       <FeedbackButton />
     </div>

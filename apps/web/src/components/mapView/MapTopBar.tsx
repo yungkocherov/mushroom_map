@@ -1,28 +1,20 @@
 /**
  * MapTopBar — floating top bar для full-bleed карты.
- * Source: docs/redesign-2026-05/claude-design/src/d1v2.jsx:365-378
  *
- * 3 секции в ряд: Wordmark (clickable → /), search trigger
- * (открывает Spotlight через synthetic ⌘K event), user chip
- * (HeaderAuth re-styled).
+ * V4.2 (redesign-2026-05-11): кнопка-trigger Spotlight'а заменена на
+ * InlineSearch — input напрямую в баре + dropdown под ним. Юзер
+ * перестаёт видеть отдельный modal окно при каждом клике.
+ *
+ * 3 секции в ряд: Wordmark (clickable → /), InlineSearch (с ⌘K hotkey),
+ * user chip (HeaderAuth re-styled).
  */
 
 import { Link } from "react-router-dom";
 import { Wordmark } from "../Wordmark";
 import { HeaderAuth } from "../layout/HeaderAuth";
 import { useAuth } from "../../auth/useAuth";
+import { InlineSearch } from "./InlineSearch";
 import styles from "./MapTopBar.module.css";
-
-function dispatchSpotlightOpen() {
-  window.dispatchEvent(
-    new KeyboardEvent("keydown", {
-      key: "k",
-      code: "KeyK",
-      metaKey: true,
-      ctrlKey: true,
-    }),
-  );
-}
 
 export function MapTopBar() {
   const { status } = useAuth();
@@ -37,32 +29,7 @@ export function MapTopBar() {
         <Wordmark size="sm" />
       </Link>
 
-      <button
-        type="button"
-        onClick={dispatchSpotlightOpen}
-        className={`${styles.search} card-interactive`}
-        aria-label="Открыть поиск (⌘K)"
-      >
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={styles.searchIcon}
-          aria-hidden="true"
-        >
-          <circle cx="11" cy="11" r="7" />
-          <path d="m20 20-3.5-3.5" />
-        </svg>
-        <span className={styles.searchPlaceholder}>
-          Найти гриб, район или место…
-        </span>
-        <span className={styles.searchKbd}>⌘ K</span>
-      </button>
+      <InlineSearch />
 
       {status === "authenticated" && (
         <Link
