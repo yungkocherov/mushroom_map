@@ -1,13 +1,19 @@
 /**
  * Карта маршрутов сайта. Один источник правды.
  *
- * /             - Главная с hero и входом в карту
- * /map          - Полноэкранная карта (lazy — MapLibre тяжёлый, не
- *                 грузим на других страницах; см. MapPage.tsx)
- * /species      - Каталог видов (placeholder на Фазе 1)
- * /guide        - Полевые гайды (placeholder)
+ * Phase W2 (redesign-2026-05): инверсия `/` ↔ `/map`. Лендинг теперь
+ * приветствует на `/`, карта переезжает на `/map`. Добавлены
+ * `/calendar` и `/onboarding`.
+ *
+ * /             - Landing (hero + map cameo) [redesign-2026-05]
+ * /map          - Полноэкранная карта (бывший `/`)
+ * /map/:district - Detail режим района
+ * /calendar     - Сезонный календарь видов
+ * /onboarding   - 3-step wizard (first-visit redirect)
+ * /species      - Каталог видов
+ * /spots        - Сохранённые места (auth-gated)
  * /methodology  - Методология данных
- * /about        - Об авторе
+ * /about        - 301 → /methodology
  * /auth/*       - OAuth-flow (Yandex ID)
  * /cabinet      - Личный кабинет (за ProtectedRoute)
  * /legal/*      - Privacy / Terms (drafts)
@@ -17,7 +23,10 @@ import { lazy, Suspense } from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 
 import { Layout } from "./components/layout/Layout";
+import { LandingPage } from "./routes/LandingPage";
 import { MapHomePage } from "./routes/MapHomePage";
+import { CalendarPage } from "./routes/CalendarPage";
+import { OnboardingPage } from "./routes/OnboardingPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
 import { SpeciesListPage } from "./routes/SpeciesListPage";
@@ -65,16 +74,15 @@ export const router = createBrowserRouter([
     path: "/",
     element: <Layout />,
     children: [
-      // Главная — теперь карта-обзор с sidebar'ом (variant C редизайна).
-      // Старая `HomePage` (hero + виджеты) больше не на `/`; компонент
-      // оставлен в коде для возможного восстановления и будет удалён в
-      // фазе 2.5 cleanup. См. docs/redesign-2026-04.md.
-      { index: true, element: <MapHomePage /> },
-      // /map → 301-style redirect на главную (главная и есть карта).
-      { path: "map", element: <Navigate to="/" replace /> },
+      // Phase W2 (redesign-2026-05): `/` теперь Landing, карта переехала
+      // на `/map`. Phase W3 заполнит Landing полным D1VLanding port'ом.
+      { index: true, element: <LandingPage /> },
+      // Карта — теперь на `/map`. Sidebar grid доживает до Phase W4
+      // (full-bleed + floating panels rewrite).
+      { path: "map", element: <MapHomePage /> },
       // /map/:district — детальный режим района (slug = osm_rel_id или
-      // транслит). Phase 2.X partial: пока подсасываем тот же MapPage,
-      // SidebarDistrict пока пустой. Phase 2.Y допишет его.
+      // транслит). До Phase W4 подсасывает MapPage; W4 reconcile'ит с
+      // MapHomePage + DistrictDetailPanel.
       {
         path: "map/:district",
         element: (
@@ -83,6 +91,9 @@ export const router = createBrowserRouter([
           </Suspense>
         ),
       },
+      // Новые routes Phase W2 — placeholder'ы, наполняются в W3 / W5.
+      { path: "calendar",   element: <CalendarPage /> },
+      { path: "onboarding", element: <OnboardingPage /> },
       // /forecast — старый плейсхолдер, теперь главная и есть прогноз.
       { path: "forecast", element: <Navigate to="/" replace /> },
       // /guide — старый плейсхолдер для гайдов; контент уехал в /methodology.
@@ -90,7 +101,7 @@ export const router = createBrowserRouter([
       // /home-legacy и /about-legacy удалены: главная неделю катается на
       // MapHomePage без откатов, контент About переехал в MDX. Если когда-то
       // понадобится откат — `git revert` PR'а phase 2.f.
-      { path: "home-legacy", element: <Navigate to="/" replace /> },
+      { path: "home-legacy", element: <Navigate to="/map" replace /> },
       { path: "species",        element: <SpeciesListPage /> },
       { path: "species/:slug",  element: <SpeciesDetailPage /> },
       { path: "methodology",         element: <MethodologyPage /> },

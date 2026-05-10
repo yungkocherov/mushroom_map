@@ -3,14 +3,13 @@ import { HeaderAuth } from "./HeaderAuth";
 import { Wordmark } from "../Wordmark";
 import styles from "./Header.module.css";
 
-// 4 IA-раздела по spec'у redesign-2026-04. Прежние «Прогноз» / «Гайды»
-// / «О проекте» теперь 301'ы → /, /methodology, /methodology/about.
-// W2 (redesign-2026-05) добавит «Календарь» и переименует «Сохранённые
-// места» → «Споты».
+// 5 IA-разделов после Phase W2 (redesign-2026-05). Лендинг — на `/`,
+// карта переехала на `/map`. Добавлен «Календарь».
 const NAV_ITEMS = [
-  { to: "/",            label: "Карта", end: true },
+  { to: "/map",         label: "Карта" },
   { to: "/species",     label: "Виды" },
-  { to: "/spots",       label: "Сохранённые места" },
+  { to: "/spots",       label: "Споты" },
+  { to: "/calendar",    label: "Календарь" },
   { to: "/methodology", label: "Методология" },
 ];
 
@@ -23,11 +22,10 @@ export function Header() {
         </Link>
         <div className={styles.spacer} />
         <nav className={styles.nav} aria-label="Основная навигация">
-          {NAV_ITEMS.map(({ to, label, end }) => (
+          {NAV_ITEMS.map(({ to, label }) => (
             <NavLink
               key={to}
               to={to}
-              end={end}
               className={({ isActive }) =>
                 `${styles.link} link-underline${isActive ? ` ${styles.linkActive}` : ""}`
               }
