@@ -1,0 +1,299 @@
+.root {
+  position: relative;
+  width: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  overflow: hidden;
+  /* match Layout.contentMain — Footer лежит снизу, у нас scroll'а почти нет */
+  min-height: calc(100vh - 64px);
+  padding: var(--space-6) var(--space-5);
+  box-sizing: border-box;
+}
+
+.washGradient {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at top right, rgba(184, 106, 58, 0.09), transparent 55%),
+    radial-gradient(ellipse at bottom left, rgba(93, 106, 58, 0.12), transparent 60%);
+  pointer-events: none;
+}
+
+.washContours {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.18;
+  pointer-events: none;
+}
+
+/* ─── Hero grid ─── */
+
+.heroGrid {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.15fr 1fr;
+  gap: var(--space-7);
+  align-items: center;
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-3);
+}
+
+.heroLeft {
+  animation: geobiom-fadeup 0.9s 0.1s ease both;
+}
+
+/* badge "сезон 2026 · ..." */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  background: rgba(93, 106, 58, 0.14);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  color: var(--forest);
+  font-family: var(--font-mono);
+  margin-bottom: var(--space-6);
+  letter-spacing: 0.04em;
+}
+
+.badgePulse {
+  position: relative;
+  display: inline-flex;
+}
+
+.badgePulseRing {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--moss);
+  animation: geobiom-pulse 2.2s ease-out infinite;
+}
+
+.badgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--moss);
+  display: inline-block;
+}
+
+/* headline «Лес, как атлас.» */
+.headline {
+  font-family: var(--font-display);
+  font-size: var(--fs-hero);
+  line-height: 0.98;
+  font-weight: 500;
+  margin: 0;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.atlas {
+  position: relative;
+  display: inline-block;
+}
+
+.atlas em {
+  color: var(--chanterelle);
+  font-style: italic;
+}
+
+.atlasUnderline {
+  position: absolute;
+  left: 0;
+  bottom: -4px;
+  width: 100%;
+  height: 14px;
+}
+
+.lead {
+  font-size: var(--fs-lg);
+  line-height: var(--lh-normal);
+  color: var(--ink-dim);
+  margin-top: var(--space-6);
+  max-width: 500px;
+}
+
+/* CTA buttons */
+.ctaRow {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 15px 24px;
+  border-radius: var(--radius-lg);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  font-family: var(--font-body);
+}
+
+.btnPrimary {
+  background: var(--forest);
+  color: var(--cream);
+  box-shadow: 0 8px 22px rgba(62, 72, 39, 0.28);
+}
+
+.btnGhost {
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+}
+
+/* Stats row at the bottom of left column */
+.statsRow {
+  display: flex;
+  gap: var(--space-7);
+  margin-top: var(--space-7);
+  padding-top: var(--space-5);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  letter-spacing: 0.04em;
+  flex-wrap: wrap;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.statValue {
+  font-family: var(--font-display);
+  font-size: 26px;
+  color: var(--ink);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.statLabel {
+  margin-top: 4px;
+}
+
+/* ─── Map cameo (right column) ─── */
+
+.cameoWrap {
+  position: relative;
+  animation: geobiom-fadeup 1s 0.25s ease both;
+}
+
+.cameo {
+  position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  box-shadow:
+    0 28px 70px rgba(60, 50, 30, 0.22),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+  animation: geobiom-drift 14s ease-in-out infinite;
+}
+
+.cameoSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.cameoPin1 {
+  position: absolute;
+  top: 30%;
+  left: 48%;
+}
+
+.cameoPin2 {
+  position: absolute;
+  top: 52%;
+  left: 62%;
+}
+
+.cameoPin3 {
+  position: absolute;
+  top: 66%;
+  left: 42%;
+}
+
+.cameoNote {
+  position: absolute;
+  top: 40%;
+  left: 30%;
+  font-family: var(--font-hand);
+  font-size: 24px;
+  color: var(--ink);
+  transform: rotate(-4deg);
+  animation: geobiom-fadeup 0.8s 1.2s ease both;
+  pointer-events: none;
+}
+
+.cameoCard {
+  position: absolute;
+  bottom: 18px;
+  left: 18px;
+  right: 18px;
+  padding: 14px 16px;
+  background: rgba(250, 245, 232, 0.94);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 6px 18px rgba(60, 50, 30, 0.12);
+}
+
+.cameoCardHead {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.cameoCardLabel {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+
+.cameoCardHand {
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: var(--chanterelle);
+}
+
+/* ─── Mobile (≤720px): single column ─── */
+
+@media (max-width: 720px) {
+  .heroGrid {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+  .lead {
+    margin-top: var(--space-5);
+  }
+  .ctaRow {
+    margin-top: var(--space-5);
+  }
+  .statsRow {
+    gap: var(--space-5);
+    margin-top: var(--space-6);
+    padding-top: var(--space-4);
+  }
+  .statValue {
+    font-size: 22px;
+  }
+  .cameoNote {
+    font-size: 18px;
+  }
+}

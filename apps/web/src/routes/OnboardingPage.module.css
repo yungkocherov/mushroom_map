@@ -1,0 +1,315 @@
+.root {
+  position: relative;
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  background: var(--paper);
+  color: var(--ink);
+  overflow: hidden;
+  padding: var(--space-3) var(--space-5) var(--space-6);
+  box-sizing: border-box;
+}
+
+.wash {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.topBar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-4) 0;
+}
+
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.stepperGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepDot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink-dim);
+  transition: background 0.3s, color 0.3s;
+}
+
+.stepDotActive {
+  background: var(--forest);
+  color: var(--cream);
+}
+
+.stepLine {
+  width: 24px;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.1);
+  transition: background 0.3s;
+}
+
+.stepLineActive {
+  background: var(--forest);
+}
+
+/* ─── Body grid ─── */
+
+.body {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  gap: var(--space-7);
+  align-items: center;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-5) 0;
+}
+
+.bodyLeft {
+  animation: geobiom-fadeup 0.5s ease both;
+}
+
+.bodyRight {
+  animation: geobiom-fadeup 0.7s 0.15s ease both;
+}
+
+/* ─── Step content ─── */
+
+.crumb {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  margin-bottom: var(--space-3);
+}
+
+.headline {
+  font-family: var(--font-display);
+  font-size: var(--fs-display);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+  margin: 0 0 var(--space-4) 0;
+  color: var(--ink);
+}
+
+.headlineCompact {
+  font-family: var(--font-display);
+  font-size: 60px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  margin: 0 0 var(--space-3) 0;
+  color: var(--ink);
+}
+
+.headlineEm {
+  color: var(--chanterelle);
+  font-style: italic;
+}
+
+.handAccent {
+  font-family: var(--font-hand);
+  color: var(--chanterelle);
+  font-style: italic;
+  font-size: 1.15em;
+}
+
+.lead {
+  font-size: var(--fs-lg);
+  line-height: var(--lh-normal);
+  color: var(--ink-dim);
+  max-width: 480px;
+  margin: 0 0 var(--space-6) 0;
+}
+
+.leadCompact {
+  font-size: var(--fs-body);
+  line-height: 1.5;
+  color: var(--ink-dim);
+  max-width: 480px;
+  margin: 0 0 var(--space-5) 0;
+}
+
+.pillRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-width: 540px;
+  margin-bottom: var(--space-7);
+}
+
+.ctaRow {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.btn {
+  padding: 15px 24px;
+  border-radius: var(--radius-lg);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  font-family: var(--font-body);
+  text-decoration: none;
+}
+
+.btnPrimary {
+  background: var(--forest);
+  color: var(--cream);
+  box-shadow: 0 8px 22px rgba(62, 72, 39, 0.28);
+}
+
+.btnGhost {
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+}
+
+.btnText {
+  background: transparent;
+  color: var(--ink-dim);
+  font-size: 14px;
+  padding: 15px 8px;
+}
+
+.cta {
+  padding: 2px 8px;
+  background: rgba(184, 106, 58, 0.14);
+  color: var(--chanterelle);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* Step 3 feature cards */
+
+.featureGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  max-width: 480px;
+  margin: var(--space-6) 0;
+}
+
+.featureCard {
+  padding: 14px;
+  background: var(--cream);
+  border-radius: var(--radius-md);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+.featureTitle {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.featureSub {
+  font-size: 12px;
+  color: var(--ink-dim);
+  margin-top: 2px;
+}
+
+/* ─── Cameo ─── */
+
+.cameo {
+  position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  aspect-ratio: 4 / 5;
+  box-shadow:
+    0 24px 60px rgba(60, 50, 30, 0.2),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.cameoSvg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pin1 {
+  position: absolute;
+  top: 30%;
+  left: 48%;
+}
+
+.pin2 {
+  position: absolute;
+  top: 52%;
+  left: 62%;
+}
+
+.cameoFooter {
+  position: absolute;
+  bottom: 14px;
+  left: 14px;
+  right: 14px;
+  padding: 10px 14px;
+  background: rgba(250, 245, 232, 0.92);
+  border-radius: var(--radius-md);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  display: flex;
+  justify-content: space-between;
+  backdrop-filter: blur(4px);
+}
+
+@media (max-width: 720px) {
+  .body {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+  .topBar {
+    padding: var(--space-3) 0;
+  }
+  .stepper {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+  }
+  .stepDot {
+    width: 20px;
+    height: 20px;
+  }
+  .headline,
+  .headlineCompact {
+    font-size: 36px;
+  }
+  .lead {
+    font-size: var(--fs-body);
+  }
+}
