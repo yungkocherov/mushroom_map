@@ -1,9 +1,14 @@
 /**
- * Legend — bottom-left floating card отображающий список свотчей для
- * активного слоя (порода / бонитет / возраст / почва).
+ * Legend — список свотчей для активного слоя (порода / бонитет /
+ * возраст / почва).
  *
- * После Phase W4/V2 (redesign-2026-05) переписан на cream-card стиль
- * c CSS Modules — гармонизирует с LayerGrid и MapForecastPanel.
+ * После Phase V3 (redesign-2026-05) переключаемый между двумя режимами:
+ *
+ *  - `floating` (default) — отдельная bottom-left card на /map (legacy).
+ *    Используется когда LayerGrid не показывает легенду inline.
+ *  - `inline` — рендерится внутри LayerGrid floating-card как нижняя
+ *    секция «легенда · {слой}». Гармонизирует с дизайн-эталоном
+ *    d1v2.jsx, где подложка/слои/легенда — одна карточка.
  */
 
 import { useState } from "react";
@@ -30,23 +35,27 @@ const SPECIES_LEGEND = [
   { slug: "unknown",          label: "Неизвестно" },
 ] as const;
 
-// Что показывать в легенде. Если включена почва — её легенда важнее
-// (перекрывает лес визуально), иначе — лес по выбранному режиму.
 type LegendMode = "soil" | "forest";
 
-export function Legend() {
+interface LegendProps {
+  /**
+   * 'floating' (default) — bottom-left card с тенью.
+   * 'inline'  — без position/shadow, для встраивания в LayerGrid.
+   */
+  variant?: "floating" | "inline";
+}
+
+export function Legend({ variant = "floating" }: LegendProps = {}) {
   const colorMode = useLayerVisibility((s) => s.forestColorMode);
   const forestLoaded = useLayerVisibility((s) => s.loaded.forest);
   const forestVisible = useLayerVisibility((s) => s.visible.forest);
   const soilLoaded = useLayerVisibility((s) => s.loaded.soil);
   const soilVisible = useLayerVisibility((s) => s.visible.soil);
   const mobile = useIsMobile();
-  // На мобильном легенда сворачивается в кнопку-чип, чтобы не закрывать карту.
-  const [open, setOpen] = useState(!mobile);
+  // На мобильном legend сворачивается в чип только в floating-режиме;
+  // inline всегда раскрыт, потому что родитель — collapsible LayerGrid.
+  const [open, setOpen] = useState(!mobile || variant === "inline");
 
-  // Легенда рисуется только когда соответствующий слой и загружен, и
-  // видим. Раньше gate был только на `loaded` — после toggle off forest
-  // легенда оставалась висеть (см. user feedback fix 8).
   const forestActive = forestLoaded && forestVisible;
   const soilActive = soilLoaded && soilVisible;
   if (!forestActive && !soilActive) return null;
@@ -72,7 +81,7 @@ export function Legend() {
     items = AGE_GROUP_LEGEND;
   }
 
-  if (mobile && !open) {
+  if (variant === "floating" && mobile && !open) {
     return (
       <button
         type="button"
@@ -85,11 +94,13 @@ export function Legend() {
     );
   }
 
+  const wrapClass = variant === "inline" ? styles.inline : styles.wrap;
+
   return (
-    <aside className={styles.wrap} aria-label={`Легенда: ${title}`}>
+    <aside className={wrapClass} aria-label={`Легенда: ${title}`}>
       <div className={styles.head}>
         <span className={styles.eyebrow}>{title}</span>
-        {mobile && (
+        {variant === "floating" && mobile && (
           <button
             type="button"
             onClick={() => setOpen(false)}

@@ -46,25 +46,32 @@
   flex-wrap: wrap;
 }
 
-/* Стиль ссылок — underline-on-hover (`.link-underline` в animations.css)
-   вместо background-fill. На активной ссылке — постоянная underline + цвет. */
+/* Стиль ссылок — pill-чип (V4 redesign-2026-05). Active вкладка явно
+   выделяется тёмно-зелёной заливкой с cream текстом — раньше был только
+   тонкий underline + смена цвета, его не было видно на скриншотах. */
 .link {
   color: var(--ink-dim);
   text-decoration: none;
-  padding: var(--space-2) 0;
+  padding: 6px var(--space-3);
   font-size: var(--fs-sm);
   font-weight: 500;
-  transition: color 0.15s;
+  border-radius: var(--radius-pill);
+  transition: color 0.15s ease, background 0.15s ease;
 }
 .link:hover {
   color: var(--ink);
+  background: rgba(93, 106, 58, 0.08);
 }
-.linkActive {
-  color: var(--forest);
+.linkActive,
+.linkActive:hover {
+  color: var(--cream);
+  background: var(--forest);
 }
+/* link-underline animation (см. animations.css) добавляет ::after с
+   подчёркиванием. На pill-стиле он не нужен — глушим. */
+.link::after,
 .linkActive::after {
-  right: 0 !important; /* link-underline persistent for active link */
-  background: var(--forest) !important;
+  display: none !important;
 }
 
 @media (max-width: 720px) {

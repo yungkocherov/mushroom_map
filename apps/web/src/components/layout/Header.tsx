@@ -5,10 +5,13 @@ import styles from "./Header.module.css";
 
 // 5 IA-разделов после Phase W2 (redesign-2026-05). Лендинг — на `/`,
 // карта переехала на `/map`. Добавлен «Календарь».
+//
+// V4 (2026-05-10) feedback от автора: «Споты»→«Точки» (W4) → «Мои места»
+// (теперь). Так клиенту понятнее, что это именно его сохранения.
 const NAV_ITEMS = [
   { to: "/map",         label: "Карта" },
   { to: "/species",     label: "Виды" },
-  { to: "/spots",       label: "Точки" },
+  { to: "/spots",       label: "Мои места" },
   { to: "/calendar",    label: "Календарь" },
   { to: "/methodology", label: "Методология" },
 ];

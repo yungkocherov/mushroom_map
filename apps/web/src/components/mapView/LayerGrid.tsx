@@ -25,6 +25,7 @@ import {
 } from "../../store/useLayerVisibility";
 import { useMapShare } from "./hooks/useMapShare";
 import { BaseMapPicker } from "./BaseMapPicker";
+import { Legend } from "../Legend";
 import { track } from "../../lib/track";
 import styles from "./LayerGrid.module.css";
 
@@ -207,6 +208,8 @@ export function LayerGrid({
           </button>
         </div>
       )}
+
+      {floating && <Legend variant="inline" />}
     </div>
   );
 }

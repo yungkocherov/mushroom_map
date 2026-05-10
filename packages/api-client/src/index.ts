@@ -230,6 +230,11 @@ export interface GazetteerSearchResult {
    *  `admin_area_id` — на фронт оба не используются, но сохраняем верный
    *  ключ для type-safety при будущих использованиях. */
   district_admin_area_id: number | null;
+  /** Имя района (admin_area level=6) — для контекста в Spotlight. null
+   *  если у топонима не определён район (например, поверхность Ладоги). */
+  district_name: string | null;
+  /** Название региона из `region.name_ru` («Ленинградская область»). */
+  region_name: string;
   popularity: number;
   score: number;
 }
@@ -258,5 +263,39 @@ export async function searchPlaces(q: string): Promise<NominatimResult[]> {
     headers: { "User-Agent": "mushroom-map/1.0" },
   });
   if (!res.ok) return [];
+  return res.json();
+}
+
+
+// ──────────────────────────────────────────────────────────────────────
+// Feedback (V4 redesign-2026-05-10)
+// ──────────────────────────────────────────────────────────────────────
+
+export interface FeedbackPayload {
+  message: string;
+  contact?: string;
+  page_url?: string;
+}
+
+/**
+ * POST /api/feedback — короткое сообщение от посетителя сайта.
+ * Auth опционален (если есть Bearer-token, бэк привяжет к user_id).
+ * Вернёт `{id}` или бросит Error на 4xx/5xx.
+ */
+export async function submitFeedback(
+  payload: FeedbackPayload,
+  accessToken?: string,
+): Promise<{ id: number }> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (accessToken) headers.authorization = `Bearer ${accessToken}`;
+  const res = await fetch(`${API_BASE}/api/feedback`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    throw new Error(`feedback failed: ${res.status} ${t || res.statusText}`);
+  }
   return res.json();
 }

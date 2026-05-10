@@ -83,3 +83,20 @@
     padding: 10px 12px;
   }
 }
+
+/*
+ * Inline variant — встраивается внутрь LayerGrid'а (V3 redesign-2026-05).
+ * Без position/shadow/animation, разделитель сверху отделяет от чипов.
+ */
+.inline {
+  width: auto;
+  margin-top: var(--space-3);
+  padding: var(--space-3) 0 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  animation: none;
+  overflow: visible;
+  max-height: none;
+}

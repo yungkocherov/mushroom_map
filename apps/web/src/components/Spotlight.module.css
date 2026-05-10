@@ -12,10 +12,10 @@
 
 .content {
   position: fixed;
-  top: 12vh;
+  top: 14vh;
   left: 50%;
   transform: translateX(-50%);
-  width: min(92vw, 600px);
+  width: min(94vw, 760px);
   max-height: 70vh;
   background: var(--paper-rise);
   border: 1px solid var(--rule);
@@ -40,11 +40,22 @@
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
 
+.title {
+  margin: 0;
+  padding: var(--space-4) var(--space-5) var(--space-2);
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
 .inputRow {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-5) var(--space-4);
   border-bottom: 1px solid var(--rule);
 }
 
@@ -150,6 +161,23 @@
 .name {
   font-size: var(--fs-sm);
   color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Контейнер для name + context — две строки, выровнены влево, общий
+   ellipsis. Чтобы не плыло при длинных именах сёл. */
+.placeBody {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.placeContext {
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

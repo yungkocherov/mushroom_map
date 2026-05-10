@@ -81,7 +81,7 @@ export function MapTopBar() {
           >
             <path d="m12 2 3 7 7 .7-5.3 4.6 1.6 7L12 17.7 5.7 21.3 7.3 14.3 2 9.7 9 9z" />
           </svg>
-          <span className={styles.spotsLabel}>Точки</span>
+          <span className={styles.spotsLabel}>Мои места</span>
         </Link>
       )}
 

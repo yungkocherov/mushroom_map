@@ -98,6 +98,20 @@ class Settings(BaseSettings):
     # api/rate_limit.py.
     rate_limit_enabled: bool = False
 
+    # ── Feedback email (V4 redesign-2026-05-10) ───────────────────────
+    # Фидбек юзеров через `/api/feedback` пишется в БД (`user_feedback`),
+    # а если SMTP-конфиг задан — параллельно шлётся email автору. Если
+    # хоть одно из полей пусто — отправка тихо пропускается; запись в БД
+    # всё равно сохранится. SSL подключение (port 465). Gmail требует
+    # 2FA + App Password, Yandex — app-пароль из ID.
+    smtp_host: str = ""                       # smtp.gmail.com / smtp.yandex.com
+    smtp_port: int = 465                      # 465 (SSL) или 587 (STARTTLS)
+    smtp_user: str = ""                       # full email
+    smtp_password: str = ""                   # 16-char app password
+    # Куда приходят письма с фидбэком (default = smtp_user, чтобы не
+    # дублировать).
+    feedback_email_to: str = ""
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property

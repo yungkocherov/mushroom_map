@@ -1,24 +1,25 @@
 /**
  * LandingMapCameo — миниатюрная неинтерактивная превью-карта на лендинге.
  *
- * Использует тот же MapLibre+pmtiles стек что и /map, но:
+ * Использует тот же стек что и /map: scheme-basemap (Versatiles Colorful)
+ * + forest.pmtiles слой в режиме «Породы». Раньше был OSM-raster без
+ * forest'а — лендинг показывал просто карту мира, не отражая суть проекта.
+ *
  *  - bbox привязан к ЛО (Финский залив + Ладога), zoom фиксирован
  *  - все интеракции отключены (drag, scroll-zoom, double-click, touch)
  *  - клик по контейнеру → navigate to /map
- *  - не рендерит forest/water/oopt/etc. — только базовый schemе для
- *    превью; настоящая карта со слоями ждёт по адресу /map
+ *  - если scheme-style не догрузился — fallback на ESRI Topo (в нём тоже
+ *    можно показать forest-overlay)
  */
 
 import { useEffect, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { INLINE_STYLE } from "./mapView/styles/inline";
+import { buildSchemeStyle, SCHEME_STYLE_FALLBACK } from "./mapView/styles/scheme";
+import { addForestLayer, setForestVisibility } from "./mapView/layers/forest";
 import styles from "./LandingMapCameo.module.css";
 
-// Один протокол на приложение — повторное .addProtocol после mount
-// /map тоже не вредит, но регистрируем здесь чтобы Landing мог
-// быть первым потребителем.
 const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile.bind(protocol));
 
@@ -33,21 +34,42 @@ export function LandingMapCameo({ onClick }: Props) {
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
-    const m = new maplibregl.Map({
-      container: containerRef.current,
-      style: INLINE_STYLE,
-      center: [30.5, 60.0],
-      zoom: 7.2,
-      attributionControl: false,
-      // Disable all interactions — cameo is decorative, click forwards
-      // to /map.
-      interactive: false,
-      maxTileCacheSize: 200,
-    });
-    mapRef.current = m;
+    let cancelled = false;
+    const init = async () => {
+      let style: maplibregl.StyleSpecification;
+      try {
+        style = await buildSchemeStyle();
+      } catch {
+        style = SCHEME_STYLE_FALLBACK;
+      }
+      if (cancelled || !containerRef.current) return;
+
+      const m = new maplibregl.Map({
+        container: containerRef.current,
+        style,
+        center: [30.3, 60.05],
+        zoom: 7.6,
+        attributionControl: false,
+        interactive: false,
+        maxTileCacheSize: 200,
+      });
+      mapRef.current = m;
+
+      const addForest = () => {
+        if (!m.isStyleLoaded()) {
+          m.once("idle", addForest);
+          return;
+        }
+        addForestLayer(m);
+        setForestVisibility(m, true);
+      };
+      m.on("load", addForest);
+    };
+    void init();
 
     return () => {
-      m.remove();
+      cancelled = true;
+      mapRef.current?.remove();
       mapRef.current = null;
     };
   }, []);

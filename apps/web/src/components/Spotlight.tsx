@@ -195,8 +195,8 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
           }}
           aria-label="Поиск"
         >
-          <Dialog.Title className="sr-only" asChild>
-            <span>Поиск по видам и местам</span>
+          <Dialog.Title asChild>
+            <p className={styles.title}>Поиск по видам и местам</p>
           </Dialog.Title>
           <div className={styles.inputRow}>
             <Search size={16} className={styles.icon} aria-hidden />
@@ -270,6 +270,11 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
                     const flatIdx = species.length + i;
                     const isActive = flatIdx === activeIdx;
                     const href = `/map?lat=${p.lat.toFixed(5)}&lon=${p.lon.toFixed(5)}&z=11`;
+                    // Контекст справа от названия: «<район>, <регион>» или
+                    // только регион, если район неизвестен.
+                    const context = p.district_name
+                      ? `${p.district_name} р-н, ${p.region_name}`
+                      : p.region_name;
                     return (
                       <li key={p.id}>
                         <a
@@ -288,7 +293,10 @@ export function Spotlight({ open: controlled, onOpenChange }: SpotlightProps = {
                           <span className={styles.kind}>
                             {KIND_LABEL[p.kind] ?? p.kind}
                           </span>
-                          <span className={styles.name}>{p.name}</span>
+                          <span className={styles.placeBody}>
+                            <span className={styles.name}>{p.name}</span>
+                            <span className={styles.placeContext}>{context}</span>
+                          </span>
                           <span className={styles.coords}>
                             {p.lat.toFixed(2)}, {p.lon.toFixed(2)}
                           </span>

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
 
 import { useIsMobile } from "../lib/useIsMobile";
-import { Legend } from "./Legend";
 
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
 import { addUserSpotsLayer } from "./mapView/layers/userSpots";
@@ -96,7 +95,6 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
 
       <LayerGrid layout={mobile ? "strip" : "grid"} floating showFooter showBasemap mapRef={map} />
 
-      <Legend />
       <CursorReadout mapRef={map} />
       <ForestLoadingOverlay mapRef={map} />
       <MapOverlays />

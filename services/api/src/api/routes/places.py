@@ -71,6 +71,8 @@ def search_places(
                    ST_Y(g.point) AS lat,
                    ST_X(g.point) AS lon,
                    g.admin_area_id,
+                   a.name_ru        AS district_name,
+                   r.name_ru        AS region_name,
                    g.popularity,
                    CASE
                        WHEN g.name_ru ILIKE %s THEN 0.8
@@ -79,7 +81,8 @@ def search_places(
                        ELSE 0.5
                    END AS score
             FROM gazetteer_entry g
-            JOIN region r ON r.id = g.region_id
+            JOIN region     r ON r.id = g.region_id
+            LEFT JOIN admin_area a ON a.id = g.admin_area_id
             WHERE r.code = %s
               AND (
                    g.name_ru ILIKE %s
@@ -109,8 +112,10 @@ def search_places(
             "lat":                      float(r[3]),
             "lon":                      float(r[4]),
             "district_admin_area_id":   r[5],
-            "popularity":               r[6],
-            "score":                    float(r[7]),
+            "district_name":            r[6],
+            "region_name":              r[7],
+            "popularity":               r[8],
+            "score":                    float(r[9]),
         }
         for r in rows
     ]

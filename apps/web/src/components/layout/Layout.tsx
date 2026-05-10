@@ -2,6 +2,7 @@ import { Outlet, useLocation, Navigate } from "react-router-dom";
 import { Header } from "./Header";
 import { Footer } from "./Footer";
 import { Spotlight } from "../Spotlight";
+import { FeedbackButton } from "../FeedbackButton";
 import { isOnboarded } from "../../lib/onboardingStorage";
 import styles from "./Layout.module.css";
 
@@ -39,6 +40,9 @@ export function Layout() {
           <Outlet />
         </main>
         <Spotlight />
+        {/* Onboarding — собственный step-flow, без feedback'а.
+            Map shell — поднимаем над NavigationControl (bottom-right). */}
+        {!isOnboarding && <FeedbackButton placement="aboveMapNav" />}
       </div>
     );
   }
@@ -51,6 +55,7 @@ export function Layout() {
       </main>
       <Footer />
       <Spotlight />
+      <FeedbackButton />
     </div>
   );
 }
