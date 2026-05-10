@@ -29,6 +29,7 @@ import { CalendarPage } from "./routes/CalendarPage";
 import { OnboardingPage } from "./routes/OnboardingPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
+import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
 import { SpeciesListPage } from "./routes/SpeciesListPage";
 import { SpeciesDetailPage } from "./routes/SpeciesDetailPage";
 import { AuthPage } from "./routes/AuthPage";
@@ -105,9 +106,10 @@ export const router = createBrowserRouter([
       { path: "species",        element: <SpeciesListPage /> },
       { path: "species/:slug",  element: <SpeciesDetailPage /> },
       { path: "methodology",         element: <MethodologyPage /> },
-      // Статьи методологии скрыты — раздел переписывается. Все
-      // /methodology/:slug ведут на placeholder hub.
-      { path: "methodology/:slug",    element: <Navigate to="/methodology" replace /> },
+      // Phase W6 unlock — статьи методологии теперь рендерятся
+      // (как минимум /methodology/brand). MethodologyArticlePage сам
+      // покажет 404 если slug не найден.
+      { path: "methodology/:slug",   element: <MethodologyArticlePage /> },
       { path: "about",         element: <Navigate to="/methodology" replace /> },
       { path: "about-legacy",  element: <Navigate to="/methodology" replace /> },
 

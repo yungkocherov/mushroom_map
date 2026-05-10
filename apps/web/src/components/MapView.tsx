@@ -2,7 +2,6 @@ import { useCallback, useMemo, useRef } from "react";
 
 import { useIsMobile } from "../lib/useIsMobile";
 import { Legend } from "./Legend";
-import { SearchBar } from "./SearchBar";
 
 import { addPlaceLabelsLayer } from "./mapView/layers/places";
 import { addUserSpotsLayer } from "./mapView/layers/userSpots";
@@ -19,10 +18,7 @@ import { CursorReadout } from "./mapView/CursorReadout";
 import { SpeciesFilterBadge } from "./mapView/SpeciesFilterBadge";
 import { ForestLoadingOverlay } from "./mapView/ForestLoadingOverlay";
 
-import {
-  useLayerVisibility,
-  type BaseMapMode,
-} from "../store/useLayerVisibility";
+import { type BaseMapMode } from "../store/useLayerVisibility";
 import type { UserSpot } from "@mushroom-map/types";
 
 interface MapViewProps {
@@ -39,7 +35,9 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   userSpotsRef.current = userSpots;
 
   // ─── Store subscriptions ──────────────────────────────────────────
-  const setSpeciesFilter = useLayerVisibility((s) => s.setSpeciesFilter);
+  // SearchBar removed in Phase W4 — поиск теперь живёт в MapTopBar
+  // через Spotlight (⌘K). setSpeciesFilter из URL-парам ?species=
+  // продолжает работать через MapHomePage.
 
   const initialView = useMemo(() => parseInitialView(), []);
   const { map, ready: mapReady } = useMapInstance(mapRef, initialView, (m) => {
@@ -77,17 +75,11 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   useUserSpotsSync(map, userSpots);
   useToastLifecycles();
 
-  const handleFlyTo = useCallback((lat: number, lon: number, zoom = 13) => {
-    map.current?.flyTo({ center: [lon, lat], zoom, speed: 1.5 });
-  }, []);
-
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <div ref={mapRef} className="map-root" />
 
       <LayerGrid layout={mobile ? "strip" : "grid"} floating showFooter showBasemap mapRef={map} />
-
-      <SearchBar onFlyTo={handleFlyTo} onSpeciesFilter={setSpeciesFilter} />
 
       <Legend />
       <CursorReadout mapRef={map} />

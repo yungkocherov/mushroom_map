@@ -17,7 +17,10 @@ import styles from "./Layout.module.css";
 export function Layout() {
   const { pathname } = useLocation();
   const isMap = pathname === "/map" || pathname.startsWith("/map/");
-  const isMapShell = isMap;
+  const isOnboarding = pathname === "/onboarding";
+  // Onboarding имеет свой top-bar (Wordmark + stepper) — глобальный
+  // Header дал бы двойной лого. Сворачиваем shell к bare main.
+  const isMapShell = isMap || isOnboarding;
 
   // First-visit redirect — только на `/`. Deep-link'и (например
   // `/species`) видим как есть. localStorage-флаг ставится после
