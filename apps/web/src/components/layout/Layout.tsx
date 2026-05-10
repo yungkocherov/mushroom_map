@@ -27,9 +27,11 @@ export function Layout() {
   }
 
   if (isMapShell) {
+    // Phase W4 (redesign-2026-05): на /map* Header не нужен — навигация
+    // переезжает в floating MapTopBar (Wordmark + search + user) внутри
+    // MapHomePage. Footer тоже скрыт — карта не должна скроллиться.
     return (
       <div className={styles.mapShell}>
-        <Header />
         <main className={styles.mapMain}>
           <Outlet />
         </main>

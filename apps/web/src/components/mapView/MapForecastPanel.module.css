@@ -1,0 +1,86 @@
+.panel {
+  position: absolute;
+  top: 84px;
+  right: 18px;
+  width: 304px;
+  max-height: calc(100vh - 110px);
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--cream);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  z-index: 10;
+  animation: geobiom-fadeup 0.6s 0.15s ease both;
+  font-family: var(--font-body);
+  color: var(--ink);
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+}
+
+.handAccent {
+  font-family: var(--font-hand);
+  font-size: 14px;
+  color: var(--chanterelle);
+}
+
+.location {
+  font-size: 13px;
+  color: var(--ink-dim);
+  margin-bottom: 10px;
+}
+
+.lead {
+  font-size: 12px;
+  color: var(--ink-dim);
+  line-height: 1.55;
+  margin: 14px 0 0 0;
+}
+
+.lead strong {
+  color: var(--forest);
+  font-weight: 600;
+}
+
+.scrubber {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  font-size: 11px;
+  color: var(--ink-dim);
+  font-family: var(--font-mono);
+}
+
+/* Mobile: переезжает в bottom-sheet-style карточку. */
+@media (max-width: 720px) {
+  .panel {
+    top: auto;
+    right: 10px;
+    bottom: 10px;
+    left: 10px;
+    width: auto;
+    max-height: 50vh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    padding: 16px;
+  }
+}

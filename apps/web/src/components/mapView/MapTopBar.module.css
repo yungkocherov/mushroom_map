@@ -1,0 +1,107 @@
+.bar {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  z-index: 10;
+  pointer-events: none;
+  animation: geobiom-fadeup 0.6s ease both;
+}
+
+.bar > * {
+  pointer-events: auto;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--cream);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  text-decoration: none;
+  color: inherit;
+}
+.brand:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus), var(--shadow-card);
+}
+
+.search {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 16px;
+  background: var(--cream);
+  border: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  font-family: var(--font-body);
+  text-align: left;
+}
+.search:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus), var(--shadow-card);
+}
+
+.searchIcon {
+  color: var(--ink-dim);
+  flex-shrink: 0;
+}
+
+.searchPlaceholder {
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.searchKbd {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  padding: 2px 6px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: var(--radius-xs);
+  flex-shrink: 0;
+}
+
+.user {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--cream);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .bar {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    gap: 8px;
+  }
+  .brand {
+    padding: 8px 10px;
+  }
+  .searchKbd {
+    display: none;
+  }
+  .searchPlaceholder {
+    font-size: var(--fs-xs);
+  }
+  .user {
+    padding: 6px 10px;
+    font-size: var(--fs-xs);
+  }
+}

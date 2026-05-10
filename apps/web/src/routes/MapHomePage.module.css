@@ -1,90 +1,34 @@
 /*
- * Map-as-home layout: sidebar слева, карта на оставшееся.
- * На широких экранах sidebar 380px фиксирован; ниже 768px sidebar
- * сворачивается в верхнюю секцию (мобильный stack), карта тянется на
- * всю оставшуюся высоту.
+ * Full-bleed карта-shell. Phase W4 (redesign-2026-05): grid Sidebar |
+ * MapPane заменён на одну area, поверх которой floating-карточки
+ * (MapTopBar, LayerGrid, MapForecastPanel). MapView сам занимает всё
+ * доступное пространство (см. .map-root в global.css).
  */
 
 .shell {
-  display: grid;
-  grid-template-columns: 420px 1fr;
+  position: relative;
   width: 100%;
   height: 100%;
+  overflow: hidden;
   background: var(--paper);
-  overflow: hidden;
 }
 
-.shellCollapsed {
-  grid-template-columns: 0 1fr;
-}
-
-.sidebarToggle {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  transform: translateY(-50%);
-  z-index: 600;
-  width: 22px;
-  height: 56px;
-  border: 1px solid var(--rule);
-  border-left: none;
-  background: var(--paper-rise);
-  color: var(--ink-dim);
-  font-size: 18px;
-  line-height: 1;
-  font-weight: 600;
-  cursor: pointer;
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  box-shadow: var(--shadow-1);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.sidebarToggle:hover {
-  background: var(--birch);
-  color: var(--ink);
-}
-.sidebarToggle:focus-visible {
-  outline: none;
-  box-shadow: var(--shadow-focus);
-}
-
-.sidebar {
-  /* SidebarOverview сам управляет своим padding'ом и скроллом —
-     мы только даём ему фиксированную область grid-cell. */
-  height: 100%;
-  overflow-y: auto;
-  border-right: 1px solid var(--rule);
-}
-
-.sidebarHidden {
-  display: none;
-}
-
-.mapPane {
-  position: relative;
-  height: 100%;
-  overflow: hidden;
-  /* Жёстко прибиваем к второй колонке: если sidebar схлопнут (display:none),
-     auto-placement иначе утащит mapPane в первую (0px) колонку и карта
-     схлопнется до нуля по ширине. */
-  grid-column: 2;
-}
-
+/* Контекст-чип появляется когда на карте `?species=...`. Поднимается
+   над MapTopBar чтобы не попадать под Wordmark/search. */
 .contextChip {
   position: absolute;
-  top: var(--space-3);
+  top: 88px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 500;
+  z-index: 11;
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
   padding: 6px 12px;
-  background: var(--paper-rise);
+  background: var(--cream);
   border: 1px solid var(--rule);
   border-radius: var(--radius-pill);
-  box-shadow: var(--shadow-2);
+  box-shadow: var(--shadow-card);
   font-family: var(--font-body);
   font-size: var(--fs-sm);
   color: var(--ink);
@@ -99,29 +43,10 @@
   font-weight: 500;
 }
 
-/* Mobile: sidebar collapses above the map. */
-@media (max-width: 768px) {
-  .shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr;
-  }
-  .shellCollapsed {
-    grid-template-columns: 1fr;
-    grid-template-rows: 0 1fr;
-  }
-
-  .sidebar {
-    height: auto;
-    max-height: 50vh;
-    border-right: none;
-    border-bottom: 1px solid var(--rule);
-  }
-
-  .mapPane {
-    min-height: 50vh;
-    /* На мобильном grid-template-rows: auto 1fr (или 0 1fr) — карта всегда
-       во второй строке. */
-    grid-column: 1;
-    grid-row: 2;
+@media (max-width: 720px) {
+  .contextChip {
+    top: 64px;
+    font-size: var(--fs-xs);
+    padding: 4px 10px;
   }
 }
