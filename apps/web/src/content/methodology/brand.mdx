@@ -1,0 +1,104 @@
+export const frontmatter = {
+  title: "Бренд и токены",
+  slug: "brand",
+  category: "О проекте",
+  reading_minutes: 4,
+  updated: "2026-05-10",
+  abstract: "Палитра, типографика, лого и принципы — единая основа дизайна Geobiom после редизайна 2026-05.",
+};
+
+import { Logo } from "../../components/Logo";
+import { Wordmark } from "../../components/Wordmark";
+import { TLDR, KeyFacts, Callout } from "../../components/mdx";
+
+# Бренд и токены
+
+<TLDR>
+**Geobiom — полевой гид по лесу Ленобласти.** Дизайн опирается на естественную палитру (мох, кора, лисичка), serif-шрифт Fraunces для заголовков и handwritten Caveat для тёплых акцентов. Лого H1 Hybrid — сосна, боровик и контурная линия — соединяет «лес» и «карту» в одном знаке.
+</TLDR>
+
+## Знак
+
+<div style={{ display: "flex", alignItems: "center", gap: "var(--space-6)", flexWrap: "wrap", padding: "var(--space-5) 0" }}>
+  <Logo size={120} ariaLabel="Geobiom logo (large)" />
+  <div style={{ display: "flex", alignItems: "center", gap: "var(--space-4)" }}>
+    <Logo size={16} />
+    <Logo size={24} />
+    <Logo size={32} />
+    <Logo size={56} />
+  </div>
+  <Wordmark size="lg" />
+</div>
+
+Знак собран из трёх примитивов:
+
+- **HPine** — схематичная сосна (ствол + три яруса треугольников).
+- **HBoletus** — маленький боровик (ножка + шляпка с теневым эхом контура).
+- **HContour** — две линии «топо-горизонта» под фигурами; та же графическая
+  идея, что в исходном направлении A («Cap & Contour»).
+
+Безопасная зона — четверть высоты знака. На цвете — только на тёмно-моховом
+(`var(--forest)`) или кремовом (`var(--cream)`).
+
+## Палитра
+
+<div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "var(--space-3)", marginTop: "var(--space-4)" }}>
+  {[
+    ["paper",       "#f4ede0", "фон бумаги"],
+    ["paper-rise",  "#ede4d2", "карты, панели"],
+    ["cream",       "#faf5e8", "модалки, floating"],
+    ["ink",         "#2a2620", "основной текст"],
+    ["ink-dim",     "#5b5346", "вторичный"],
+    ["forest",      "#3e4827", "primary · кнопки"],
+    ["moss",        "#5d6a3a", "аффинити, графики"],
+    ["chanterelle", "#b86a3a", "accent · лучшие места"],
+    ["bark",        "#7a5a3a", "осень, гумус"],
+  ].map(([name, hex, role]) => (
+    <div key={name} style={{ background: "var(--cream)", padding: "var(--space-3)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-1)" }}>
+      <div style={{ width: "100%", height: 56, background: hex, borderRadius: "var(--radius-sm)", boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.08)" }} />
+      <div style={{ marginTop: "var(--space-2)", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--ink)" }}>{name}</div>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--ink-dim)" }}>{hex}</div>
+      <div style={{ fontSize: 12, color: "var(--ink-dim)", fontStyle: "italic", marginTop: 2 }}>{role}</div>
+    </div>
+  ))}
+</div>
+
+<Callout title="Зачем смягчили палитру" tone="info">
+До 2026-05 акцент был ярко-янтарный (#d88c1e), а primary — холодно-зелёный
+(#2d5a3a). Новая палитра тише — лучше читается на длинных списках видов
+и на карте, где конкурирует с цветами топоосновы. Forecast-индекс 0..4
+по-прежнему семантический: «холодно-мимо» зелёный → «свежо» терракот.
+</Callout>
+
+## Типографика
+
+<KeyFacts facts={[
+  { label: "Fraunces (display)", value: "заголовки, hero — 36–88px, weight 500–600, letter-spacing -0.025em" },
+  { label: "Inter (body)",       value: "основной текст, контролы — 14–18px, line-height 1.55" },
+  { label: "IBM Plex Mono",      value: "координаты, метаданные, eyebrow — 10–13px, letter-spacing 0.14em" },
+  { label: "Caveat (hand)",      value: "рукописные акценты — «~ свежо», стрелки, заметки на map" },
+]} />
+
+Все шрифты подключены через `@fontsource(-variable)` с granular subset
+импортами (`cyrillic-400.css`, `cyrillic-500.css`, `latin-400.css`,
+`latin-500.css`) — без vietnamese / latin-ext, чтобы держать bundle-size
+компактным.
+
+## Принципы
+
+- **Field guide, не product showroom.** Карта = действие. Длинные тексты
+  живут в `/methodology` и `/species/...`, на map UI коротко.
+- **Один акцент на viewport.** Терракот (`var(--chanterelle)`)
+  применяется только в одном месте на странице — обычно на основном
+  CTA или на самой важной метрике.
+- **Анимации тёплые, не displaykit'овые.** Кубик-безье (0.2, 0.7, 0.2, 1),
+  длительность 0.35–0.6s. Для accessibility всё уважает
+  `prefers-reduced-motion: reduce`.
+- **Иконки 1.6 stroke.** Стандартный stroke-width у всех в-app SVG —
+  читаемо в 12px, не выглядит толсто в 32px.
+
+## Источники
+
+- Знак, палитра, шрифты — [docs/redesign-2026-05/plan.md](https://github.com/yungkocherov/mushroom_map/blob/main/docs/redesign-2026-05/plan.md).
+- Эталонные мокапы — `docs/redesign-2026-05/claude-design/` (D1 v2 direction).
+- Все цвета и типографика — `packages/tokens/src/{tokens.css,index.ts}`.
