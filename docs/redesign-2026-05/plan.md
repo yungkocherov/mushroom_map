@@ -1,7 +1,13 @@
 # Geobiom Redesign 2026-05 — план перехода
 
-**Статус:** spec, ожидает approval автора. После одобрения переходим в
-writing-plans (детальный implementation plan по фазам).
+**Статус 2026-05-10: SHIPPED.** Phase W0 → W6 + V + 3 polish-волны
+живут в production (geobiom.ru / app.geobiom.ru). Текущий exit-state
+зафиксирован в memory `project_redesign_2026_05.md` — там список
+commit'ов, архитектурные финалы, что не вошло (отложено), gotcha'и
+найденные в Phase V.
+
+Этот файл оставлен как исторический spec — проектные решения, decision
+log и token map по-прежнему действительны для будущих волн полировки.
 
 **Источник дизайна:** [docs/redesign-2026-05/claude-design/](claude-design/)
 — распакованный архив `Geobiom.zip` (claude-design сессия 2026-05-08).
