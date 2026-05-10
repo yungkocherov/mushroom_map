@@ -5,7 +5,8 @@
  * Future apps/mobile consumes the same values from index.ts.
  *
  * Positioning: field-guide / natural-history journal.
- * References: iNaturalist, Merlin/eBird, plantsoftheworldonline.org.
+ * Refresh 2026-05: Geobiom rebrand (D1 v2 — refined organic).
+ *   See docs/redesign-2026-05/plan.md §2 for token map.
  *
  * Light mode is the default. Dark mode activates via
  * `[data-theme="dark"]` on <html>, set by a pre-hydrate script
@@ -14,26 +15,28 @@
 
 :root {
   /* ─── Palette — surfaces & text ─────────────────────────────────── */
-  --paper:        #f5f1e6;  /* page background, warm ivory */
-  --paper-rise:   #fcf9f0;  /* cards, raised surfaces */
-  --ink:          #20241e;  /* body text, warm near-black */
-  --ink-dim:      #4f4e45;  /* captions, secondary text — AA 7.50:1 vs paper */
-  --ink-faint:    #5e5d52;  /* tertiary — AA 5.81:1 vs paper, 5.09:1 on birch */
-  --rule:         #d8d2c0;  /* hairlines, card borders */
+  --paper:        #f4ede0;  /* page background, warm sand (D1V.bg) */
+  --paper-rise:   #ede4d2;  /* cards, raised surfaces (D1V.paper) */
+  --cream:        #faf5e8;  /* modals, floating cards (D1V.cream) — new */
+  --ink:          #2a2620;  /* body text, warm near-black */
+  --ink-dim:      #5b5346;  /* captions, secondary text — AA on paper */
+  --ink-faint:    #8a8270;  /* tertiary, ≥18px or non-text accent */
+  --rule:         rgba(0, 0, 0, 0.08);  /* hairlines, card borders */
 
   /* ─── Palette — forest primary ──────────────────────────────────── */
-  --forest:       #2d5a3a;  /* primary accent, buttons, links */
-  --forest-deep:  #1a3a24;  /* hover state */
-  --moss:         #4d6b40;  /* edible badge — AA 5.38:1 paper / 6.07:1 white */
-  --birch:        #e8e2d1;  /* hover bg for cards on paper */
+  --forest:       #3e4827;  /* primary accent, buttons, links (D1V.mossDeep) */
+  --forest-deep:  #2a3019;  /* hover state */
+  --moss:         #5d6a3a;  /* edible badge, affinity bars (D1V.moss) */
+  --birch:        #e0d8c2;  /* hover bg for cards on paper */
 
   /* ─── Palette — chanterelle CTA (use sparingly — ONE per viewport) ─ */
-  --chanterelle:  #d88c1e;
-  --amber-deep:   #a86b0f;
+  --chanterelle:  #b86a3a;  /* accent — terracotta (D1V.terra) */
+  --amber-deep:   #9a5a30;  /* hover accent */
+  --bark:         #7a5a3a;  /* autumn accents, гумус (D1V.bark) — new */
 
   /* ─── Palette — status ──────────────────────────────────────────── */
   --danger:       #8b2a2a;  /* toxic species, safety */
-  --caution:      #855410;  /* conditional-edible — AA 5.71:1 paper / 6.44:1 white */
+  --caution:      #855410;  /* conditional-edible — AA on paper / on white */
 
   /* ─── Forecast index scale (0–5, 5 buckets) ─────────────────────── */
   /* Semantic, not viridis. Cool dark green = forest is here, mushrooms
@@ -43,19 +46,21 @@
   --idx-1:        #5e8050;  /* мимо */
   --idx-2:        #9bb47a;  /* слабо */
   --idx-3:        #bcc890;  /* можно ехать */
-  --idx-4:        #d88c1e;  /* хороший день — same hue as chanterelle */
+  --idx-4:        #b86a3a;  /* хороший день — same hue as chanterelle/terra */
 
   /* ─── A11y ──────────────────────────────────────────────────────── */
-  --focus-ring:   #d88c1e;
+  --focus-ring:   #b86a3a;
 
   /* ─── Typography ────────────────────────────────────────────────── */
   --font-display: "Fraunces Variable", "Fraunces", Georgia, "Times New Roman", serif;
   --font-body:    "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
-  --font-mono:    "JetBrains Mono", Menlo, Consolas, monospace;
+  --font-mono:    "IBM Plex Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  --font-hand:    "Caveat", "Fraunces Variable", "Fraunces", cursive;  /* new — handwritten accents */
 
-  /* Scale — 1.25 ratio, root 16px */
-  --fs-display:   2.625rem;   /* 42px — hero */
-  --fs-h1:        2rem;        /* 32px */
+  /* Scale — root 17px (см. global.css). Hero clamps for mobile. */
+  --fs-hero:      clamp(2.75rem, 5vw + 1rem, 5.5rem);  /* 44 → 88px */
+  --fs-display:   clamp(2rem, 3vw + 1rem, 4rem);       /* 32 → 64px */
+  --fs-h1:        2.25rem;     /* 36px */
   --fs-h2:        1.5rem;      /* 24px */
   --fs-h3:        1.25rem;     /* 20px */
   --fs-lg:        1.125rem;    /* 18px — lead paragraph */
@@ -83,49 +88,53 @@
   --radius-sm:    4px;
   --radius-md:    8px;
   --radius-lg:    12px;
+  --radius-xl:    16px;
   --radius-pill:  9999px;
 
   /* ─── Shadow ────────────────────────────────────────────────────── */
   --shadow-1:     0 1px 2px rgba(0, 0, 0, 0.04);
-  --shadow-2:     0 4px 16px rgba(0, 0, 0, 0.06);
-  --shadow-3:     0 12px 32px rgba(0, 0, 0, 0.10);
-  --shadow-focus: 0 0 0 3px rgba(216, 140, 30, 0.35);
+  --shadow-2:     0 4px 16px rgba(60, 50, 30, 0.10);
+  --shadow-3:     0 12px 32px rgba(60, 50, 30, 0.18);
+  --shadow-card:  0 6px 22px rgba(60, 50, 30, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --shadow-focus: 0 0 0 3px rgba(184, 106, 58, 0.35);
 }
 
-/* ─── Dark mode — bespoke palette, not an inverted light ──────────── */
+/* ─── Dark mode — bespoke palette, calibrated against new light ──── */
 [data-theme="dark"] {
-  --paper:        #171913;
-  --paper-rise:   #1f221b;
-  --ink:          #e4dfd0;
-  --ink-dim:      #b0ad99;  /* AA 7.99:1 vs paper-dark */
-  --ink-faint:    #969381;  /* AA 5.66:1 vs paper-dark */
-  --rule:         #2b2e23;
+  --paper:        #1a1812;
+  --paper-rise:   #232017;
+  --cream:        #2d2820;  /* dark-mode equivalent of cream surface */
+  --ink:          #ede4d2;  /* warm cream text */
+  --ink-dim:      #b6ad96;  /* AA on paper-dark */
+  --ink-faint:    #8a826f;  /* AA on paper-dark */
+  --rule:         rgba(255, 255, 255, 0.08);
 
-  --forest:       #72b07e;  /* lightened for WCAG AA on dark */
-  --forest-deep:  #8fc395;
+  --forest:       #8aa362;  /* lightened mossDeep for AA */
+  --forest-deep:  #a4ba80;  /* hover */
   --moss:         #9bb785;
-  --birch:        #2b2e23;
+  --birch:        #2d2820;
 
-  --chanterelle:  #f3a435;  /* lightened */
-  --amber-deep:   #e8941f;
+  --chanterelle:  #d88c5a;  /* lightened terra */
+  --amber-deep:   #e8a070;
+  --bark:         #b08868;
 
   --danger:       #d05252;
   --caution:      #dfa25c;
 
-  /* Forecast index — lightened greens for dark surfaces, chanterelle
-     for "good day" matches the dark `--chanterelle`. */
+  /* Forecast index — lightened greens, warm accent for "good day" */
   --idx-0:        #6b8a5e;
   --idx-1:        #7da068;
   --idx-2:        #a9c290;
   --idx-3:        #cdd8a3;
-  --idx-4:        #f3a435;
+  --idx-4:        #d88c5a;
 
-  --focus-ring:   #f3a435;
+  --focus-ring:   #d88c5a;
 
   --shadow-1:     0 1px 2px rgba(0, 0, 0, 0.35);
   --shadow-2:     0 4px 16px rgba(0, 0, 0, 0.45);
   --shadow-3:     0 12px 32px rgba(0, 0, 0, 0.55);
-  --shadow-focus: 0 0 0 3px rgba(243, 164, 53, 0.40);
+  --shadow-card:  0 6px 22px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --shadow-focus: 0 0 0 3px rgba(216, 140, 90, 0.40);
 }
 
 /* Honour OS-level preference when the user has not explicitly chosen.
@@ -133,20 +142,22 @@
    localStorage; if absent, we fall through to `prefers-color-scheme`. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper:        #171913;
-    --paper-rise:   #1f221b;
-    --ink:          #e4dfd0;
-    --ink-dim:      #b0ad99;
-    --ink-faint:    #969381;
-    --rule:         #2b2e23;
+    --paper:        #1a1812;
+    --paper-rise:   #232017;
+    --cream:        #2d2820;
+    --ink:          #ede4d2;
+    --ink-dim:      #b6ad96;
+    --ink-faint:    #8a826f;
+    --rule:         rgba(255, 255, 255, 0.08);
 
-    --forest:       #72b07e;
-    --forest-deep:  #8fc395;
+    --forest:       #8aa362;
+    --forest-deep:  #a4ba80;
     --moss:         #9bb785;
-    --birch:        #2b2e23;
+    --birch:        #2d2820;
 
-    --chanterelle:  #f3a435;
-    --amber-deep:   #e8941f;
+    --chanterelle:  #d88c5a;
+    --amber-deep:   #e8a070;
+    --bark:         #b08868;
 
     --danger:       #d05252;
     --caution:      #dfa25c;
@@ -155,13 +166,14 @@
     --idx-1:        #7da068;
     --idx-2:        #a9c290;
     --idx-3:        #cdd8a3;
-    --idx-4:        #f3a435;
+    --idx-4:        #d88c5a;
 
-    --focus-ring:   #f3a435;
+    --focus-ring:   #d88c5a;
 
     --shadow-1:     0 1px 2px rgba(0, 0, 0, 0.35);
     --shadow-2:     0 4px 16px rgba(0, 0, 0, 0.45);
     --shadow-3:     0 12px 32px rgba(0, 0, 0, 0.55);
-    --shadow-focus: 0 0 0 3px rgba(243, 164, 53, 0.40);
+    --shadow-card:  0 6px 22px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --shadow-focus: 0 0 0 3px rgba(216, 140, 90, 0.40);
   }
 }

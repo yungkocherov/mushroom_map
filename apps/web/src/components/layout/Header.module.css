@@ -7,10 +7,8 @@
 }
 
 .inner {
-  /* Раньше тут было max-width: 1280px + margin auto, и на мониторах >1280
-     бренд оказывался не у левого края экрана, а у левого края центрированного
-     блока. Юзер просил «бренд в самый угол слева, Войти в самый угол справа»
-     → растягиваем header на 100% viewport'а. */
+  /* Растягиваем header на 100% viewport'а: бренд в самый угол слева,
+     Войти в самый угол справа. */
   width: 100%;
   padding: var(--space-3) var(--space-5);
   display: flex;
@@ -19,7 +17,10 @@
   flex-wrap: wrap;
 }
 
-.spacer { flex: 1; }
+.spacer {
+  flex: 1;
+}
+
 .right {
   display: inline-flex;
   align-items: center;
@@ -29,7 +30,6 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
   text-decoration: none;
   color: inherit;
 }
@@ -39,58 +39,43 @@
   border-radius: var(--radius-sm);
 }
 
-.logo {
-  width: 64px;
-  height: 64px;
-  flex-shrink: 0;
-}
-
-.brandText {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-}
-.brandTitle {
-  font-family: var(--font-display);
-  font-size: var(--fs-lg);
-  font-weight: 600;
-  color: var(--ink);
-  letter-spacing: -0.01em;
-}
-.brandSub {
-  font-size: var(--fs-xs);
-  color: var(--ink-dim);
-  margin-top: 2px;
-}
-
 .nav {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 
+/* Стиль ссылок — underline-on-hover (`.link-underline` в animations.css)
+   вместо background-fill. На активной ссылке — постоянная underline + цвет. */
 .link {
   color: var(--ink-dim);
   text-decoration: none;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-sm);
+  padding: var(--space-2) 0;
   font-size: var(--fs-sm);
   font-weight: 500;
-  transition: background 0.15s, color 0.15s;
+  transition: color 0.15s;
 }
 .link:hover {
   color: var(--ink);
-  background: var(--birch);
 }
 .linkActive {
-  color: var(--forest-deep);
-  background: var(--birch);
+  color: var(--forest);
+}
+.linkActive::after {
+  right: 0 !important; /* link-underline persistent for active link */
+  background: var(--forest) !important;
 }
 
 @media (max-width: 720px) {
-  .inner { padding: var(--space-3) var(--space-4); gap: var(--space-3); }
-  .brandSub { display: none; }
-  .nav { gap: 0; }
-  .link { padding: var(--space-2); font-size: var(--fs-xs); }
+  .inner {
+    padding: var(--space-3) var(--space-4);
+    gap: var(--space-3);
+  }
+  .nav {
+    gap: var(--space-3);
+  }
+  .link {
+    font-size: var(--fs-xs);
+  }
 }

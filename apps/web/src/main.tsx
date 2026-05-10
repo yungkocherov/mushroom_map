@@ -7,8 +7,19 @@ import { AuthProvider } from "./auth/AuthProvider";
 import "@mushroom-map/tokens/tokens.css";
 import "@fontsource-variable/fraunces";
 import "@fontsource-variable/inter";
-import "@fontsource-variable/jetbrains-mono";
+// IBM Plex Mono — координаты, метаданные. Granular subset imports
+// держат bundle минимальным (без vietnamese/latin-ext которые не нужны).
+import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-mono/500.css";
+import "@fontsource/ibm-plex-mono/cyrillic-400.css";
+import "@fontsource/ibm-plex-mono/cyrillic-500.css";
+// Caveat — рукописные акценты. weights 400+500 + cyrillic+latin only.
+import "@fontsource/caveat/400.css";
+import "@fontsource/caveat/500.css";
+import "@fontsource/caveat/cyrillic-400.css";
+import "@fontsource/caveat/cyrillic-500.css";
 import "./styles/global.css";
+import "./styles/animations.css";
 
 // GlitchTip / Sentry init. Если DSN не задан в build-env — SDK no-op.
 // Это значит код можно деплоить до того как поднят GlitchTip; активация

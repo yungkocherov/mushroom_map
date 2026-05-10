@@ -11,8 +11,11 @@ import { palette, typography } from "./index";
 export { palette, typography };
 
 export const fontSize = {
+  // Mobile doesn't use clamp(); pick sensible numeric values.
+  // Hero is rare on mobile — typically used on Landing, capped at 56dp.
+  hero: 56,
   display: 42,
-  h1: 32,
+  h1: 36,
   h2: 24,
   h3: 20,
   lg: 18,
@@ -44,5 +47,6 @@ export const radius = {
   sm: 4,
   md: 8,
   lg: 12,
+  xl: 16,
   pill: 9999,
 } as const;

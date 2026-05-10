@@ -1,0 +1,124 @@
+/*
+ * Animation keyframes & interactive utility classes.
+ * Source: docs/redesign-2026-05/claude-design/src/d1v2.jsx:26-46
+ *
+ * Keyframes prefixed with `geobiom-` to avoid namespace collisions with
+ * any third-party animation lib. Used by Logo (breathe), PulsePin
+ * (pulse), Landing/Onboarding entrance animations, IndexMeter (grow-x),
+ * etc.
+ *
+ * `prefers-reduced-motion: reduce` neutralises all animations and
+ * transitions to ~0 (mandated by plan §6 risks).
+ */
+
+/* ─── Keyframes ──────────────────────────────────────────────────── */
+
+@keyframes geobiom-pulse {
+  0%   { transform: scale(0.9); opacity: 0.55; }
+  80%  { opacity: 0; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+@keyframes geobiom-breathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.045); }
+}
+
+@keyframes geobiom-fadeup {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes geobiom-fadein {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes geobiom-grow-x {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes geobiom-myco {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes geobiom-spore {
+  0%   { transform: translate(0, 0) scale(1); opacity: 0; }
+  15%  { opacity: 1; }
+  100% { transform: translate(36px, -54px) scale(0.6); opacity: 0; }
+}
+
+@keyframes geobiom-drift {
+  0%, 100% { transform: translate(0, 0); }
+  50%      { transform: translate(6px, -4px); }
+}
+
+@keyframes geobiom-tick {
+  0%   { stroke-dashoffset: 120; }
+  100% { stroke-dashoffset: 0; }
+}
+
+@keyframes geobiom-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ─── Interactive utility classes ────────────────────────────────── */
+
+.card-interactive {
+  transition:
+    transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1),
+    box-shadow 0.35s;
+}
+
+.card-interactive:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 14px 40px rgba(60, 50, 30, 0.18),
+    0 0 0 1px rgba(0, 0, 0, 0.06);
+}
+
+.btn-interactive {
+  transition:
+    transform 0.2s,
+    box-shadow 0.25s,
+    background 0.2s;
+}
+
+.btn-interactive:hover {
+  transform: translateY(-1px);
+}
+
+.link-underline {
+  position: relative;
+}
+
+.link-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 100%;
+  bottom: -3px;
+  height: 1px;
+  background: currentColor;
+  transition: right 0.25s ease;
+}
+
+.link-underline:hover::after,
+.link-underline:focus-visible::after {
+  right: 0;
+}
+
+/* ─── Reduced-motion fallback ────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
