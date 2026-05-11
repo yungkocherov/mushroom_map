@@ -80,7 +80,7 @@ def overview() -> dict:
                 (SELECT COALESCE(SUM(area_m2), 0) / 1e6
                    FROM forest_polygon
                    WHERE area_m2 IS NOT NULL)                                        AS forest_area_km2,
-                (SELECT MAX(updated_at) FROM forest_polygon)                         AS forest_last_updated,
+                (SELECT MAX(ingested_at) FROM forest_polygon)                        AS forest_last_updated,
                 (SELECT MAX(fetched_at) FROM vk_post)                                AS last_vk_refresh,
                 (SELECT photo_prompt_version FROM vk_post
                    WHERE photo_prompt_version IS NOT NULL
