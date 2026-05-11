@@ -41,6 +41,24 @@ from api.settings import settings
 
 log = logging.getLogger("api.feedback")
 
+# V4.10: monkey-patch `socket.getaddrinfo` один раз на module-load
+# (вместо per-worker patch с try/finally — там был race при concurrent
+# фидбэках). Фильтр **только для api.telegram.org**: остальные resolve'ы
+# (Sentry, Yandex OAuth, и т.д.) идут через native dual-stack.
+# Docker bridge на TimeWeb не маршрутизирует IPv6 → AAAA-резолв падал.
+_orig_getaddrinfo = socket.getaddrinfo
+
+
+def _ipv4_only_for_telegram(host, *args, **kwargs):
+    results = _orig_getaddrinfo(host, *args, **kwargs)
+    if host and "telegram.org" in str(host).lower():
+        v4_only = [r for r in results if r[0] == socket.AF_INET]
+        return v4_only or results
+    return results
+
+
+socket.getaddrinfo = _ipv4_only_for_telegram  # type: ignore[assignment]
+
 router = APIRouter()
 
 
@@ -81,72 +99,56 @@ def _notify_telegram_async(
     if not (settings.tg_bot_token and settings.tg_chat_id):
         return  # TG не настроен — silent skip
 
+    text = (
+        f"geobiom feedback #{feedback_id}\n"
+        f"\n"
+        f"{message}\n"
+        f"\n"
+        f"---\n"
+        f"Контакт:  {contact or '-'}\n"
+        f"Страница: {page_url or '-'}\n"
+        f"UA:       {(user_agent or '-')[:120]}\n"
+        f"User:     {user_id or 'anon'}"
+    )
+
     def worker() -> None:
-        # Force IPv4-only DNS resolution. Docker bridge на TimeWeb не
-        # маршрутизирует IPv6; api.telegram.org резолвится в AF_INET +
-        # AF_INET6 одновременно. Раньше пробовали `local_address=0.0.0.0`
-        # — но это даёт «Address family not supported» random'но, когда
-        # httpx выбирал AAAA-адрес а bind был IPv4. Чище — отфильтровать
-        # AF_INET6 на уровне getaddrinfo. Patch локальный (на время
-        # worker'а), не глобальный.
-        orig_getaddrinfo = socket.getaddrinfo
-
-        def ipv4_only(*a, **kw):
-            return [r for r in orig_getaddrinfo(*a, **kw) if r[0] == socket.AF_INET]
-
-        socket.getaddrinfo = ipv4_only  # type: ignore[assignment]
-        text = (
-            f"geobiom feedback #{feedback_id}\n"
-            f"\n"
-            f"{message}\n"
-            f"\n"
-            f"---\n"
-            f"Контакт:  {contact or '-'}\n"
-            f"Страница: {page_url or '-'}\n"
-            f"UA:       {(user_agent or '-')[:120]}\n"
-            f"User:     {user_id or 'anon'}"
-        )
-        # V4.5: retry x3 c expontntial backoff. Юзер пожаловался что
-        # часть фидбэков пропадает; TG api.telegram.org иногда timeout'ит
-        # или rate-limit'ит (хотя у нас ~5/час). Тихий fail = потерянный
-        # фидбек. Три попытки покрывают transient'ы.
+        # V4.10: monkey-patch теперь на module-level (см. выше), worker
+        # просто использует httpx без обёрток. Убрали try/finally restore
+        # — он создавал race при двух concurrent фидбэках одновременно.
         last_err: Exception | None = None
-        try:
-            for attempt in range(3):
-                try:
-                    r = httpx.post(
-                        f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage",
-                        json={
-                            "chat_id": settings.tg_chat_id,
-                            "text": text,
-                            "disable_web_page_preview": True,
-                        },
-                        timeout=15,
-                    )
-                    r.raise_for_status()
-                    # log.warning (не info) — uvicorn default level=WARNING.
-                    log.warning(
-                        "feedback #%s posted to telegram (attempt %d)",
-                        feedback_id, attempt + 1,
-                    )
-                    return
-                except Exception as exc:  # noqa: BLE001
-                    last_err = exc
-                    if attempt < 2:
-                        # 1s → 3s → (no more retries)
-                        time.sleep(1 + 2 * attempt)
-            log.exception(
-                "feedback #%s telegram-send failed after 3 attempts: %r",
-                feedback_id, last_err,
-            )
-        finally:
-            socket.getaddrinfo = orig_getaddrinfo  # type: ignore[assignment]
+        for attempt in range(3):
+            try:
+                r = httpx.post(
+                    f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage",
+                    json={
+                        "chat_id": settings.tg_chat_id,
+                        "text": text,
+                        "disable_web_page_preview": True,
+                    },
+                    timeout=15,
+                )
+                r.raise_for_status()
+                log.warning(
+                    "feedback #%s posted to telegram (attempt %d)",
+                    feedback_id, attempt + 1,
+                )
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_err = exc
+                if attempt < 2:
+                    time.sleep(1 + 2 * attempt)  # 1s → 3s
+        log.exception(
+            "feedback #%s telegram-send failed after 3 attempts: %r",
+            feedback_id, last_err,
+        )
 
     threading.Thread(target=worker, daemon=True).start()
 
 
 @router.post("", status_code=status.HTTP_201_CREATED)
-@limiter.limit("5/hour")
+@limiter.limit("50/hour")  # V4.10: было 5/hour — слишком строго для
+                            # ручного тестирования автором. 50/hour
+                            # покрывает живых юзеров + автор-тесты.
 def submit_feedback(payload: FeedbackPayload, request: Request) -> dict:
     user_id = _maybe_user_id(request)
     user_agent = request.headers.get("user-agent", "")[:500] or None
