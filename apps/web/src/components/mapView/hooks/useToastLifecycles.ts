@@ -1,10 +1,6 @@
 /**
  * useToastLifecycles — управляет жизненным циклом fading-тостов:
  * - forestHint: показывается при первом успешном loaded.forest=true, 4с visible + 0.8с fade
- *
- * V4.3: vpnToast удалён — юзер пожаловался что мешает (см. feedback
- * 2026-05-11). Spotlight Spотник работает и так через TimeWeb даже с
- * VPN; предупреждение больше не нужно.
  */
 import { useEffect, useRef } from "react";
 import { useLayerVisibility } from "../../../store/useLayerVisibility";
