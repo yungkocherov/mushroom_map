@@ -19,7 +19,9 @@ Forest endpoints.
 2026-04-25 — две лишние SQL-операции на каждый клик карты.
 """
 
-from fastapi import APIRouter, Query
+import time
+
+from fastapi import APIRouter, Query, Response
 
 from api.db import get_conn
 
@@ -63,12 +65,30 @@ _BONITET_LABELS: dict[int, str] = {
 }
 
 
+# In-memory cache: forest_polygon обновляется раз в месяц (на ingest),
+# distribution-агрегаты можно держать 1 час без потери актуальности.
+# Process-local — каждый uvicorn worker строит свой; ок при 2 worker'ах.
+_LEGEND_CACHE: tuple[float, dict] | None = None
+_LEGEND_TTL_SECONDS = 3600  # 1 час
+
+
 @router.get("/legend")
-def forest_legend() -> dict:
+def forest_legend(response: Response) -> dict:
     """Распределение forest_polygon'ов по dominant_species / bonitet /
     age_group. Возвращает только значения, у которых есть хотя бы один
     полигон (NULL = «Неизвестно» как отдельная строка для species,
-    скрывается для bonitet/age как стандарт легенды)."""
+    скрывается для bonitet/age как стандарт легенды).
+
+    Кэшируется: in-memory (1h TTL) на стороне процесса + `Cache-Control:
+    max-age=3600` на стороне браузера. Первый запрос ~1-2 сек (full
+    table scan 2.17M полигонов), последующие — < 5ms. Forest data
+    обновляется месяцами — час stale'ности приемлем."""
+    global _LEGEND_CACHE
+    now = time.time()
+    if _LEGEND_CACHE and now - _LEGEND_CACHE[0] < _LEGEND_TTL_SECONDS:
+        response.headers["Cache-Control"] = f"public, max-age={_LEGEND_TTL_SECONDS}"
+        return _LEGEND_CACHE[1]
+
     with get_conn() as conn:
         species_rows = conn.execute(
             """
@@ -109,7 +129,7 @@ def forest_legend() -> dict:
             """
         ).fetchall()
 
-    return {
+    result = {
         "species": [
             {
                 "slug":  r[0],
@@ -137,6 +157,9 @@ def forest_legend() -> dict:
             for r in age_rows
         ],
     }
+    _LEGEND_CACHE = (now, result)
+    response.headers["Cache-Control"] = f"public, max-age={_LEGEND_TTL_SECONDS}"
+    return result
 
 
 @router.get("/at")

@@ -24,6 +24,12 @@
   box-shadow: var(--shadow-card);
   text-decoration: none;
   color: inherit;
+  /* V4.4: ширина = LayerGrid floating (286px) чтобы brand-блок ровно
+     стоял над панелью подложки. Без этого InlineSearch съезжал в
+     центр после рефакта V4.3, оставляя пустоту слева. */
+  width: 286px;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 .brand:focus-visible {
   outline: none;
@@ -80,6 +86,9 @@
   }
   .brand {
     padding: 8px 10px;
+    /* На мобайле панель подложки full-width внутри map'ы, brand
+       можно не растягивать — auto-width для компактного header'а. */
+    width: auto;
   }
   .spots {
     padding: 8px 10px;

@@ -9,12 +9,27 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import { createSpot } from "@mushroom-map/api-client";
+import { createSpot, fetchForestLegend } from "@mushroom-map/api-client";
 import type { SpotRating } from "@mushroom-map/types";
 import { useAuth } from "../auth/useAuth";
 import { RATING_OPTIONS } from "../lib/spotRating";
 import { TREE_TAGS, MUSHROOM_TAGS, BERRY_TAGS, type SpotTag } from "../lib/spotTags";
+import { FOREST_COLORS, type ForestSlug } from "../lib/forestStyle";
 import { track } from "../lib/track";
+
+// Module-level cache forest/legend (тот же что в Legend.tsx). Один
+// fetch на сессию вместо отдельных запросов из обоих компонентов.
+let _legendSpeciesCache: Set<string> | null = null;
+async function getAvailableTreeSlugs(): Promise<Set<string>> {
+  if (_legendSpeciesCache) return _legendSpeciesCache;
+  try {
+    const d = await fetchForestLegend();
+    _legendSpeciesCache = new Set(d.species.map((s) => s.slug));
+    return _legendSpeciesCache;
+  } catch {
+    return new Set(); // fallback на пустой → покажем все TREE_TAGS
+  }
+}
 
 
 interface Props {
@@ -38,6 +53,28 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
   // включаем валидационную подсветку. Раньше кнопка была silently
   // disabled, юзер кликал без эффекта и не понимал почему.
   const [showErrors, setShowErrors] = useState(false);
+  // V4.4: фильтруем TREE_TAGS по тому, что реально есть в forest
+  // distribution (= по тем же slug'ам что в легенде). При первом
+  // mount'е модалки делаем fetch /api/forest/legend; пока pending —
+  // показываем full TREE_TAGS. Это синхронизация с тем что юзер видит
+  // в Legend.
+  const [availableTrees, setAvailableTrees] = useState<Set<string> | null>(
+    _legendSpeciesCache,
+  );
+  useEffect(() => {
+    if (availableTrees) return;
+    let cancelled = false;
+    void getAvailableTreeSlugs().then((set) => {
+      if (!cancelled && set.size > 0) setAvailableTrees(set);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [availableTrees]);
+
+  const filteredTreeTags = availableTrees
+    ? TREE_TAGS.filter((t) => availableTrees.has(t.slug))
+    : TREE_TAGS;
 
   const toggleTag = (slug: string) => {
     setTags((cur) =>
@@ -241,7 +278,7 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
               </div>
             </fieldset>
 
-            <TagBlock title="Деревья" options={TREE_TAGS} selected={tags} onToggle={toggleTag} />
+            <TagBlock title="Деревья" options={filteredTreeTags} selected={tags} onToggle={toggleTag} colorBySlug />
             <TagBlock title="Грибы"   options={MUSHROOM_TAGS} selected={tags} onToggle={toggleTag} />
             <TagBlock title="Ягоды"   options={BERRY_TAGS} selected={tags} onToggle={toggleTag} />
 
@@ -276,11 +313,16 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
 
 
 // Tag-picker блок: чипы с checkbox-семантикой. Multi-select без verbose UI.
-function TagBlock({ title, options, selected, onToggle }: {
+//
+// `colorBySlug` (V4.4) — если true, цвет активного чипа берётся из
+// `FOREST_COLORS[slug]` (та же палитра что в Legend / forest-fill).
+// Деревьям делаем визуально согласованно с легендой.
+function TagBlock({ title, options, selected, onToggle, colorBySlug = false }: {
   title: string;
   options: SpotTag[];
   selected: string[];
   onToggle: (slug: string) => void;
+  colorBySlug?: boolean;
 }) {
   return (
     <fieldset style={fieldsetStyle}>
@@ -288,6 +330,9 @@ function TagBlock({ title, options, selected, onToggle }: {
       <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
         {options.map((t) => {
           const on = selected.includes(t.slug);
+          const activeColor = colorBySlug
+            ? FOREST_COLORS[t.slug as ForestSlug] ?? "var(--forest)"
+            : "var(--forest)";
           return (
             <button
               key={t.slug}
@@ -297,8 +342,8 @@ function TagBlock({ title, options, selected, onToggle }: {
               onClick={() => onToggle(t.slug)}
               style={{
                 padding: "4px 10px",
-                border: `1px solid ${on ? "var(--forest)" : "var(--rule)"}`,
-                background: on ? "var(--forest)" : "var(--paper)",
+                border: `1px solid ${on ? activeColor : "var(--rule)"}`,
+                background: on ? activeColor : "var(--paper)",
                 color: on ? "#fff" : "var(--ink)",
                 borderRadius: 999,
                 fontSize: "var(--fs-sm)",

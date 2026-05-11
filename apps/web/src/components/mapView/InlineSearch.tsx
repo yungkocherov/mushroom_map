@@ -175,7 +175,7 @@ export function InlineSearch() {
 
   return (
     <div className={styles.wrap} ref={wrapRef}>
-      <div className={`${styles.bar} card-interactive`}>
+      <div className={styles.bar}>
         <Search size={16} className={styles.icon} aria-hidden />
         <input
           ref={inputRef}
