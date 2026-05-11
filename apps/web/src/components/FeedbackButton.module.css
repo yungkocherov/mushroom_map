@@ -64,8 +64,9 @@
   width: min(94vw, 480px);
   max-height: 90vh;
   overflow-y: auto;
-  background: var(--paper-rise);
-  border: 1px solid var(--rule);
+  /* V4.6: cream — синхрон со всеми floating-cards. */
+  background: var(--cream);
+  border: 0;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-3);
   z-index: 1001;

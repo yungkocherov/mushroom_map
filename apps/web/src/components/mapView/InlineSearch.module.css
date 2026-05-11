@@ -69,10 +69,14 @@
   width: min(100%, 600px);
   max-height: 60vh;
   overflow-y: auto;
-  background: var(--paper-rise);
-  border: 1px solid var(--rule);
+  /* V4.6: cream вместо paper-rise — все floating-cards (LayerGrid,
+     MapTopBar, ForecastPanel, popup, SaveSpot, Feedback) используют
+     cream. Раньше dropdown был заметно темнее на скриншоте — выделялся
+     как несогласованный элемент. */
+  background: var(--cream);
+  border: 0;
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-3);
+  box-shadow: var(--shadow-card);
   z-index: 20;
   padding: var(--space-3) 0;
   font-family: var(--font-body);
@@ -136,7 +140,9 @@
 .row:hover,
 .row:focus-visible,
 .rowActive {
-  background: var(--birch);
+  /* Highlight на cream-фоне — paper-rise даёт чуть тёмное хорошо
+     различимое выделение строки. */
+  background: var(--paper-rise);
   outline: none;
 }
 

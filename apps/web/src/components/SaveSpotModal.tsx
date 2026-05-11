@@ -150,10 +150,12 @@ export function SaveSpotModal({ lat, lon, onClose, onSaved }: Props) {
     >
       <div
         style={{
-          background:    "var(--paper-rise)",
+          // V4.6: cream вместо paper-rise — синхрон с InlineSearch
+          // dropdown / Spotlight / FeedbackModal / popup'ом карты.
+          background:    "var(--cream)",
           color:         "var(--ink)",
-          border:        "1px solid var(--rule)",
-          borderRadius:  10,
+          border:        0,
+          borderRadius:  "var(--radius-lg)",
           padding:       "var(--space-5)",
           width:         "min(420px, 100%)",
           maxHeight:     "90vh",
