@@ -63,10 +63,10 @@
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  /* V4.5: bar занимает всю width между brand'ом и spots-chip. Dropdown
-     не должен растягиваться — ограничиваем 600px чтобы не перекрывать
-     forecast-panel справа. */
-  width: min(100%, 600px);
+  /* V4.7: dropdown ровно по ширине input bar'а. Раньше был min(100%, 600px)
+     — выглядел оторванным от поиска. Теперь визуально привязан: при
+     resize окна или уменьшении bar'а dropdown сжимается вместе. */
+  width: 100%;
   max-height: 60vh;
   overflow-y: auto;
   /* V4.6: cream вместо paper-rise — все floating-cards (LayerGrid,

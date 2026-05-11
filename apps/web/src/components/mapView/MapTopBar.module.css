@@ -75,6 +75,15 @@
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-card);
   font-size: 13px;
+  /* V4.7: ширина = MapForecastPanel (304px). Юзер хотел чтобы правая
+     колонка хедера ровно стояла над forecast-card под ней. */
+  width: 304px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  /* HeaderAuth внутри — flex-row {avatar, name, logout-link}. На фикс.
+     ширине нужен justify-content чтобы контент распределился, иначе
+     остаётся пустое место справа. */
+  justify-content: space-between;
 }
 
 @media (max-width: 720px) {
@@ -99,5 +108,8 @@
   .user {
     padding: 6px 10px;
     font-size: var(--fs-xs);
+    /* На мобайле forecast-panel занимает всю ширину снизу — user-chip
+       тоже отвязываем от 304px, auto. */
+    width: auto;
   }
 }
