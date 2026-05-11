@@ -73,15 +73,27 @@ jobs:
           TARGET:          "/srv/web/"
           ARGS: "-rlgoDz --delete --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
 
-      # V4.5: Oracle foreign-IP replica. Включается флагом
-      # ORACLE_DEPLOY_ENABLED=true в GH vars. Без него — skip.
-      - name: Rsync dist to Oracle VM
+      # V4.5+ (V4.6): Oracle foreign-IP replica. Через ssh+tar вместо
+      # rsync — на Oracle ubuntu user'е ssh-deploy action упорно падает
+      # с «protocol version mismatch» (rsync дереву из чего-то в ssh-
+      # session-handshake'е). Tar-stream через stdin pipe в `ssh tar
+      # -xzf` работает predictable. Один shot, без incremental.
+      - name: Tar-stream dist to Oracle VM
         if: ${{ vars.ORACLE_DEPLOY_ENABLED == 'true' }}
-        uses: easingthemes/ssh-deploy@2cc5b27bf3029d0455dd5e09fe02633904031447  # v6.0.3
-        with:
-          SSH_PRIVATE_KEY: ${{ secrets.ORACLE_SSH_KEY || secrets.PROD_SSH_KEY }}
-          REMOTE_HOST:     ${{ vars.ORACLE_HOST }}
-          REMOTE_USER:     ${{ secrets.ORACLE_SSH_USER || secrets.PROD_SSH_USER }}
-          SOURCE:          "apps/web/dist/"
-          TARGET:          "/srv/web/"
-          ARGS: "-rlgoDz --delete --chmod=Du=rwx,Dgo=rx,Fu=rw,Fgo=r"
+        env:
+          ORACLE_HOST: ${{ vars.ORACLE_HOST }}
+          ORACLE_USER: ${{ secrets.ORACLE_SSH_USER || secrets.PROD_SSH_USER }}
+          ORACLE_KEY:  ${{ secrets.ORACLE_SSH_KEY || secrets.PROD_SSH_KEY }}
+        run: |
+          set -e
+          mkdir -p ~/.ssh
+          echo "$ORACLE_KEY" > ~/.ssh/oracle_deploy
+          chmod 600 ~/.ssh/oracle_deploy
+          # tar -czf -  → ssh tar -xzf -  с очисткой каталога.
+          # --strip-components не нужен: tar -C apps/web/dist + tar -C /srv/web
+          # сохраняет относительные пути from-dist (assets/, index.html, ...).
+          tar -C apps/web/dist -czf - . | \
+            ssh -i ~/.ssh/oracle_deploy \
+                -o StrictHostKeyChecking=no \
+                "$ORACLE_USER@$ORACLE_HOST" \
+                "rm -rf /srv/web/* && tar -C /srv/web -xzf -"
