@@ -1,26 +1,28 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
+import { fetchStatsOverview } from "@mushroom-map/api-client";
+import type { StatsOverview } from "@mushroom-map/types";
 import { IndexMeter } from "../components/IndexMeter";
 import { LandingMapCameo } from "../components/LandingMapCameo";
 import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./LandingPage.module.css";
 
 /**
- * Landing — `/`. Phase W3 full port of D1VLanding.
- * Source: docs/redesign-2026-05/claude-design/src/d1v2.jsx:263-350
+ * Landing — `/`. Hero «Лес, как атлас» (italic terra accent + mycelium
+ * underline), 3 live-stat счётчика, 2 CTA, decorative contour wash,
+ * map cameo (static PNG из /landing-cameo.png) с IndexMeter overlay.
  *
- * Hero «Лес, как атлас.» (с italic terra accent + mycelium underline),
- * 4 animated stat counters, 2 CTA, decorative contour wash background,
- * map cameo card с PulsePin маркерами + IndexMeter «Всеволожский ·
- * завтра».
+ * V4.8: точка из headline убрана, статистика тянется из
+ * `/api/stats/overview` вместо хардкода. Badge «сезон / обновлено N
+ * дней назад» — динамически из forest_last_updated.
  */
 
-const STATS: ReadonlyArray<readonly [number, string]> = [
-  [18,    "районов ЛО"],
-  [25,    "видов"],
-  [72_000, "выделов леса"],
-  [11,    "лет наблюдений"],
-];
+interface StatRow {
+  value: number;
+  label: string;
+  /** Suffix к value — «км²», «лет», и т.п. Optional. */
+  suffix?: string;
+}
 
 function formatStat(n: number): string {
   if (n >= 1000) return `${Math.floor(n / 1000)}k`;
@@ -44,35 +46,81 @@ function useCountUp(target: number, duration = 1100): number {
   return n;
 }
 
-function StatBlock({ value, label }: { value: number; label: string }) {
+function StatBlock({ value, label, suffix }: StatRow) {
   const animated = useCountUp(value);
   return (
     <div className={styles.stat}>
-      <div className={styles.statValue}>{formatStat(animated)}</div>
+      <div className={styles.statValue}>
+        {formatStat(animated)}
+        {suffix && <span className={styles.statSuffix}>{suffix}</span>}
+      </div>
       <div className={styles.statLabel}>{label}</div>
     </div>
   );
+}
+
+/** «N дней назад» / «вчера» / «сегодня». */
+function relativeUpdatedRu(iso: string | null): string {
+  if (!iso) return "обновлено недавно";
+  const then = new Date(iso).getTime();
+  const now = Date.now();
+  const days = Math.floor((now - then) / (24 * 3600 * 1000));
+  if (days <= 0) return "обновлено сегодня";
+  if (days === 1) return "обновлено вчера";
+  if (days < 5) return `обновлено ${days} дня назад`;
+  if (days < 31) return `обновлено ${days} дней назад`;
+  const months = Math.floor(days / 30);
+  if (months === 1) return "обновлено месяц назад";
+  if (months < 5) return `обновлено ${months} месяца назад`;
+  if (months < 12) return `обновлено ${months} месяцев назад`;
+  return `обновлено больше года назад`;
 }
 
 export function LandingPage() {
   usePageTitle("Geobiom — лес ленобласти");
   const navigate = useNavigate();
 
+  const [stats, setStats] = useState<StatsOverview | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchStatsOverview()
+      .then((d) => !cancelled && setStats(d))
+      .catch(() => {}); // fallback на хардкод-значения ниже
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const year = new Date().getFullYear();
+  const updatedLabel = relativeUpdatedRu(stats?.forest_last_updated ?? null);
+
+  const STATS: StatRow[] = [
+    {
+      value: stats?.district_count ?? 18,
+      label: "районов ЛО",
+    },
+    {
+      value: stats?.forest_polygon_count ?? 72_000,
+      label: "выделов леса",
+    },
+    {
+      value: Math.round(stats?.forest_area_km2 ?? 0),
+      label: "км² покрытия",
+    },
+  ];
+
   return (
     <div className={styles.root}>
-      {/* Decorative contour wash — `pointer-events:none` чтобы не блочить
-          интеракции под собой. */}
       <ContourWash />
 
       <div className={styles.heroGrid}>
-        {/* Left column: badge + headline + paragraph + CTA + stats */}
         <div className={styles.heroLeft}>
           <span className={styles.badge}>
             <span className={styles.badgePulse}>
               <span className={styles.badgePulseRing} />
               <span className={styles.badgeDot} />
             </span>
-            сезон 2026 · открытые данные · обновлено сейчас
+            сезон {year} · открытые данные · {updatedLabel}
           </span>
 
           <h1 className={styles.headline}>
@@ -99,7 +147,6 @@ export function LandingPage() {
                 />
               </svg>
             </span>
-            .
           </h1>
 
           <p className={styles.lead}>
@@ -108,26 +155,24 @@ export function LandingPage() {
           </p>
 
           <div className={styles.ctaRow}>
-            <Link to="/map" className={`${styles.btn} ${styles.btnPrimary} btn-interactive`}>
+            <Link to="/map" className={`${styles.btn} ${styles.btnPrimary}`}>
               Открыть карту
             </Link>
             <Link
               to="/methodology"
-              className={`${styles.btn} ${styles.btnGhost} btn-interactive`}
+              className={`${styles.btn} ${styles.btnGhost}`}
             >
               Как это работает
             </Link>
           </div>
 
           <div className={styles.statsRow}>
-            {STATS.map(([value, label]) => (
-              <StatBlock key={label} value={value} label={label} />
+            {STATS.map((s) => (
+              <StatBlock key={s.label} value={s.value} label={s.label} suffix={s.suffix} />
             ))}
           </div>
         </div>
 
-        {/* Right column: real MapLibre cameo (clickable → /map) +
-            forecast snippet floating bottom of cameo. */}
         <div className={styles.cameoWrap}>
           <LandingMapCameo onClick={() => navigate("/map")} />
           <div className={styles.cameoCard}>
@@ -172,4 +217,3 @@ function ContourWash() {
     </>
   );
 }
-

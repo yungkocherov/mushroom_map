@@ -140,16 +140,32 @@
   font-family: var(--font-body);
 }
 
-.btnPrimary {
+.btnPrimary,
+.btnPrimary:hover,
+.btnPrimary:focus,
+.btnPrimary:active,
+.btnPrimary:visited {
   background: var(--forest);
   color: var(--cream);
   box-shadow: 0 8px 22px rgba(62, 72, 39, 0.28);
 }
+/* V4.8: на hover не меняем цвет текста (раньше чернело — браузерный
+   default :hover на <a> или inherited ink). Box-shadow чуть глубже
+   как лёгкий лифт. */
+.btnPrimary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 12px 28px rgba(62, 72, 39, 0.34);
+}
 
-.btnGhost {
+.btnGhost,
+.btnGhost:visited {
   background: transparent;
   color: var(--ink);
   border: 1.5px solid var(--ink);
+}
+.btnGhost:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ink);
 }
 
 /* Stats row at the bottom of left column */

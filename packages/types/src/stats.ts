@@ -8,6 +8,10 @@ export interface StatsOverview {
   species_count: number;
   district_count: number;
   forest_polygon_count: number;
+  /** Сумма ST_Area-geodesic полигонов forest_polygon в км². V4.8. */
+  forest_area_km2: number;
+  /** ISO timestamp (UTC). MAX(updated_at) из forest_polygon. V4.8. */
+  forest_last_updated: string | null;
   /** ISO timestamp (UTC). */
   last_vk_refresh: string | null;
   photo_prompt_version: string | null;

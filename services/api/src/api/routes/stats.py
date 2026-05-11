@@ -61,7 +61,13 @@ SPECIES_LABELS: dict[str, str] = {
 # ──────────────────────────────────────────────────────────────────────────
 @router.get("/overview")
 def overview() -> dict:
-    """Сводка по корпусу и доступным данным."""
+    """Сводка по корпусу и доступным данным.
+
+    V4.8: добавлены `forest_area_km2` (сумма геодезической площади всех
+    выделов из forest_polygon.area_m2 / 1e6) + `forest_last_updated`
+    (MAX(updated_at)). Используется лендингом для динамической статистики
+    вместо хардкода. Запрос ~1с на 2.17M полигонов — кэшируем через
+    `Cache-Control: max-age=3600`, аналогично /forest/legend."""
     with get_conn() as conn:
         row = conn.execute(
             """
@@ -71,6 +77,10 @@ def overview() -> dict:
                 (SELECT COUNT(*) FROM species)                                       AS species_count,
                 (SELECT COUNT(*) FROM admin_area WHERE level = 6)                    AS district_count,
                 (SELECT COUNT(*) FROM forest_unified)                                AS forest_polygon_count,
+                (SELECT COALESCE(SUM(area_m2), 0) / 1e6
+                   FROM forest_polygon
+                   WHERE area_m2 IS NOT NULL)                                        AS forest_area_km2,
+                (SELECT MAX(updated_at) FROM forest_polygon)                         AS forest_last_updated,
                 (SELECT MAX(fetched_at) FROM vk_post)                                AS last_vk_refresh,
                 (SELECT photo_prompt_version FROM vk_post
                    WHERE photo_prompt_version IS NOT NULL
@@ -79,13 +89,17 @@ def overview() -> dict:
             """
         ).fetchone()
 
-    posts_total, posts_classified, species_count, district_count, forest_count, last_vk, prompt_ver = row
+    (posts_total, posts_classified, species_count, district_count,
+     forest_count, forest_area_km2, forest_last_updated,
+     last_vk, prompt_ver) = row
     return {
         "posts_total":          int(posts_total or 0),
         "posts_classified":     int(posts_classified or 0),
         "species_count":        int(species_count or 0),
         "district_count":       int(district_count or 0),
         "forest_polygon_count": int(forest_count or 0),
+        "forest_area_km2":      round(float(forest_area_km2 or 0), 1),
+        "forest_last_updated":  forest_last_updated.isoformat() if forest_last_updated else None,
         "last_vk_refresh":      last_vk.isoformat() if last_vk else None,
         "photo_prompt_version": prompt_ver,
         # Прогноз-модель пока не подключена — наполним когда появится
