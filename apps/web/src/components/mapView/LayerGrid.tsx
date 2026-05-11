@@ -26,6 +26,7 @@ import {
 import { useMapShare } from "./hooks/useMapShare";
 import { BaseMapPicker } from "./BaseMapPicker";
 import { Legend } from "../Legend";
+import { LAYER_DESCRIPTIONS, getForestDescription } from "./layerDescriptions";
 import { track } from "../../lib/track";
 import styles from "./LayerGrid.module.css";
 
@@ -98,22 +99,27 @@ export function LayerGrid({
     toggleVisible(key);
   };
 
+  // V4.5: hint (title attribute) = body description из layerDescriptions.
+  // Native HTML tooltip — простой и доступный, не требует library.
   const primaryChips: ChipDescriptor[] = [
     {
       key: "forecastChoropleth",
       label: "Прогноз",
+      hint: LAYER_DESCRIPTIONS.forecastChoropleth.body,
       active: visible.forecastChoropleth,
       onClick: () => trackedToggle("forecastChoropleth"),
     },
     {
       key: "waterway",
       label: "Водотоки",
+      hint: LAYER_DESCRIPTIONS.waterway.body,
       active: visible.waterway,
       onClick: () => trackedToggle("waterway"),
     },
     {
       key: "wetland",
       label: "Болота",
+      hint: LAYER_DESCRIPTIONS.wetland.body,
       active: visible.wetland,
       onClick: () => trackedToggle("wetland"),
     },
@@ -125,20 +131,21 @@ export function LayerGrid({
     primaryChips.push({
       key: "userSpots",
       label: "Сохранённые",
+      hint: LAYER_DESCRIPTIONS.userSpots.body,
       active: visible.userSpots,
       onClick: () => trackedToggle("userSpots"),
     });
   }
 
   const secondaryChips: ChipDescriptor[] = [
-    { key: "water",    label: "Водоохранные", active: visible.water, onClick: () => trackedToggle("water") },
-    { key: "soil",     label: "Почва",    active: visible.soil,     onClick: () => trackedToggle("soil") },
-    { key: "hillshade", label: "Рельеф",  active: visible.hillshade, onClick: () => trackedToggle("hillshade") },
-    { key: "oopt",     label: "ООПТ",     active: visible.oopt,     onClick: () => trackedToggle("oopt") },
-    { key: "roads",    label: "Дороги",   active: visible.roads,    onClick: () => trackedToggle("roads") },
-    { key: "felling",  label: "Вырубки",  active: visible.felling,  onClick: () => trackedToggle("felling") },
-    { key: "protective", label: "Защитные", active: visible.protective, onClick: () => trackedToggle("protective") },
-    { key: "districts", label: "Районы",  active: visible.districts, onClick: () => trackedToggle("districts") },
+    { key: "water",    label: "Водоохранные", hint: LAYER_DESCRIPTIONS.water.body, active: visible.water, onClick: () => trackedToggle("water") },
+    { key: "soil",     label: "Почва",    hint: LAYER_DESCRIPTIONS.soil.body, active: visible.soil,     onClick: () => trackedToggle("soil") },
+    { key: "hillshade", label: "Рельеф",  hint: LAYER_DESCRIPTIONS.hillshade.body, active: visible.hillshade, onClick: () => trackedToggle("hillshade") },
+    { key: "oopt",     label: "ООПТ",     hint: LAYER_DESCRIPTIONS.oopt.body, active: visible.oopt,     onClick: () => trackedToggle("oopt") },
+    { key: "roads",    label: "Дороги",   hint: LAYER_DESCRIPTIONS.roads.body, active: visible.roads,    onClick: () => trackedToggle("roads") },
+    { key: "felling",  label: "Вырубки",  hint: LAYER_DESCRIPTIONS.felling.body, active: visible.felling,  onClick: () => trackedToggle("felling") },
+    { key: "protective", label: "Защитные", hint: LAYER_DESCRIPTIONS.protective.body, active: visible.protective, onClick: () => trackedToggle("protective") },
+    { key: "districts", label: "Районы",  hint: LAYER_DESCRIPTIONS.districts.body, active: visible.districts, onClick: () => trackedToggle("districts") },
   ];
 
   const containerClass = layout === "strip" ? styles.strip : styles.grid;
@@ -219,18 +226,20 @@ function ChipButton({ chip }: { chip: ChipDescriptor }) {
     chip.disabled ? ` ${styles.chipDisabled}` : ""
   }`;
 
-  const inner = (
-    <>
-      <span className={styles.label}>{chip.label}</span>
-      {chip.hint ? <span className={styles.subLabel}>{chip.hint}</span> : null}
-    </>
-  );
+  // V4.5: hint теперь рендерится через native `title` (HTML tooltip)
+  // вместо inline subtext. Юзер пожаловался что не понятно что значит
+  // «Бонитет» / «ООПТ» — короткое описание появляется при hover'е без
+  // визуального шума в самом чипе.
+  const titleAttr = chip.hint || undefined;
+
+  const inner = <span className={styles.label}>{chip.label}</span>;
 
   if (chip.href) {
     return (
       <Link
         to={chip.href}
         className={className}
+        title={titleAttr}
         aria-disabled={chip.disabled || undefined}
         tabIndex={chip.disabled ? -1 : undefined}
       >
@@ -243,6 +252,7 @@ function ChipButton({ chip }: { chip: ChipDescriptor }) {
     <button
       type="button"
       className={className}
+      title={titleAttr}
       onClick={chip.onClick}
       aria-pressed={chip.active}
       disabled={chip.disabled}
@@ -269,6 +279,7 @@ function ForestCard({ forestVisible, forestColorMode, onToggleMode }: ForestCard
           className={`${styles.forestPill}${isActive("species") ? ` ${styles.forestPillActive}` : ""}`}
           onClick={() => onToggleMode("species")}
           aria-pressed={isActive("species")}
+          title={getForestDescription("species").body}
         >
           Породы
         </button>
@@ -277,6 +288,7 @@ function ForestCard({ forestVisible, forestColorMode, onToggleMode }: ForestCard
           className={`${styles.forestPill}${isActive("bonitet") ? ` ${styles.forestPillActive}` : ""}`}
           onClick={() => onToggleMode("bonitet")}
           aria-pressed={isActive("bonitet")}
+          title={getForestDescription("bonitet").body}
         >
           Бонитет
         </button>
@@ -285,6 +297,7 @@ function ForestCard({ forestVisible, forestColorMode, onToggleMode }: ForestCard
           className={`${styles.forestPill}${isActive("age_group") ? ` ${styles.forestPillActive}` : ""}`}
           onClick={() => onToggleMode("age_group")}
           aria-pressed={isActive("age_group")}
+          title={getForestDescription("age_group").body}
         >
           Возраст
         </button>

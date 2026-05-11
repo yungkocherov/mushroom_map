@@ -6,10 +6,12 @@ import styles from "./Header.module.css";
 // 5 IA-разделов после Phase W2 (redesign-2026-05). Лендинг — на `/`,
 // карта переехала на `/map`. Добавлен «Календарь».
 //
-// V4 (2026-05-10) feedback от автора: «Споты»→«Точки» (W4) → «Мои места»
-// (теперь). Так клиенту понятнее, что это именно его сохранения.
-const NAV_ITEMS = [
-  { to: "/map",         label: "Карта" },
+// V4 feedback: «Споты»→«Точки»→«Мои места».
+// V4.5: «Карта» получила флаг `primary=true` — это main entry-point,
+// она выделена pill-стилем (forest border + чуть-чуть прозрачный fill)
+// даже когда не active. Когда active — full filled.
+const NAV_ITEMS: Array<{ to: string; label: string; primary?: boolean }> = [
+  { to: "/map",         label: "Карта", primary: true },
   { to: "/species",     label: "Виды" },
   { to: "/spots",       label: "Мои места" },
   { to: "/calendar",    label: "Календарь" },
@@ -25,12 +27,12 @@ export function Header() {
         </Link>
         <div className={styles.spacer} />
         <nav className={styles.nav} aria-label="Основная навигация">
-          {NAV_ITEMS.map(({ to, label }) => (
+          {NAV_ITEMS.map(({ to, label, primary }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
-                `${styles.link} link-underline${isActive ? ` ${styles.linkActive}` : ""}`
+                `${styles.link}${primary ? ` ${styles.linkPrimary}` : ""}${isActive ? ` ${styles.linkActive}` : ""}`
               }
             >
               {label}

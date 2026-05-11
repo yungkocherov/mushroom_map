@@ -9,9 +9,6 @@
   position: relative;
   flex: 1;
   min-width: 0;
-  /* Ограничение растяжения — иначе search-bar заберёт всё свободное
-     место и dropdown под ним перекроет панель ПОДЛОЖКА слева. */
-  max-width: 560px;
 }
 
 .bar {
@@ -66,7 +63,10 @@
   position: absolute;
   top: calc(100% + 6px);
   left: 0;
-  right: 0;
+  /* V4.5: bar занимает всю width между brand'ом и spots-chip. Dropdown
+     не должен растягиваться — ограничиваем 600px чтобы не перекрывать
+     forecast-panel справа. */
+  width: min(100%, 600px);
   max-height: 60vh;
   overflow-y: auto;
   background: var(--paper-rise);

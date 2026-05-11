@@ -106,7 +106,12 @@ export const SpotsMiniMap = forwardRef<SpotsMiniMapHandle, Props>(
       flyTo: (lat, lon, zoom = 13) => {
         const m = mapRef.current;
         if (!m) return;
-        m.flyTo({ center: [lon, lat], zoom, speed: 1.2, essential: true });
+        // V4.5: speed 2.4 (быстрее) + curve 1.0 (более прямой полёт).
+        // Юзер пожаловался что переключение между точками слишком
+        // медленное. flyTo на спотах не критично-плавное — это просто
+        // навигация по списку. 2.4 — почти моментально на близких
+        // точках, держит smooth animation на дальних.
+        m.flyTo({ center: [lon, lat], zoom, speed: 2.4, curve: 1.0, essential: true });
       },
     }), []);
 

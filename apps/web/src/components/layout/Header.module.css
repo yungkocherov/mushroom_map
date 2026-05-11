@@ -46,27 +46,42 @@
   flex-wrap: wrap;
 }
 
-/* Стиль ссылок — pill-чип (V4 redesign-2026-05). Active вкладка явно
-   выделяется тёмно-зелёной заливкой с cream текстом — раньше был только
-   тонкий underline + смена цвета, его не было видно на скриншотах. */
+/* Стиль ссылок — pill-чип. Active вкладка тёмно-зелёная (cream text),
+   primary («Карта» — main entry-point) всегда выделена forest-border'ом
+   чтобы юзер сразу видел где главный экран. */
 .link {
   color: var(--ink-dim);
   text-decoration: none;
   padding: 6px var(--space-3);
   font-size: var(--fs-sm);
   font-weight: 500;
+  border: 1.5px solid transparent;
   border-radius: var(--radius-pill);
-  transition: color 0.15s ease, background 0.15s ease;
+  transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
 }
 .link:hover {
   color: var(--ink);
   background: rgba(93, 106, 58, 0.08);
 }
+
+/* V4.5: «Карта» — primary CTA. Даже когда не active, выделена
+   forest-border'ом + лёгкой fill'ом. Иконка-метка для юзера. */
+.linkPrimary {
+  color: var(--forest);
+  border-color: var(--forest);
+  background: rgba(93, 106, 58, 0.08);
+}
+.linkPrimary:hover {
+  background: rgba(93, 106, 58, 0.16);
+}
+
 .linkActive,
 .linkActive:hover {
   color: var(--cream);
   background: var(--forest);
+  border-color: var(--forest);
 }
+
 /* link-underline animation (см. animations.css) добавляет ::after с
    подчёркиванием. На pill-стиле он не нужен — глушим. */
 .link::after,

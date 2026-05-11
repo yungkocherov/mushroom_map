@@ -164,14 +164,22 @@ export function useMapLayers(
     if (!m) return;
     const color = paintForMode(forestColorMode);
     if (m.getLayer("forest-fill")) m.setPaintProperty("forest-fill", "fill-color", color);
-  }, [forestColorMode, mapRef, ready]);
+  }, [forestColorMode, mapRef, ready, loaded.forest]);
 
   useEffect(() => {
     const m = mapRef.current;
     if (!m) return;
     const filter = buildForestFilter(forestColorMode, speciesFilter, legendFilter);
-    if (m.getLayer("forest-fill")) m.setFilter("forest-fill", filter as never);
-  }, [speciesFilter, legendFilter, forestColorMode, mapRef, ready]);
+    // V4.5: forest-fill добавляется лениво (после HEAD-check pmtiles).
+    // Если slug в store пришёл из share-URL bootstrap'а ДО того как
+    // layer существует — раньше setFilter молча пропускался и юзеру
+    // приходилось дёргать toggle вручную. Теперь дополнительно
+    // подписываемся на loaded.forest — когда становится true, паint
+    // и filter применяются повторно.
+    if (m.getLayer("forest-fill")) {
+      m.setFilter("forest-fill", filter as never);
+    }
+  }, [speciesFilter, legendFilter, forestColorMode, mapRef, ready, loaded.forest]);
 
   const reapplyAll = useCallback(() => {
     const m = mapRef.current;

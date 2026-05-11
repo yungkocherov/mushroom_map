@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 import socket
 import threading
+import time
 from typing import Optional
 
 import httpx
@@ -94,35 +95,50 @@ def _notify_telegram_async(
             return [r for r in orig_getaddrinfo(*a, **kw) if r[0] == socket.AF_INET]
 
         socket.getaddrinfo = ipv4_only  # type: ignore[assignment]
+        text = (
+            f"geobiom feedback #{feedback_id}\n"
+            f"\n"
+            f"{message}\n"
+            f"\n"
+            f"---\n"
+            f"Контакт:  {contact or '-'}\n"
+            f"Страница: {page_url or '-'}\n"
+            f"UA:       {(user_agent or '-')[:120]}\n"
+            f"User:     {user_id or 'anon'}"
+        )
+        # V4.5: retry x3 c expontntial backoff. Юзер пожаловался что
+        # часть фидбэков пропадает; TG api.telegram.org иногда timeout'ит
+        # или rate-limit'ит (хотя у нас ~5/час). Тихий fail = потерянный
+        # фидбек. Три попытки покрывают transient'ы.
+        last_err: Exception | None = None
         try:
-            text = (
-                f"geobiom feedback #{feedback_id}\n"
-                f"\n"
-                f"{message}\n"
-                f"\n"
-                f"---\n"
-                f"Контакт:  {contact or '-'}\n"
-                f"Страница: {page_url or '-'}\n"
-                f"UA:       {(user_agent or '-')[:120]}\n"
-                f"User:     {user_id or 'anon'}"
+            for attempt in range(3):
+                try:
+                    r = httpx.post(
+                        f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage",
+                        json={
+                            "chat_id": settings.tg_chat_id,
+                            "text": text,
+                            "disable_web_page_preview": True,
+                        },
+                        timeout=15,
+                    )
+                    r.raise_for_status()
+                    # log.warning (не info) — uvicorn default level=WARNING.
+                    log.warning(
+                        "feedback #%s posted to telegram (attempt %d)",
+                        feedback_id, attempt + 1,
+                    )
+                    return
+                except Exception as exc:  # noqa: BLE001
+                    last_err = exc
+                    if attempt < 2:
+                        # 1s → 3s → (no more retries)
+                        time.sleep(1 + 2 * attempt)
+            log.exception(
+                "feedback #%s telegram-send failed after 3 attempts: %r",
+                feedback_id, last_err,
             )
-            r = httpx.post(
-                f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage",
-                json={
-                    "chat_id": settings.tg_chat_id,
-                    "text": text,
-                    "disable_web_page_preview": True,
-                },
-                timeout=10,
-            )
-            r.raise_for_status()
-            # Используем log.warning а не log.info — uvicorn default
-            # log-level = WARNING, info-сообщения нигде не видны (юзер
-            # на проде в логах ничего о feedback'е не увидел). WARNING
-            # для «отправлено» — не страшно, фидбек редкая операция.
-            log.warning("feedback #%s posted to telegram", feedback_id)
-        except Exception:  # noqa: BLE001
-            log.exception("feedback #%s telegram-send failed", feedback_id)
         finally:
             socket.getaddrinfo = orig_getaddrinfo  # type: ignore[assignment]
 
