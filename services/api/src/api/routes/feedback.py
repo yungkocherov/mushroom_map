@@ -25,6 +25,7 @@ hCaptcha. Сейчас сайт получает ~0 спама, поэтому o
 from __future__ import annotations
 
 import logging
+import socket
 import threading
 from typing import Optional
 
@@ -80,6 +81,19 @@ def _notify_telegram_async(
         return  # TG не настроен — silent skip
 
     def worker() -> None:
+        # Force IPv4-only DNS resolution. Docker bridge на TimeWeb не
+        # маршрутизирует IPv6; api.telegram.org резолвится в AF_INET +
+        # AF_INET6 одновременно. Раньше пробовали `local_address=0.0.0.0`
+        # — но это даёт «Address family not supported» random'но, когда
+        # httpx выбирал AAAA-адрес а bind был IPv4. Чище — отфильтровать
+        # AF_INET6 на уровне getaddrinfo. Patch локальный (на время
+        # worker'а), не глобальный.
+        orig_getaddrinfo = socket.getaddrinfo
+
+        def ipv4_only(*a, **kw):
+            return [r for r in orig_getaddrinfo(*a, **kw) if r[0] == socket.AF_INET]
+
+        socket.getaddrinfo = ipv4_only  # type: ignore[assignment]
         try:
             text = (
                 f"geobiom feedback #{feedback_id}\n"
@@ -92,26 +106,25 @@ def _notify_telegram_async(
                 f"UA:       {(user_agent or '-')[:120]}\n"
                 f"User:     {user_id or 'anon'}"
             )
-            # Force IPv4: docker bridge на TimeWeb не маршрутизирует
-            # IPv6, а api.telegram.org резолвится и в v4 и в v6 —
-            # httpx иногда выбирает v6 и падает с Network unreachable.
-            # local_address=0.0.0.0 биндит socket на IPv4-интерфейс.
-            with httpx.Client(
-                transport=httpx.HTTPTransport(local_address="0.0.0.0"),
+            r = httpx.post(
+                f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage",
+                json={
+                    "chat_id": settings.tg_chat_id,
+                    "text": text,
+                    "disable_web_page_preview": True,
+                },
                 timeout=10,
-            ) as client:
-                r = client.post(
-                    f"https://api.telegram.org/bot{settings.tg_bot_token}/sendMessage",
-                    json={
-                        "chat_id": settings.tg_chat_id,
-                        "text": text,
-                        "disable_web_page_preview": True,
-                    },
-                )
+            )
             r.raise_for_status()
-            log.info("feedback #%s posted to telegram", feedback_id)
+            # Используем log.warning а не log.info — uvicorn default
+            # log-level = WARNING, info-сообщения нигде не видны (юзер
+            # на проде в логах ничего о feedback'е не увидел). WARNING
+            # для «отправлено» — не страшно, фидбек редкая операция.
+            log.warning("feedback #%s posted to telegram", feedback_id)
         except Exception:  # noqa: BLE001
             log.exception("feedback #%s telegram-send failed", feedback_id)
+        finally:
+            socket.getaddrinfo = orig_getaddrinfo  # type: ignore[assignment]
 
     threading.Thread(target=worker, daemon=True).start()
 

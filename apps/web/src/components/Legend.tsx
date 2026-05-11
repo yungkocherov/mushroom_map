@@ -1,44 +1,33 @@
 /**
- * Legend — список свотчей для активного слоя (порода / бонитет /
- * возраст / почва).
+ * Legend — список свотчей для активного слоя.
  *
- * V4.2 (redesign-2026-05-11): свотчи кликабельны и работают как фильтр
- * — нажатие на «Сосна» в режиме «Породы» оставляет на карте только
- * полигоны с dominant_species=pine. Многократный клик добавляет
- * виды в OR-фильтр. Повторный клик по выбранному — снимает.
- * Кнопка «Сбросить» появляется внизу когда фильтр активен.
+ * V4.3 (redesign-2026-05-11): данные тянутся из `/api/forest/legend`
+ * вместо хардкоженного SPECIES_LEGEND. Backend агрегирует реальные
+ * forest_unified строки и отдаёт `{species, bonitet, age_group}` с
+ * counts. Это гарантирует синхрон легенды с тем, что юзер реально
+ * увидит в попапе клика по карте: если в БД есть «клён» — он будет
+ * в легенде. Запрашивается один раз за сессию (in-memory cache).
  *
- * Filter живёт в store как `legendFilter: Array<string|number>`.
- * Map-controller (`useMapLayers`) переводит его в MapLibre setFilter
- * по `forestColorMode`-specific property name (см. buildForestFilter).
+ * V4.2 — свотчи кликабельны, действуют как filter (toggle):
+ * `legendFilter` store → `useMapLayers.buildForestFilter` → MapLibre
+ * setFilter на forest-fill по `forestColorMode`-зависимому property.
  *
  * Soil legend пока некликабельна — soil-слой имеет собственное API
  * раскраски, легенда лишь отображает.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FOREST_COLORS,
   BONITET_LEGEND,
   AGE_GROUP_LEGEND,
+  type ForestSlug,
 } from "../lib/forestStyle";
 import { SOIL_LEGEND } from "../lib/soilStyle";
 import { useIsMobile } from "../lib/useIsMobile";
 import { useLayerVisibility } from "../store/useLayerVisibility";
+import { fetchForestLegend, type ForestLegendResponse } from "@mushroom-map/api-client";
 import styles from "./Legend.module.css";
-
-const SPECIES_LEGEND = [
-  { slug: "pine",             label: "Сосна" },
-  { slug: "spruce",           label: "Ель" },
-  { slug: "birch",            label: "Берёза" },
-  { slug: "aspen",            label: "Осина" },
-  { slug: "alder",            label: "Ольха" },
-  { slug: "oak",              label: "Дуб" },
-  { slug: "mixed_coniferous", label: "Смеш. хвойный" },
-  { slug: "mixed_broadleaved",label: "Смеш. лиственный" },
-  { slug: "mixed",            label: "Смешанный" },
-  { slug: "unknown",          label: "Неизвестно" },
-] as const;
 
 type LegendMode = "soil" | "forest";
 
@@ -54,6 +43,39 @@ interface LegendProps {
   variant?: "floating" | "inline";
 }
 
+// Module-level cache — одна fetch на сессию. Если бэкенд обновит данные
+// между сессиями — после reload подтянется свежее.
+let _legendCache: ForestLegendResponse | null = null;
+let _legendPromise: Promise<ForestLegendResponse> | null = null;
+
+function getLegendData(): Promise<ForestLegendResponse> {
+  if (_legendCache) return Promise.resolve(_legendCache);
+  if (_legendPromise) return _legendPromise;
+  _legendPromise = fetchForestLegend()
+    .then((d) => {
+      _legendCache = d;
+      return d;
+    })
+    .catch((e) => {
+      _legendPromise = null; // позволить retry на следующий render
+      throw e;
+    });
+  return _legendPromise;
+}
+
+// Цвет для возрастной группы / бонитета — берётся из захардкоженных
+// AGE_GROUP_LEGEND / BONITET_LEGEND. Цветовая шкала намеренно не из
+// БД — она определяется UX, не данными.
+const AGE_COLOR_BY_VALUE: Record<string, string> = Object.fromEntries(
+  ["молодняки", "средневозрастные", "приспевающие", "спелые", "перестойные"].map(
+    (v, i) => [v, AGE_GROUP_LEGEND[i]?.color ?? "#9e9e9e"],
+  ),
+);
+
+const BONITET_COLOR_BY_VALUE: Record<number, string> = Object.fromEntries(
+  [1, 2, 3, 4, 5].map((v, i) => [v, BONITET_LEGEND[i]?.color ?? "#9e9e9e"]),
+);
+
 export function Legend({ variant = "floating" }: LegendProps = {}) {
   const colorMode = useLayerVisibility((s) => s.forestColorMode);
   const forestLoaded = useLayerVisibility((s) => s.loaded.forest);
@@ -65,6 +87,19 @@ export function Legend({ variant = "floating" }: LegendProps = {}) {
   const clearLegendFilter = useLayerVisibility((s) => s.clearLegendFilter);
   const mobile = useIsMobile();
   const [open, setOpen] = useState(!mobile || variant === "inline");
+
+  // Async fetch легенды — only when forest active. Cached in-module.
+  const [data, setData] = useState<ForestLegendResponse | null>(_legendCache);
+  useEffect(() => {
+    if (data || !(forestLoaded && forestVisible)) return;
+    let cancelled = false;
+    getLegendData()
+      .then((d) => !cancelled && setData(d))
+      .catch(() => {}); // тихо — fall-back на хардкод-метки ниже
+    return () => {
+      cancelled = true;
+    };
+  }, [data, forestLoaded, forestVisible]);
 
   const forestActive = forestLoaded && forestVisible;
   const soilActive = soilLoaded && soilVisible;
@@ -81,30 +116,28 @@ export function Legend({ variant = "floating" }: LegendProps = {}) {
     filterable = false;
   } else if (colorMode === "species") {
     title = "Порода";
-    items = SPECIES_LEGEND.map(({ slug, label }) => ({
-      label,
-      color: FOREST_COLORS[slug as keyof typeof FOREST_COLORS] ?? "#9e9e9e",
-      filterValue: slug,
+    // Если данные ещё не пришли — пустой список (Legend re-render'ится
+    // после fetch). После пришли — итерируем по DB-distribution.
+    items = (data?.species ?? []).map((s) => ({
+      label: s.label,
+      color: FOREST_COLORS[s.slug as ForestSlug] ?? "#9e9e9e",
+      filterValue: s.slug,
     }));
     filterable = true;
   } else if (colorMode === "bonitet") {
     title = "Бонитет";
-    // BONITET_LEGEND имеет 6 entries (I-V + «Нет данных»). Filter-value
-    // = индекс+1 (1..5); последний без filterValue.
-    items = BONITET_LEGEND.map((b, i) => ({
+    items = (data?.bonitet ?? []).map((b) => ({
       label: b.label,
-      color: b.color,
-      filterValue: i < 5 ? i + 1 : undefined,
+      color: BONITET_COLOR_BY_VALUE[b.value] ?? "#9e9e9e",
+      filterValue: b.value,
     }));
     filterable = true;
   } else {
     title = "Возраст";
-    // AGE_GROUP_LEGEND метки совпадают с property values в нижнем регистре.
-    const SLUGS = ["молодняки", "средневозрастные", "приспевающие", "спелые", "перестойные"];
-    items = AGE_GROUP_LEGEND.map((a, i) => ({
+    items = (data?.age_group ?? []).map((a) => ({
       label: a.label,
-      color: a.color,
-      filterValue: i < SLUGS.length ? SLUGS[i] : undefined,
+      color: AGE_COLOR_BY_VALUE[a.value] ?? "#9e9e9e",
+      filterValue: a.value,
     }));
     filterable = true;
   }
@@ -140,10 +173,12 @@ export function Legend({ variant = "floating" }: LegendProps = {}) {
           </button>
         )}
       </div>
+      {items.length === 0 && mode === "forest" && (
+        <p className={styles.emptyHint}>Загружаем&hellip;</p>
+      )}
       {items.map(({ label, color, filterValue }) => {
         const isActive =
           hasFilter && filterValue !== undefined && legendFilter!.includes(filterValue);
-        // Если фильтр активен и эта строка НЕ в фильтре — приглушаем.
         const isDimmed = hasFilter && !isActive;
         const canFilter = filterable && filterValue !== undefined;
         const className = [

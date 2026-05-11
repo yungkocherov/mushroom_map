@@ -299,3 +299,30 @@ export async function submitFeedback(
   }
   return res.json();
 }
+
+
+// ──────────────────────────────────────────────────────────────────────
+// Forest legend (V4.3) — реальные значения из БД, не хардкод
+// ──────────────────────────────────────────────────────────────────────
+
+export interface ForestLegendSpecies { slug: string; label: string; count: number; }
+export interface ForestLegendBonitet { value: number; label: string; count: number; }
+export interface ForestLegendAgeGroup { value: string; label: string; count: number; }
+
+export interface ForestLegendResponse {
+  species:   ForestLegendSpecies[];
+  bonitet:   ForestLegendBonitet[];
+  age_group: ForestLegendAgeGroup[];
+}
+
+/**
+ * GET /api/forest/legend — распределение реальных значений
+ * dominant_species / bonitet / age_group из forest_polygon. Frontend
+ * Legend.tsx строит легенду по этому ответу вместо hardcode'а.
+ * Кэшируется в-memory на стороне фронта (single fetch на сессию).
+ */
+export async function fetchForestLegend(): Promise<ForestLegendResponse> {
+  const res = await fetch(`${API_BASE}/api/forest/legend`);
+  if (!res.ok) throw new Error(`forest/legend ${res.status}`);
+  return res.json();
+}

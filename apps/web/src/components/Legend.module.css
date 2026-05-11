@@ -91,6 +91,12 @@
 }
 .rowDimmed:hover { opacity: 0.7; }
 
+.emptyHint {
+  margin: 4px 0;
+  font-size: var(--fs-sm);
+  color: var(--ink-faint);
+}
+
 .clearBtn {
   margin-top: 8px;
   width: 100%;
