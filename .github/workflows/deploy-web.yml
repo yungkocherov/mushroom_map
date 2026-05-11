@@ -82,7 +82,11 @@ jobs:
         if: ${{ vars.ORACLE_DEPLOY_ENABLED == 'true' }}
         env:
           ORACLE_HOST: ${{ vars.ORACLE_HOST }}
-          ORACLE_USER: ${{ secrets.ORACLE_SSH_USER || secrets.PROD_SSH_USER }}
+          # Oracle Ubuntu cloud-image — user всегда `ubuntu` (root заблокирован).
+          # Hardcoded fallback: если secret пуст / содержит whitespace —
+          # используем 'ubuntu'. Раньше fallback'или на `secrets.PROD_SSH_USER`
+          # (root для TimeWeb) — Oracle отвечал «login as ubuntu».
+          ORACLE_USER: ${{ secrets.ORACLE_SSH_USER || 'ubuntu' }}
           ORACLE_KEY:  ${{ secrets.ORACLE_SSH_KEY || secrets.PROD_SSH_KEY }}
         run: |
           set -e
@@ -92,8 +96,12 @@ jobs:
           # tar -czf -  → ssh tar -xzf -  с очисткой каталога.
           # --strip-components не нужен: tar -C apps/web/dist + tar -C /srv/web
           # сохраняет относительные пути from-dist (assets/, index.html, ...).
+          # /srv/web/ принадлежит ubuntu:ubuntu после первой manual-sync,
+          # но если каталог потом тронули root'ом — нужно sudo. Tee'м
+          # tar-команду через `sudo -n` (non-interactive) — на Oracle
+          # NOPASSWD должен быть для ubuntu (cloud-init default).
           tar -C apps/web/dist -czf - . | \
             ssh -i ~/.ssh/oracle_deploy \
                 -o StrictHostKeyChecking=no \
                 "$ORACLE_USER@$ORACLE_HOST" \
-                "rm -rf /srv/web/* && tar -C /srv/web -xzf -"
+                "sudo rm -rf /srv/web/* && sudo tar -C /srv/web -xzf -"

@@ -115,17 +115,20 @@ jobs:
           GIT_SHA: ${{ github.sha }}
         with:
           host: ${{ vars.ORACLE_HOST }}
-          username: ${{ secrets.ORACLE_SSH_USER || secrets.PROD_SSH_USER }}
+          # Oracle Ubuntu cloud-image — user всегда `ubuntu` (root blocked).
+          username: ${{ secrets.ORACLE_SSH_USER || 'ubuntu' }}
           key: ${{ secrets.ORACLE_SSH_KEY || secrets.PROD_SSH_KEY }}
           envs: GIT_SHA
           script: |
             set -e
-            cd /srv/mushroom-map
-            git pull --ff-only origin main
-            export GIT_SHA="${GIT_SHA}"
-            docker compose -f docker-compose.prod.yml --env-file .env.prod pull api
-            docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api
-            # Миграции на Oracle применяются sync-скриптом из TimeWeb
-            # (pg_dump|pg_restore clobber'ит схему вместе с данными).
-            # Здесь только API-код.
-            docker image prune -f --filter "until=24h"
+            # Oracle compose dir может требовать sudo для git pull
+            # (root-owned). docker compose тоже через sudo, т.к. ubuntu-
+            # user может быть не в docker-group.
+            sudo bash -c '
+              cd /srv/mushroom-map
+              git pull --ff-only origin main
+              export GIT_SHA="'"${GIT_SHA}"'"
+              docker compose -f docker-compose.prod.yml --env-file .env.prod pull api
+              docker compose -f docker-compose.prod.yml --env-file .env.prod up -d api
+              docker image prune -f --filter "until=24h"
+            '
