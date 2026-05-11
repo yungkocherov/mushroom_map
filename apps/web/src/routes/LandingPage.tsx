@@ -25,6 +25,14 @@ interface StatRow {
 }
 
 function formatStat(n: number): string {
+  if (n >= 1_000_000) {
+    // 1.2 млн / 1.25 млн — показываем 1 знак если результат < 10,
+    // иначе целое («12 млн»). С Russian thin-space между числом и
+    // единицей измерения для типографики.
+    const m = n / 1_000_000;
+    const formatted = m < 10 ? m.toFixed(1) : Math.round(m).toString();
+    return `${formatted} млн`;
+  }
   if (n >= 1000) return `${Math.floor(n / 1000)}k`;
   return String(n);
 }
@@ -59,21 +67,15 @@ function StatBlock({ value, label, suffix }: StatRow) {
   );
 }
 
-/** «N дней назад» / «вчера» / «сегодня». */
-function relativeUpdatedRu(iso: string | null): string {
+/** Форматирует ISO timestamp в «обновлено DD.MM.YYYY». V4.9: юзер
+ *  предпочитает точную дату вместо relative «N дней назад». */
+function formatUpdated(iso: string | null): string {
   if (!iso) return "обновлено недавно";
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const days = Math.floor((now - then) / (24 * 3600 * 1000));
-  if (days <= 0) return "обновлено сегодня";
-  if (days === 1) return "обновлено вчера";
-  if (days < 5) return `обновлено ${days} дня назад`;
-  if (days < 31) return `обновлено ${days} дней назад`;
-  const months = Math.floor(days / 30);
-  if (months === 1) return "обновлено месяц назад";
-  if (months < 5) return `обновлено ${months} месяца назад`;
-  if (months < 12) return `обновлено ${months} месяцев назад`;
-  return `обновлено больше года назад`;
+  const d = new Date(iso);
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `обновлено ${dd}.${mm}.${yyyy}`;
 }
 
 export function LandingPage() {
@@ -92,7 +94,7 @@ export function LandingPage() {
   }, []);
 
   const year = new Date().getFullYear();
-  const updatedLabel = relativeUpdatedRu(stats?.forest_last_updated ?? null);
+  const updatedLabel = formatUpdated(stats?.forest_last_updated ?? null);
 
   const STATS: StatRow[] = [
     {

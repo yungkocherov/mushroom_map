@@ -39,7 +39,9 @@
    — поднимаем FAB над ним, чтобы не сливались. Высота nav-control'а ~110px
    (3 кнопки по ~30 + gap) + 18 base padding. */
 .fabAboveMap {
-  bottom: 156px;
+  /* V4.9: bottom-right теперь содержит 4 контрола (zoom+/−, compass,
+     geolocate). Поднимаем FAB чуть выше — ~200px от низа. */
+  bottom: 200px;
 }
 @media (max-width: 720px) {
   .fabAboveMap {

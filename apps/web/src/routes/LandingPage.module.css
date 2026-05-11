@@ -8,6 +8,11 @@
   min-height: calc(100vh - 64px);
   padding: var(--space-6) var(--space-5);
   box-sizing: border-box;
+  /* V4.9: убираем зазор между лендингом и футером. .contentMain имеет
+     padding-top + padding-bottom = var(--space-6), мы перекрываем bottom
+     отрицательным margin-bottom чтобы footer прижимался сразу к
+     concentu_landing без полосы paper-фона. */
+  margin-bottom: calc(-1 * var(--space-6));
 }
 
 .washGradient {

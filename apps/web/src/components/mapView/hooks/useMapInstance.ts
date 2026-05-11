@@ -72,6 +72,22 @@ export function useMapInstance(
       "bottom-right",
     );
 
+    // V4.9: «Центрировать на себе» — стандартный MapLibre GeolocateControl.
+    // browser.navigator.geolocation → один-shot центровка карты + маркер.
+    // `trackUserLocation: false` — не следим за движением (мобильный
+    // юзер за пешим темпом и так контролирует zoom-фокус сам). Кнопка
+    // активна с moment'а когда юзер разрешил permission; недоступна —
+    // показывает alert. Стиль наследует cream-card override из global.css.
+    m.addControl(
+      new maplibregl.GeolocateControl({
+        positionOptions: { enableHighAccuracy: true, timeout: 8000 },
+        trackUserLocation: false,
+        showAccuracyCircle: true,
+        showUserLocation: true,
+      }),
+      "bottom-right",
+    );
+
     const onStyleReady = () => {
       if (m.isStyleLoaded()) {
         m.off("styledata", onStyleReady);
