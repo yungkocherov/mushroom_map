@@ -76,10 +76,11 @@ function setPaint(layer: StyleLayer, key: string, value: unknown): void {
   layer.paint[key] = value;
 }
 
-// Versatiles Colorful использует стабильные prefix'ы id'ов слоёв:
-//   background, water-*, landcover-*, landuse-*, building*,
-//   road-*, tunnel-*, bridge-*, boundary-*, label-*, poi-*.
-// Walk по типу + regex по id; unmatched оставляем как было.
+// Versatiles Colorful naming (verified против live style.json, 309 слоёв):
+//   background, water-*, land-*, site-*, airport-*, building[:outline],
+//   street-*, tunnel-*-{street|way}-*, bridge-*-{street|way}-*,
+//   boundary-* (с :outline вариантом casing), label-*, poi-*.
+// :outline-суффикс используется как casing (вместо -bg/-fg как у MapTiler).
 export function applyD1VPaint(style: PatchableStyle, c: D1VColors = resolveD1VColors()): void {
   for (const layer of style.layers) {
     const id = layer.id ?? "";
@@ -90,66 +91,99 @@ export function applyD1VPaint(style: PatchableStyle, c: D1VColors = resolveD1VCo
       continue;
     }
 
-    // Water polygons (озёра, моря, заливы) — мутно-голубой
-    if (t === "fill" && /^water(-area)?(-|$)/.test(id)) {
+    // Water — fills для water-area*/water-ocean/water-dam-area/water-pier-area;
+    // lines для water-river/water-canal/water-stream/water-ditch/water-dam/water-pier.
+    if (t === "fill" && id.startsWith("water")) {
       setPaint(layer, "fill-color", c.water);
       setPaint(layer, "fill-opacity", 1);
       continue;
     }
-    // Waterway lines (реки, ручьи)
-    if (t === "line" && /^water/.test(id)) {
+    if (t === "line" && id.startsWith("water")) {
       setPaint(layer, "line-color", c.waterLine);
       continue;
     }
 
-    // Леса — насыщенный мох
-    if (t === "fill" && /landcover-(wood|forest)/.test(id)) {
-      setPaint(layer, "fill-color", c.moss);
-      setPaint(layer, "fill-opacity", 0.6);
+    // Land categories
+    if (t === "fill") {
+      // Леса / vegetation — насыщенный мох
+      if (/^land-(forest|vegetation)/.test(id)) {
+        setPaint(layer, "fill-color", c.moss);
+        setPaint(layer, "fill-opacity", 0.6);
+        continue;
+      }
+      // Травы / парки / wetland / leisure — светлый мох
+      if (/^land-(grass|park|garden|leisure|wetland)/.test(id)) {
+        setPaint(layer, "fill-color", c.mossLight);
+        setPaint(layer, "fill-opacity", 0.45);
+        continue;
+      }
+      // Застроенное / агро / прочее — paper-rise
+      if (/^land-(commercial|industrial|residential|agriculture|waste|burial|sand|rock|glacier)/.test(id)) {
+        setPaint(layer, "fill-color", c.paperRise);
+        setPaint(layer, "fill-opacity", 0.7);
+        continue;
+      }
+      // Sites (university, hospital, parking, school, ...) — нейтральные
+      if (/^site-/.test(id)) {
+        setPaint(layer, "fill-color", c.paperRise);
+        setPaint(layer, "fill-opacity", 0.5);
+        continue;
+      }
+      // Airport runway/taxiway зоны — тёмный bark
+      if (/^airport-(area|runway|taxiway)/.test(id)) {
+        setPaint(layer, "fill-color", c.bark);
+        setPaint(layer, "fill-opacity", 0.55);
+        continue;
+      }
+      // Pedestrian zones (street-pedestrian-zone fill) — paper-rise
+      if (/^(street-|tunnel-street-|bridge-street-)/.test(id)) {
+        setPaint(layer, "fill-color", c.paperRise);
+        setPaint(layer, "fill-opacity", 0.6);
+        continue;
+      }
+      // Tunnel/bridge solo fills (палубы)
+      if (id === "tunnel" || id === "bridge") {
+        setPaint(layer, "fill-color", c.paperRise);
+        setPaint(layer, "fill-opacity", 0.5);
+        continue;
+      }
+    }
+
+    // Здания (building + building:outline)
+    if (id.startsWith("building")) {
+      if (t === "fill") {
+        setPaint(layer, "fill-color", c.paperRise);
+        setPaint(layer, "fill-opacity", 0.85);
+        continue;
+      }
+      if (t === "line") {
+        setPaint(layer, "line-color", c.inkDim);
+        setPaint(layer, "line-opacity", 0.4);
+        continue;
+      }
+    }
+
+    // Дороги — street-*, tunnel-{street|way}-*, bridge-{street|way}-*.
+    // :outline = casing → светлый paper-rise; основная линия → bark.
+    if (t === "line" && /^(street-|tunnel-street-|tunnel-way-|bridge-street-|bridge-way-)/.test(id)) {
+      const isOutline = id.endsWith(":outline");
+      setPaint(layer, "line-color", isOutline ? c.paperRise : c.bark);
       continue;
     }
-    // Травы/парки/кустарник — светлый мох
-    if (t === "fill" && /landcover-(grass|meadow|heath|scrub|park|wetland)/.test(id)) {
-      setPaint(layer, "fill-color", c.mossLight);
-      setPaint(layer, "fill-opacity", 0.45);
-      continue;
-    }
-    // Пашня/сельхоз — бумажный rise
-    if (t === "fill" && /(landcover-(farmland|crop)|landuse-(farmland|crop|residential|industrial|commercial))/.test(id)) {
-      setPaint(layer, "fill-color", c.paperRise);
-      setPaint(layer, "fill-opacity", 0.7);
+    // Airport runway/taxiway lines
+    if (t === "line" && /^airport-(runway|taxiway)/.test(id)) {
+      setPaint(layer, "line-color", c.bark);
       continue;
     }
 
-    // Здания — нейтральный bark на низкой непрозрачности
-    if (t === "fill" && /^building/.test(id)) {
-      setPaint(layer, "fill-color", c.paperRise);
-      setPaint(layer, "fill-opacity", 0.85);
-      setPaint(layer, "fill-outline-color", c.inkDim);
-      continue;
-    }
-    if (t === "line" && /^building/.test(id)) {
-      setPaint(layer, "line-color", c.inkDim);
-      setPaint(layer, "line-opacity", 0.4);
-      continue;
-    }
-
-    // Дороги/мосты/тоннели. *-bg (casing) → светлый, *-fg (основа) → bark.
-    // Слои без -bg/-fg суффикса трактуем как основу.
-    if (t === "line" && /^(road|tunnel|bridge)-/.test(id)) {
-      const isBg = id.includes("-bg") || id.endsWith("-casing");
-      setPaint(layer, "line-color", isBg ? c.paperRise : c.bark);
-      continue;
-    }
-
-    // Административные границы — тонкие приглушённые
-    if (t === "line" && /^boundary-/.test(id)) {
+    // Административные границы (boundary-country/state, +:outline casing)
+    if (t === "line" && id.startsWith("boundary-")) {
       setPaint(layer, "line-color", c.inkDim);
       setPaint(layer, "line-opacity", 0.45);
       continue;
     }
 
-    // Подписи (всё symbol с text-field) — ink на paper-halo.
+    // Подписи (любой symbol с text-field) — ink на paper-halo.
     // Размер не трогаем (он уже масштабируется в buildSchemeStyle).
     if (t === "symbol" && layer.layout?.["text-field"]) {
       setPaint(layer, "text-color", c.ink);
