@@ -94,7 +94,7 @@ def render_species(species: list[dict] | None) -> str:
 
 
 def short_model(model: str) -> str:
-    """google/gemma-3-12b → gemma-3-12b"""
+    """qwen/qwen3.5-9b -> qwen3.5-9b"""
     return model.split("/")[-1] if "/" in model else model
 
 

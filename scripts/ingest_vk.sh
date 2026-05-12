@@ -9,7 +9,7 @@
 #
 # Требует:
 #   - Docker (контейнер mushroom_db на порту 5434)
-#   - LM Studio с Gemma на 127.0.0.1:1234 (для стадии photos)
+#   - LM Studio с Qwen на 127.0.0.1:1234 (для стадии photos)
 #   - VK_TOKEN в .env
 
 set -euo pipefail

@@ -1,5 +1,5 @@
 @echo off
-REM Запуск только стадии распознавания видов грибов по фото через Gemma (LM Studio).
+REM Запуск только стадии распознавания видов грибов по фото через Qwen (LM Studio).
 REM
 REM Использование:
 REM   scripts\classify_photos.bat
@@ -25,7 +25,7 @@ curl -fsS --max-time 5 "http://127.0.0.1:1234/v1/models" >nul 2>&1
 if errorlevel 1 (
     echo [ERROR] LM Studio is not available at 127.0.0.1:1234
     echo         1. Open LM Studio
-    echo         2. Load model google/gemma-3-12b
+    echo         2. Load model qwen/qwen3.5-9b
     echo         3. Start server: Developer -^> Start Server
     exit /b 1
 )

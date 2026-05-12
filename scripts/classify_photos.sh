@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Запуск только стадии распознавания видов грибов по фото через Gemma (LM Studio).
+# Запуск только стадии распознавания видов грибов по фото через Qwen (LM Studio).
 # Предполагает что посты уже скачаны и даты извлечены.
 #
 # Использование:
@@ -7,7 +7,7 @@
 #   ./scripts/classify_photos.sh grib_spb
 #
 # Требует:
-#   - LM Studio запущена с моделью google/gemma-3-12b на 127.0.0.1:1234
+#   - LM Studio запущена с моделью qwen/qwen3.5-9b на 127.0.0.1:1234
 #   - data/vk/{group}/raw_posts.json существует (иначе запусти ingest_vk.sh сначала)
 
 set -euo pipefail
@@ -35,7 +35,7 @@ echo "════════════════════════�
 if ! curl -fsS --max-time 5 "$LM_STUDIO_BASE/models" > /dev/null 2>&1; then
     echo "❌ LM Studio недоступна по адресу $LM_STUDIO_BASE/models"
     echo "   1. Открой LM Studio"
-    echo "   2. Загрузи модель google/gemma-3-12b"
+    echo "   2. Загрузи модель qwen/qwen3.5-9b"
     echo "   3. Запусти сервер (Developer → Start Server)"
     exit 1
 fi
