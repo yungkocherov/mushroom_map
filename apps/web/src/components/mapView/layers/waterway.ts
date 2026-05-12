@@ -33,9 +33,9 @@ export function addWaterwayLayer(m: Map): void {
       // line-width:0 фактически прячет фичу.
       "line-width": [
         "interpolate", ["linear"], ["zoom"],
-        6,  ["match", ["get", "waterway"], "river", 0.6, "canal", 0.4, 0],
-        9,  ["match", ["get", "waterway"], "river", 2.2, "canal", 1.6, 0.4],
-        11, ["match", ["get", "waterway"], "river", 3.6, "canal", 2.8, "stream", 1.4, 0.8],
+        6,  ["match", ["get", "waterway"], "river", 1.2, "canal", 0.8, 0],
+        9,  ["match", ["get", "waterway"], "river", 3.0, "canal", 2.4, 0.6],
+        11, ["match", ["get", "waterway"], "river", 4.0, "canal", 3.2, "stream", 1.6, 1.0],
         13, ["match", ["get", "waterway"], "river", 5.0, "canal", 4.0, "stream", 2.5, 1.5],
       ],
       "line-opacity": 0.85,
