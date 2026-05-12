@@ -15,7 +15,7 @@ import type { Map, StyleSpecification } from "maplibre-gl";
 
 import { useLayerVisibility, type BaseMapMode } from "../../../store/useLayerVisibility";
 import { INLINE_STYLE, SATELLITE_STYLE } from "../styles/inline";
-import { buildSchemeStyle, SCHEME_STYLE_FALLBACK } from "../styles/scheme";
+import { buildSchemeStyleD1V, SCHEME_STYLE_FALLBACK } from "../styles/scheme";
 import { buildHybridStyle, HYBRID_STYLE_FALLBACK } from "../styles/hybrid";
 
 export function useBaseMap(
@@ -69,7 +69,7 @@ export function useBaseMap(
     };
 
     if (baseMap === "scheme") {
-      buildSchemeStyle().then(apply).catch(() => apply(SCHEME_STYLE_FALLBACK));
+      buildSchemeStyleD1V().then(apply).catch(() => apply(SCHEME_STYLE_FALLBACK));
     } else if (baseMap === "hybrid") {
       buildHybridStyle().then(apply).catch(() => apply(HYBRID_STYLE_FALLBACK));
     } else {
