@@ -33,12 +33,12 @@ export function addWaterwayLayer(m: Map): void {
       // line-width:0 фактически прячет фичу.
       "line-width": [
         "interpolate", ["linear"], ["zoom"],
-        6,  ["match", ["get", "waterway"], "river", 2.5, "canal", 1.8, 0],
-        9,  ["match", ["get", "waterway"], "river", 3.6, "canal", 2.8, 0.8],
-        11, ["match", ["get", "waterway"], "river", 4.2, "canal", 3.4, "stream", 1.6, 1.0],
-        13, ["match", ["get", "waterway"], "river", 5.0, "canal", 4.0, "stream", 2.5, 1.5],
+        6,  ["match", ["get", "waterway"], "river", 1.8, "canal", 1.2, 0],
+        9,  ["match", ["get", "waterway"], "river", 2.4, "canal", 1.8, 0.5],
+        11, ["match", ["get", "waterway"], "river", 3.0, "canal", 2.4, "stream", 1.2, 0.8],
+        13, ["match", ["get", "waterway"], "river", 4.0, "canal", 3.2, "stream", 2.0, 1.2],
       ],
-      "line-opacity": 0.95,
+      "line-opacity": 0.85,
     } as unknown as maplibregl.LineLayerSpecification["paint"],
   });
 }
