@@ -214,6 +214,14 @@
 .cameoWrap {
   position: relative;
   animation: geobiom-fadeup 1s 0.25s ease both;
+  /* «Прибиты» к карте: на hover translateY переезжает и карта, и
+     индекс-карточка одновременно (раньше только карта прыгала через
+     .cameo:hover, карточка стояла на месте). */
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.cameoWrap:hover {
+  transform: translateY(-2px);
 }
 
 .cameoCard {
