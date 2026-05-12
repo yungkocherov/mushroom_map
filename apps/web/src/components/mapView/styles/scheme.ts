@@ -1,6 +1,5 @@
 import type maplibregl from "maplibre-gl";
 import { setVersatilesFonts } from "../utils/fonts";
-import { applyD1VPaint, resolveD1VColors } from "./paint";
 
 // Правильный путь — через /assets/styles/colorful/style.json (не просто
 // colorful.json — тот отдаёт 404).
@@ -105,15 +104,6 @@ export async function buildSchemeStyle(): Promise<maplibregl.StyleSpecification>
   }
 
   return style as unknown as maplibregl.StyleSpecification;
-}
-
-// Вариант со штрих-кодом D1V — Versatiles перекрашен в палитру бренда.
-// Используется для basemap "scheme". buildHybridStyle() намеренно
-// зовёт ванильный buildSchemeStyle() (там нужны яркие labels над satellite).
-export async function buildSchemeStyleD1V(): Promise<maplibregl.StyleSpecification> {
-  const style = await buildSchemeStyle();
-  applyD1VPaint(style as unknown as Parameters<typeof applyD1VPaint>[0], resolveD1VColors());
-  return style;
 }
 
 export const SCHEME_STYLE_FALLBACK: maplibregl.StyleSpecification = {

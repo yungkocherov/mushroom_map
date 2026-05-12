@@ -21,7 +21,7 @@ import { Protocol } from "pmtiles";
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { UserSpot } from "@mushroom-map/types";
 import {
-  buildSchemeStyleD1V,
+  buildSchemeStyle,
   SCHEME_STYLE_FALLBACK,
 } from "./mapView/styles/scheme";
 import { RATING_HEX } from "../lib/spotRating";
@@ -124,7 +124,7 @@ export const SpotsMiniMap = forwardRef<SpotsMiniMapHandle, Props>(
       const init = async () => {
         let style: maplibregl.StyleSpecification;
         try {
-          style = await buildSchemeStyleD1V();
+          style = await buildSchemeStyle();
         } catch {
           style = SCHEME_STYLE_FALLBACK;
         }
