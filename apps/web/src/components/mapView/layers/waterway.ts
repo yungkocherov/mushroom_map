@@ -17,7 +17,7 @@ export function addWaterwayLayer(m: Map): void {
     type: "line",
     source: "waterway",
     "source-layer": "waterway",
-    minzoom: 9,
+    minzoom: 6,
     paint: {
       "line-color": [
         "match", ["get", "waterway"],
@@ -28,9 +28,14 @@ export function addWaterwayLayer(m: Map): void {
         "ditch", "#7e57c2",
         "#42a5f5",
       ],
+      // На z=6..9 показываем только реки и каналы (stream/ditch коллапсируются
+      // в визуальный шум на низких зумах); с z=10 поднимаем и тонкие водотоки.
+      // line-width:0 фактически прячет фичу.
       "line-width": [
         "interpolate", ["linear"], ["zoom"],
-        9,  ["match", ["get", "waterway"], "river", 2.0, "canal", 1.5, 0.6],
+        6,  ["match", ["get", "waterway"], "river", 0.6, "canal", 0.4, 0],
+        9,  ["match", ["get", "waterway"], "river", 2.2, "canal", 1.6, 0.4],
+        11, ["match", ["get", "waterway"], "river", 3.6, "canal", 2.8, "stream", 1.4, 0.8],
         13, ["match", ["get", "waterway"], "river", 5.0, "canal", 4.0, "stream", 2.5, 1.5],
       ],
       "line-opacity": 0.85,
