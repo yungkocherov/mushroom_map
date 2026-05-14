@@ -48,7 +48,7 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
   });
 
   const { reapplyAll } = useMapLayers(map, mapReady);
-  useMapPopup(map);
+  useMapPopup(map, userSpotsRef);
   useMapUrl(map);
 
   // ─── Basemap switch ───────────────────────────────────────────────

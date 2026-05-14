@@ -26,6 +26,7 @@ import type { UserSpot } from "@mushroom-map/types";
 
 import { MapView } from "../components/MapView";
 import { SaveSpotModal } from "../components/SaveSpotModal";
+import { OnboardingHints } from "../components/OnboardingHints";
 import { MapTopBar } from "../components/mapView/MapTopBar";
 import { MapForecastPanel } from "../components/mapView/MapForecastPanel";
 import { useAuth } from "../auth/useAuth";
@@ -166,12 +167,25 @@ export function MapHomePage() {
         </div>
       )}
 
+      <OnboardingHints />
+
       {saveTarget && (
         <SaveSpotModal
           lat={saveTarget.lat}
           lon={saveTarget.lon}
           onClose={() => setSaveTarget(null)}
-          onSaved={() => void refreshSpots()}
+          onSaved={() => {
+            // Эмитим событие для ForestPopup'а — он перейдёт в done-state
+            // и покажет toast + claim-ring у пина. Делаем ДО refreshSpots,
+            // чтобы попап получил событие раньше чем userSpots layer
+            // перерисуется.
+            window.dispatchEvent(
+              new CustomEvent("mm:spot-saved", {
+                detail: { lat: saveTarget.lat, lon: saveTarget.lon },
+              }),
+            );
+            void refreshSpots();
+          }}
         />
       )}
     </div>

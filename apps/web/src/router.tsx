@@ -9,7 +9,6 @@
  * /map          - Полноэкранная карта (бывший `/`)
  * /map/:district - Detail режим района
  * /calendar     - Сезонный календарь видов
- * /onboarding   - 3-step wizard (first-visit redirect)
  * /species      - Каталог видов
  * /spots        - Сохранённые места (auth-gated)
  * /methodology  - Методология данных
@@ -26,7 +25,6 @@ import { Layout } from "./components/layout/Layout";
 import { LandingPage } from "./routes/LandingPage";
 import { MapHomePage } from "./routes/MapHomePage";
 import { CalendarPage } from "./routes/CalendarPage";
-import { OnboardingPage } from "./routes/OnboardingPage";
 import { NotFoundPage } from "./routes/NotFoundPage";
 import { MethodologyPage } from "./routes/MethodologyPage";
 import { MethodologyArticlePage } from "./routes/MethodologyArticlePage";
@@ -94,7 +92,9 @@ export const router = createBrowserRouter([
       },
       // Новые routes Phase W2 — placeholder'ы, наполняются в W3 / W5.
       { path: "calendar",   element: <CalendarPage /> },
-      { path: "onboarding", element: <OnboardingPage /> },
+      // /onboarding — старый 4-step wizard, удалён 2026-05-15 в пользу
+      // inline V6-V9 hint sequence в MapHomePage (см. OnboardingHints).
+      { path: "onboarding", element: <Navigate to="/" replace /> },
       // /forecast — старый плейсхолдер, теперь главная и есть прогноз.
       { path: "forecast", element: <Navigate to="/" replace /> },
       // /guide — старый плейсхолдер для гайдов; контент уехал в /methodology.

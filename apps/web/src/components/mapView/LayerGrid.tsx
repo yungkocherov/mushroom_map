@@ -242,6 +242,7 @@ function ChipButton({ chip }: { chip: ChipDescriptor }) {
         title={titleAttr}
         aria-disabled={chip.disabled || undefined}
         tabIndex={chip.disabled ? -1 : undefined}
+        data-onboarding={chip.key}
       >
         {inner}
       </Link>
@@ -256,6 +257,7 @@ function ChipButton({ chip }: { chip: ChipDescriptor }) {
       onClick={chip.onClick}
       aria-pressed={chip.active}
       disabled={chip.disabled}
+      data-onboarding={chip.key}
     >
       {inner}
     </button>
@@ -280,6 +282,7 @@ function ForestCard({ forestVisible, forestColorMode, onToggleMode }: ForestCard
           onClick={() => onToggleMode("species")}
           aria-pressed={isActive("species")}
           title={getForestDescription("species").body}
+          data-onboarding="species"
         >
           Породы
         </button>

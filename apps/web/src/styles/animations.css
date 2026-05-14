@@ -64,6 +64,97 @@
   100% { background-position: 200% 0; }
 }
 
+/* ─── Forest-spot popup animations ────────────────────────────────
+ * Source: docs/redesign-2026-05/claude-design/src/popup-spot.jsx
+ * Используется ForestPopup + useMapPopup. Префикс psp = popup-spot.
+ */
+
+/* Popup открывается из пина: scale .04 → 1.02 → 1 с overshoot. */
+@keyframes psp-open {
+  0%   { transform: scale(0.04); opacity: 0; }
+  18%  { opacity: 1; }
+  72%  { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Стаггер строк видов: 90 ms между строками, fade + slide-in. */
+@keyframes psp-row-in {
+  from { opacity: 0; transform: translateX(-6px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Save spinner — линейный rotate + дыхание dasharray. */
+@keyframes psp-save-spinner {
+  0%   { transform: rotate(0deg);   stroke-dashoffset: 110; }
+  50%  { stroke-dashoffset: 30; }
+  100% { transform: rotate(360deg); stroke-dashoffset: 110; }
+}
+
+/* Чекмарк рисуется штрихом при переходе loading → done. */
+@keyframes psp-save-check {
+  from { stroke-dashoffset: 36; }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Кнопка слегка сжимается при нажатии. */
+@keyframes psp-save-press {
+  0%   { transform: scale(1); }
+  10%  { transform: scale(.96); }
+  20%  { transform: scale(1); }
+}
+
+/* Тост «Добавлено в Мои места» — slide up из-под попапа, hold, fade-out. */
+@keyframes psp-toast {
+  0%   { opacity: 0; transform: translate(-50%, 18px); }
+  10%  { opacity: 1; transform: translate(-50%, 0); }
+  82%  { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -6px); }
+}
+
+/* Claim-ring — terra кольцо expand'ится из пина на 3 сек, one-shot. */
+@keyframes psp-pin-ring {
+  0%      { transform: scale(.4); opacity: 0; }
+  12%     { opacity: .9; }
+  100%    { transform: scale(3.6); opacity: 0; }
+}
+
+/* Hint V9 — пульсирующее свечение save-кнопки. */
+@keyframes psp-save-pulse {
+  0%, 100% { box-shadow: 0 0 0 1.5px var(--chanterelle), 0 0 6px 0 rgba(184,106,58,.18); }
+  50%      { box-shadow: 0 0 0 1.5px var(--chanterelle), 0 0 26px 6px rgba(184,106,58,.55); }
+}
+
+/* Hint V6/V7 — контурное свечение target-кнопки. */
+@keyframes hp-contour-pulse {
+  0%, 100% { box-shadow: 0 0 0 1.5px var(--chanterelle), 0 0 6px 0 rgba(184,106,58,.18); }
+  50%      { box-shadow: 0 0 0 1.5px var(--chanterelle), 0 0 28px 6px rgba(184,106,58,.55); }
+}
+
+/* Hint V8 — пин с пульсирующими кольцами + рукописный курсор-палец. */
+@keyframes hp-pulse-ring {
+  0%   { transform: scale(.9); opacity: 0; }
+  14%  { opacity: .85; }
+  80%  { opacity: 0; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+@keyframes hp-tap-cursor {
+  0%, 30%, 100% { transform: translate(0, 0) scale(1); }
+  40%           { transform: translate(0, 5px) scale(.9); }
+  55%           { transform: translate(0, 0)   scale(1); }
+}
+
+/* Hint arrow — stroke-dasharray draw-in. */
+@keyframes hp-draw {
+  from { stroke-dashoffset: var(--len, 320); }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes hp-fadeup {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ─── Interactive utility classes ────────────────────────────────── */
 
 .card-interactive {

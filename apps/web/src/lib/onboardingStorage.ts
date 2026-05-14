@@ -1,40 +1,62 @@
 /**
- * Onboarding-flag хранение в localStorage.
+ * Onboarding state — хранится в localStorage.
  *
- * Контракт: ключ `geobiom_onboarded` со значением `"1"` означает что
- * юзер прошёл (или явно скипнул) onboarding и не должен видеть
- * редирект с `/`.
+ * Старый ключ `geobiom_onboarded` = boolean (прошёл wizard) больше не
+ * используется — wizard /onboarding убран в 2026-05-15 в пользу inline
+ * V6-V9 hint sequence поверх карты.
  *
- * Phase W2 первой версией ставит флаг только когда юзер дойдёт до
- * Step 3 в OnboardingPage. Phase W3 расширит — также при auth-cookie
- * presence (залогиненный = уже знаком), и по migration-snippet'у при
- * deploy для existing visitors.
+ * Новый ключ `geobiom.onboarding.step` хранит номер активного шага
+ * (1..4) или 'done'. `isOnboarded()` оставлен для обратной совместимости
+ * с местами, где раньше проверяли legacy-флаг (AuthCompletePage,
+ * Layout); возвращает true когда step === 'done'.
  */
 
-const KEY = "geobiom_onboarded";
+const STEP_KEY = "geobiom.onboarding.step";
+const LEGACY_KEY = "geobiom_onboarded"; // 2024-2026-04 — удалить через сезон
 const POST_AUTH_KEY = "geobiom_post_auth_redirect";
 
+export type OnboardingStep = 1 | 2 | 3 | 4 | "done";
+
+export function getOnboardingStep(): OnboardingStep {
+  try {
+    if (typeof window === "undefined") return "done";
+    const raw = window.localStorage.getItem(STEP_KEY);
+    // Миграция: legacy `geobiom_onboarded=1` означает что юзер уже видел
+    // wizard — считаем что inline-tour он тоже не должен видеть.
+    if (raw == null) {
+      const legacy = window.localStorage.getItem(LEGACY_KEY);
+      if (legacy === "1") {
+        setOnboardingStep("done");
+        return "done";
+      }
+      return 1;
+    }
+    if (raw === "done") return "done";
+    const n = Number(raw);
+    if (n === 1 || n === 2 || n === 3 || n === 4) return n;
+    return 1;
+  } catch {
+    // SSR / private mode — treat as done (нет смысла гонять туры).
+    return "done";
+  }
+}
+
+export function setOnboardingStep(step: OnboardingStep): void {
+  try {
+    window.localStorage.setItem(STEP_KEY, String(step));
+  } catch {
+    // Private mode / quota — fail silent.
+  }
+}
+
 export function isOnboarded(): boolean {
-  try {
-    return typeof window !== "undefined" &&
-      window.localStorage.getItem(KEY) === "1";
-  } catch {
-    // SSR / private mode — treat as onboarded (skip redirect).
-    return true;
-  }
+  return getOnboardingStep() === "done";
 }
 
-export function setOnboarded(): void {
+export function resetOnboarding(): void {
   try {
-    window.localStorage.setItem(KEY, "1");
-  } catch {
-    // Private mode / quota — fail silent. They'll see onboarding next visit.
-  }
-}
-
-export function resetOnboarded(): void {
-  try {
-    window.localStorage.removeItem(KEY);
+    window.localStorage.removeItem(STEP_KEY);
+    window.localStorage.removeItem(LEGACY_KEY);
   } catch {
     // ignore
   }

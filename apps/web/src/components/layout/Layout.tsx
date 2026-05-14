@@ -1,9 +1,8 @@
-import { Outlet, useLocation, Navigate } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { Header } from "./Header";
 import { Footer } from "./Footer";
 import { Spotlight } from "../Spotlight";
 import { FeedbackButton } from "../FeedbackButton";
-import { isOnboarded } from "../../lib/onboardingStorage";
 import styles from "./Layout.module.css";
 
 /**
@@ -12,23 +11,14 @@ import styles from "./Layout.module.css";
  * с footer'ом). Footer прячем только на map-shell страницах — карта
  * не должна скроллиться, footer мешал бы.
  *
- * First-visit redirect: новые посетители на `/` отправляются на
- * `/onboarding`. Залогиненные / уже onboarded — пропускают.
+ * Onboarding (2026-05-15): wizard /onboarding убран. Inline V6-V9
+ * hints поверх карты (OnboardingHints) запускаются при первом заходе
+ * на /map. Никаких redirect'ов больше нет.
  */
 export function Layout() {
   const { pathname } = useLocation();
   const isMap = pathname === "/map" || pathname.startsWith("/map/");
-  const isOnboarding = pathname === "/onboarding";
-  // Onboarding имеет свой top-bar (Wordmark + stepper) — глобальный
-  // Header дал бы двойной лого. Сворачиваем shell к bare main.
-  const isMapShell = isMap || isOnboarding;
-
-  // First-visit redirect — только на `/`. Deep-link'и (например
-  // `/species`) видим как есть. localStorage-флаг ставится после
-  // прохождения onboarding (см. lib/onboardingStorage.ts).
-  if (pathname === "/" && !isOnboarded()) {
-    return <Navigate to="/onboarding" replace />;
-  }
+  const isMapShell = isMap;
 
   if (isMapShell) {
     // Phase W4 (redesign-2026-05): на /map* Header не нужен — навигация
@@ -40,9 +30,8 @@ export function Layout() {
         <main className={styles.mapMain}>
           <Outlet />
         </main>
-        {/* Onboarding — собственный step-flow, без feedback'а.
-            Map shell — поднимаем над NavigationControl (bottom-right). */}
-        {!isOnboarding && <FeedbackButton placement="aboveMapNav" />}
+        {/* Map shell — поднимаем над NavigationControl (bottom-right). */}
+        <FeedbackButton placement="aboveMapNav" />
       </div>
     );
   }
