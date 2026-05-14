@@ -31,7 +31,7 @@ import type { Popup } from "maplibre-gl";
 // так и его отсутствие; иначе для не-bottom анкоров parse валится и
 // наш inline `top/left` от прошлого apply остаётся вместе с новым
 // MapLibre-transform — попап улетает на (X+old_left, Y+old_top).
-const TR_RE = /translate\(\s*(-?[\d.]+)(%?)\s*,\s*(-?[\d.]+)(%?)\s*\)\s*translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/;
+export const TR_RE = /translate\(\s*(-?[\d.]+)(%?)\s*,\s*(-?[\d.]+)(%?)\s*\)\s*translate\(\s*(-?[\d.]+)px\s*,\s*(-?[\d.]+)px\s*\)/;
 
 export function sharpenPopup(popup: Popup): void {
   const el = popup.getElement();
