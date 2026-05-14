@@ -113,32 +113,6 @@ mushroom-map/
 
 ---
 
-## Запуск локально
-
-Требования: Windows 11 / macOS / Linux, Docker, Python 3.14, Node 20.
-
-```bash
-# Backend stack (db + api)
-docker compose --profile full up -d
-
-# Применить миграции
-.venv/Scripts/python.exe db/migrate.py
-
-# Frontend hot-reload (на хосте, не в Docker — Vite OOM'ит на virtiofs)
-export PATH="/c/Program Files/nodejs:$PATH"
-npm install
-npm run dev                             # http://localhost:5173
-
-# Tests
-.venv/Scripts/python.exe -m pytest -q   # backend
-cd apps/web && npx tsc --noEmit          # frontend typecheck
-```
-
-Detailed setup (включая загрузку лесных данных, сборку PMTiles, ингест VK)
-— в [`CLAUDE.md`](CLAUDE.md).
-
----
-
 ## Данные
 
 ### Лес: Рослесхоз / ФГИС ЛК
@@ -165,17 +139,6 @@ sister-репо как target signal для модели.
 OSM (Overpass) для дорог / болот / водотоков / ООПТ / населённых пунктов.
 Copernicus GLO-30 DEM для рельефа (81 тайл → mosaic UTM 36N → hillshade
 PMTiles). EGRPR (Докучаевский ин-т) для почвенной зональности.
-
----
-
-## Дизайн
-
-Палитра D1 v2 — «refined organic»: paper #f4ede0 (тёплый бумажный) +
-mossDeep #3e4827 (лес) + chanterelle #b86a3a (CTA). Шрифты Fraunces
-(заголовки) + Inter (body) + IBM Plex Mono + Caveat (рукописные акценты).
-Логотип H1 Hybrid — сосна + боровик + 3 контурные линии. Полная
-типографика и токены — [`packages/tokens/src/tokens.css`](packages/tokens/src/tokens.css)
-+ [`docs/redesign-2026-05/plan.md`](docs/redesign-2026-05/plan.md).
 
 ---
 
