@@ -151,7 +151,10 @@ export function LayerGrid({
   const containerClass = layout === "strip" ? styles.strip : styles.grid;
 
   return (
-    <div className={`${floating ? styles.floating : ""}${className ? ` ${className}` : ""}`.trim()}>
+    <div
+      className={`${floating ? styles.floating : ""}${className ? ` ${className}` : ""}`.trim()}
+      data-onboarding-panel="layers"
+    >
       {showBasemap && <BaseMapPicker variant="inline" />}
       <ul
         className={containerClass}

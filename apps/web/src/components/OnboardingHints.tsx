@@ -103,19 +103,37 @@ function useTargetClick(selector: string, onClick: () => void, enabled = true) {
 }
 
 /**
- * Auto-dismiss таймер. Очищается на unmount. Reset-on-rerender был
- * багом — родительский ре-рендер выдавал новый onTimeout-замыкание,
- * effect перезапускался, таймер вечно сбрасывался И при этом каким-то
- * образом всё равно срабатывал раньше срока в StrictMode dev. Ref'у
- * лечит обе проблемы.
+ * Возвращает X-координату правой границы ближайшей подложки
+ * (`[data-onboarding-panel="..."]`). Нужно для V6/V7: текст и стрелка
+ * должны начинаться правее подложки, иначе они лезут на саму панель
+ * и читаются плохо.
  */
-function useTimeout(onTimeout: () => void, ms: number) {
-  const cbRef = useRef(onTimeout);
-  cbRef.current = onTimeout;
-  useEffect(() => {
-    const id = window.setTimeout(() => cbRef.current(), ms);
-    return () => window.clearTimeout(id);
-  }, [ms]);
+function useNearbyPanelRight(selector: string): number | null {
+  const [right, setRight] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const update = () => {
+      const target = document.querySelector<HTMLElement>(selector);
+      if (!target) {
+        setRight(null);
+        return;
+      }
+      const panel = target.closest<HTMLElement>("[data-onboarding-panel]");
+      setRight(panel ? panel.getBoundingClientRect().right : null);
+    };
+    update();
+    const raf = requestAnimationFrame(update);
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    const mo = new MutationObserver(update);
+    mo.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+      mo.disconnect();
+    };
+  }, [selector]);
+  return right;
 }
 
 // ─── Root ───────────────────────────────────────────────────────────
@@ -146,17 +164,19 @@ export function OnboardingHints() {
 
 function HintV6({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
   const rect = useTargetRect('[data-onboarding="species"]');
+  const panelRight = useNearbyPanelRight('[data-onboarding="species"]');
   useTargetClick('[data-onboarding="species"]', onDismiss);
-  useTimeout(onDismiss, 8000);
+  // Никаких auto-dismiss: юзер сам решает когда продолжить.
 
   if (!rect) return null;
   return (
     <>
-      <RadialDim cx={rect.cx} cy={rect.cy} radius={150} />
+      <RadialDim cx={rect.cx} cy={rect.cy} radius={170} />
       <TargetGlow rect={rect} />
       <ArrowHint
         rect={rect}
-        scale={1.45}
+        scale={1.8}
+        originX={panelRight != null ? panelRight + 24 : undefined}
         title={
           <>
             начни <em style={EM}>отсюда</em>
@@ -172,17 +192,18 @@ function HintV6({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
 
 function HintV7({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
   const rect = useTargetRect('[data-onboarding="wetland"]');
+  const panelRight = useNearbyPanelRight('[data-onboarding="wetland"]');
   useTargetClick('[data-onboarding="wetland"]', onDismiss);
-  useTimeout(onDismiss, 8000);
 
   if (!rect) return null;
   return (
     <>
-      <RadialDim cx={rect.cx} cy={rect.cy} radius={130} />
+      <RadialDim cx={rect.cx} cy={rect.cy} radius={150} />
       <TargetGlow rect={rect} />
       <ArrowHint
         rect={rect}
-        scale={1.4}
+        scale={1.6}
+        originX={panelRight != null ? panelRight + 24 : undefined}
         title={
           <>
             теперь <em style={EM}>болота</em>
@@ -197,8 +218,6 @@ function HintV7({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
 }
 
 function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
-  useTimeout(onDismiss, 12000);
-
   // Advance когда юзер открыл popup (= кликнул по карте → popup mount).
   useEffect(() => {
     const onOpened = () => onDismiss();
@@ -272,7 +291,6 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
 function HintV9({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
   const rect = useTargetRect("[data-popup-save]");
   useTargetClick("[data-popup-save]", onDismiss);
-  useTimeout(onDismiss, 10000);
 
   // Закрыли попап без save — тоже dismiss.
   useEffect(() => {
@@ -366,29 +384,39 @@ interface ArrowHintProps {
   title: React.ReactNode;
   sub: string;
   delay?: number;
+  /** Если задан — стрелка/текст начинаются от этого X (например, правая
+   *  граница панели LayerGrid), а не от края button'а. Полезно когда
+   *  button сидит внутри подложки и текст рядом с button'ом перекрывает
+   *  её. Стрелка тогда длинная, тянется от текста до button'а. */
+  originX?: number;
 }
 
-function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5 }: ArrowHintProps) {
+function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowHintProps) {
   // Stratifies right of the target — arrow curves from text down to the
   // button's right edge. Port из hint-породы.jsx ArrowHint side="right".
   // Если target ближе к правому краю экрана — флипаем влево.
   const k = scale;
   const w = typeof window !== "undefined" ? window.innerWidth : 1200;
-  const flipLeft = rect.left + rect.width + 160 * k > w;
-  const side = flipLeft ? -1 : 1;
+  const buttonRight = rect.left + rect.width;
+  // Якорь, от которого считаем смещения текста + arrow-start. По
+  // умолчанию = край кнопки; если задан originX (правая граница
+  // подложки) — берём его, чтобы текст не лез на панель.
+  const anchorX = originX != null ? Math.max(originX, buttonRight + 4) : buttonRight + 4;
+  const flipLeft = anchorX + 160 * k > w;
 
-  const TX = rect.left + (flipLeft ? -4 : rect.width + 4);
+  const TX = flipLeft ? rect.left - 4 : buttonRight + 4;
   const TY = rect.top + rect.height / 2 + 1;
-  const ctlX = TX + side * 56 * k;
+  const ctlX = flipLeft ? TX - 56 * k : Math.max(TX + 56 * k, anchorX - 40 * k);
   const ctlY = TY - 4 * k;
-  const startX = TX + side * 96 * k;
+  const startX = flipLeft ? TX - 96 * k : Math.max(TX + 96 * k, anchorX);
   const startY = TY + 36 * k;
-  const textX = flipLeft ? TX - 220 * k : TX + 24 * k;
+  const textX = flipLeft ? TX - 220 * k : anchorX + 8 * k;
   const textY = TY + 50 * k;
-  const subX = flipLeft ? TX - 200 * k : TX + 84 * k;
+  const subX = flipLeft ? TX - 200 * k : anchorX + 38 * k;
   const subY = TY + 90 * k;
   const rot = flipLeft ? 5 : -5;
   const subRot = flipLeft ? 4 : -4;
+  const dasharray = Math.max(320, Math.hypot(startX - TX, startY - TY) * 1.8);
 
   // Wings of arrowhead aligned to curve tangent at TX/TY.
   const vx = ctlX - TX;
@@ -425,11 +453,11 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5 }: ArrowHintProps)
           strokeWidth={strokeW}
           strokeLinecap="round"
           style={{
-            strokeDasharray: 320,
-            strokeDashoffset: 320,
+            strokeDasharray: dasharray,
+            strokeDashoffset: dasharray,
             animation: `hp-draw 1.1s ${delay}s cubic-bezier(.2,.7,.2,1) forwards`,
             // CSS custom property used by keyframe
-            ["--len" as string]: 320,
+            ["--len" as string]: dasharray,
           } as React.CSSProperties}
         />
         <g
