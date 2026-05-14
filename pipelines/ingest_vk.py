@@ -350,7 +350,9 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
                 pass
 
     # DD месяц [YYYY]
-    m = re.search(rf"\b(\d{{1,2}})\s+{MONTHS_RU_PATTERN}(?:\s+(\d{{4}}))?", text_lower)
+    # `(?!\d)` после `\d{{1,2}}` — чтобы цифра дня не оказалась первыми двумя
+    # символами 4-значного года (см. ниже в «месяц DD»; здесь defensive).
+    m = re.search(rf"\b(\d{{1,2}})(?!\d)\s+{MONTHS_RU_PATTERN}(?:\s+(\d{{4}}))?", text_lower)
     if m:
         day = int(m.group(1))
         month = _month_num(m.group(2))
@@ -365,7 +367,12 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
                 pass
 
     # месяц DD [YYYY]
-    m = re.search(rf"{MONTHS_RU_PATTERN}\s+(\d{{1,2}})(?:\s+(\d{{4}}))?", text_lower)
+    # `(?!\d)` критичен: без него на тексте "сентябрь 2020 г" greedy `\d{{1,2}}`
+    # хватал "20" из "2020" как DD, year группа не матчилась (после "20" идёт
+    # "20 г", не `\s+\d{{4}}`), year fallback'ил на post_dt.year — получали
+    # date(post.year, 9, 20) вместо корректного date(2020, 9, ~15) через
+    # «месяц YYYY» pattern ниже. Bug 2026-05-15.
+    m = re.search(rf"{MONTHS_RU_PATTERN}\s+(\d{{1,2}})(?!\d)(?:\s+(\d{{4}}))?", text_lower)
     if m:
         month = _month_num(m.group(1))
         day = int(m.group(2))
@@ -383,6 +390,10 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
     # День — случайный из [10, 25], чтобы downstream-агрегации не получали
     # искусственный пик на 15-м числе. Date_source стейдж проставит «regex».
     # Откат на год назад только если (year, month) строго позже поста.
+    # Edge: если year+month == post year+month, random day из [10,25] может
+    # превысить post_dt.day → impossible_future. Тогда clip'аем day к
+    # [1, post_dt.day]. Без этого fix line 368 раньше ловил такие тексты как
+    # bug-pattern и rollback'ил год — а сейчас они корректно идут сюда.
     m = re.search(
         rf"\bв?\s*{MONTHS_RU_PATTERN}\s+(\d{{4}})(?:\s*г\.?|\s+года?)?\b",
         text_lower,
@@ -394,7 +405,11 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
             if (year, month) > (post_dt.year, post_dt.month):
                 year -= 1
             try:
-                return date(year, month, random.randint(10, 25))
+                if year == post_dt.year and month == post_dt.month:
+                    day = random.randint(1, post_dt.day)
+                else:
+                    day = random.randint(10, 25)
+                return date(year, month, day)
             except ValueError:
                 pass
 
