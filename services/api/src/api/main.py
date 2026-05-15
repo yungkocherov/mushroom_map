@@ -52,6 +52,16 @@ if settings.sentry_dsn:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_pool()
+    # /api/stats/overview — SUM по 2.17M полигонов идёт ~7 сек. Кеш
+    # на 1 час уже встроен; чтобы первый посетитель не ждал — прогреваем
+    # в фоне сразу после старта. Если упадёт — игнорится внутри.
+    try:
+        from api.routes.stats import warm_overview_cache
+        import asyncio
+        asyncio.get_event_loop().run_in_executor(None, warm_overview_cache)
+    except Exception:
+        # noqa: BLE001 — pre-warm best-effort, не блокируем boot
+        pass
     yield
     close_pool()
 

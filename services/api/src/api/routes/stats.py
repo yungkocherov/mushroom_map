@@ -12,21 +12,36 @@ Stats / transparency endpoints.
         label + count + %-share + trend. Используется виджетом «что
         сейчас растёт» на главной.
 
-Оба endpoint'а дёшевы по чтению — простые агрегаты на уже-проиндексированных
-таблицах. Short-cache (5 min) — в реверс-прокси или через Cache-Control
-впоследствии.
+`/overview` — самый горячий публичный endpoint (загружается на лендинге
+каждым новым посетителем). Узкое место: `SUM(area_m2)` по 2.17M полигонов
+~7-8 сек. Решение — TTL-кеш в памяти процесса (1 час) + Cache-Control:
+public, max-age=300, stale-while-revalidate=86400 для браузеров/CDN.
+Первый cold-request после рестарта медленный, всё остальное instant.
+Pre-warm при старте поднимает кеш в фоне.
 """
 
 from __future__ import annotations
 
+import logging
+import threading
+import time
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from api.db import get_conn
 
 router = APIRouter()
+log = logging.getLogger(__name__)
+
+# In-process cache для /overview. dict вместо lru_cache — нужен TTL
+# и явный invalidate (pre-warm на startup). Lock защищает от thundering
+# herd: несколько одновременных cold-requests НЕ запустят 5 параллельных
+# SUM'ов, дождутся первого.
+_OVERVIEW_TTL_SECONDS = 3600  # 1 час
+_overview_cache: dict[str, object] = {"value": None, "ts": 0.0}
+_overview_lock = threading.Lock()
 
 
 # ──────────────────────────────────────────────────────────────────────────
@@ -59,15 +74,11 @@ SPECIES_LABELS: dict[str, str] = {
 # ──────────────────────────────────────────────────────────────────────────
 # Overview
 # ──────────────────────────────────────────────────────────────────────────
-@router.get("/overview")
-def overview() -> dict:
-    """Сводка по корпусу и доступным данным.
-
-    V4.8: добавлены `forest_area_km2` (сумма геодезической площади всех
-    выделов из forest_polygon.area_m2 / 1e6) + `forest_last_updated`
-    (MAX(updated_at)). Используется лендингом для динамической статистики
-    вместо хардкода. Запрос ~1с на 2.17M полигонов — кэшируем через
-    `Cache-Control: max-age=3600`, аналогично /forest/legend."""
+def _compute_overview() -> dict:
+    """Тяжёлый SQL, который собирает агрегаты для /overview. SUM(area_m2)
+    по 2.17M полигонов держит запрос на ~7 сек — поэтому вызываем строго
+    под lock'ом + кешируем результат на _OVERVIEW_TTL_SECONDS."""
+    t0 = time.monotonic()
     with get_conn() as conn:
         row = conn.execute(
             """
@@ -92,7 +103,7 @@ def overview() -> dict:
     (posts_total, posts_classified, species_count, district_count,
      forest_count, forest_area_km2, forest_last_updated,
      last_vk, prompt_ver) = row
-    return {
+    payload = {
         "posts_total":          int(posts_total or 0),
         "posts_classified":     int(posts_classified or 0),
         "species_count":        int(species_count or 0),
@@ -107,6 +118,54 @@ def overview() -> dict:
         "forecast_model_version": None,
         "forecast_cv_r2":         None,
     }
+    log.info("stats.overview computed in %.2fs", time.monotonic() - t0)
+    return payload
+
+
+def _get_cached_overview() -> dict:
+    """Возвращает закешированный /overview, пересчитывая если TTL истёк."""
+    now = time.monotonic()
+    cached = _overview_cache.get("value")
+    ts = float(_overview_cache.get("ts") or 0)
+    if cached is not None and (now - ts) < _OVERVIEW_TTL_SECONDS:
+        return cached  # type: ignore[return-value]
+    # Cold или stale — берём lock чтобы не запускать 5 параллельных SUM'ов
+    # на thundering-herd. Внутри lock'а перепроверяем — другой поток уже
+    # мог обновить пока мы ждали.
+    with _overview_lock:
+        cached = _overview_cache.get("value")
+        ts = float(_overview_cache.get("ts") or 0)
+        if cached is not None and (now - ts) < _OVERVIEW_TTL_SECONDS:
+            return cached  # type: ignore[return-value]
+        fresh = _compute_overview()
+        _overview_cache["value"] = fresh
+        _overview_cache["ts"] = time.monotonic()
+        return fresh
+
+
+def warm_overview_cache() -> None:
+    """Вызывается из main.py lifespan startup — прогревает кеш сразу
+    после init_pool. Если упадёт (DB ещё не готова) — игнорим, при
+    первом реальном запросе пересчитается."""
+    try:
+        _get_cached_overview()
+        log.info("stats.overview cache warmed at startup")
+    except Exception as exc:  # noqa: BLE001 — safety net at boot
+        log.warning("stats.overview pre-warm failed: %s", exc)
+
+
+@router.get("/overview")
+def overview(response: Response) -> dict:
+    """Сводка по корпусу и доступным данным.
+
+    Кешируется in-memory на 1 час. Браузер/CDN кешируют 5 мин с
+    stale-while-revalidate 24 ч — следующая страничная навигация в этом
+    окне instant даже без сетевого round-trip."""
+    data = _get_cached_overview()
+    response.headers["Cache-Control"] = (
+        "public, max-age=300, stale-while-revalidate=86400"
+    )
+    return data
 
 
 # ──────────────────────────────────────────────────────────────────────────

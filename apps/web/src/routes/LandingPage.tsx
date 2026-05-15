@@ -59,9 +59,11 @@ function useCountUp(target: number | null, duration = 1100): number | null {
 }
 
 function StatBlock({ value, label, suffix }: StatRow) {
-  // V4.10: пока stats не пришёл, показываем «—» вместо нулевого/
-  // хардкод-значения. Юзер жаловался что 0 км²/72k выделов появляются
-  // первыми и потом перестраиваются на реальные — выглядит как баг.
+  // V5: значение всегда определено (хардкод-fallback вместо null) —
+  // landing загружается instant. Count-up анимация играет от 0 до
+  // target, но визуально юзер с первого кадра видит финальное число
+  // (анимация заканчивается за ~1с). Если API в фоне принесёт чуть
+  // другое значение — count-up переиграется к новому.
   const animated = useCountUp(value);
   return (
     <div className={styles.stat}>
@@ -89,12 +91,25 @@ export function LandingPage() {
   usePageTitle("Geobiom — лес ленобласти");
   const navigate = useNavigate();
 
+  // V5 (2026-05-15): /api/stats/overview ~7s cold-request (SUM по 2.17M
+  // forest_polygon). Backend теперь in-memory кеширует на 1ч + pre-warm
+  // на старте, плюс Cache-Control 5min/SWR 24h. Но первый юзер всё ещё
+  // может попасть на cold-start (после restart) — поэтому стартуем
+  // ИЗ хардкод-фоллбека (реальные актуальные значения на момент билда),
+  // и тихо обновляем когда fetch'и придёт реальное. Если хардкод чуть
+  // расходится с актуальным (±1%) — допустимо, лучше чем пустой стейт.
+  const STATIC_FALLBACK = {
+    district_count: 18,
+    forest_polygon_count: 1_232_000,
+    forest_area_km2: 47_400,
+    forest_last_updated: null as string | null,
+  } as const;
   const [stats, setStats] = useState<StatsOverview | null>(null);
   useEffect(() => {
     let cancelled = false;
     fetchStatsOverview()
       .then((d) => !cancelled && setStats(d))
-      .catch(() => {}); // fallback на хардкод-значения ниже
+      .catch(() => {}); // fallback остаётся хардкод
     return () => {
       cancelled = true;
     };
@@ -103,20 +118,19 @@ export function LandingPage() {
   const year = new Date().getFullYear();
   const updatedLabel = formatUpdated(stats?.forest_last_updated ?? null);
 
-  // V4.10: НЕ показываем хардкод-fallback'и до прихода API — иначе
-  // юзер видит 18/72k/0, потом значения перестраиваются на реальные
-  // (≈18/1.2млн/47k). Лучше «—» до загрузки.
   const STATS: StatRow[] = [
     {
-      value: stats?.district_count ?? null,
+      value: stats?.district_count ?? STATIC_FALLBACK.district_count,
       label: "районов ЛО",
     },
     {
-      value: stats?.forest_polygon_count ?? null,
+      value: stats?.forest_polygon_count ?? STATIC_FALLBACK.forest_polygon_count,
       label: "выделов леса",
     },
     {
-      value: stats?.forest_area_km2 != null ? Math.round(stats.forest_area_km2) : null,
+      value: stats?.forest_area_km2 != null
+        ? Math.round(stats.forest_area_km2)
+        : STATIC_FALLBACK.forest_area_km2,
       label: "км² покрытия",
     },
   ];
