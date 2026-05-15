@@ -50,33 +50,56 @@ function rectOf(el: HTMLElement | null): DOMRectLite | null {
 /**
  * Слушает изменения положения target-элемента (resize/scroll/mutation).
  * `selector` = CSS-селектор; пересматривается каждый рендер.
+ *
+ * `livePoll=true` дополнительно опрашивает rect на каждом rAF — нужно
+ * когда target живёт внутри MapLibre popup'а: попап перепозиционируется
+ * через CSS-transform при каждом move-event карты, но MutationObserver
+ * со `childList`-фильтром этого не видит. Только для активного V9 —
+ * остальные хинты используют дефолтный (одноразовый) режим.
  */
-function useTargetRect(selector: string): DOMRectLite | null {
+function useTargetRect(selector: string, livePoll = false): DOMRectLite | null {
   const [rect, setRect] = useState<DOMRectLite | null>(null);
 
   useLayoutEffect(() => {
     let cancelled = false;
-    const update = () => {
+    let raf = 0;
+    const tick = () => {
+      if (cancelled) return;
       const el = document.querySelector<HTMLElement>(selector);
       const r = rectOf(el);
-      if (!cancelled) setRect(r);
+      setRect((prev) => {
+        if (!r && !prev) return prev;
+        if (
+          r && prev &&
+          r.left === prev.left &&
+          r.top === prev.top &&
+          r.width === prev.width &&
+          r.height === prev.height
+        ) {
+          return prev;
+        }
+        return r;
+      });
+      if (livePoll) raf = requestAnimationFrame(tick);
     };
-    update();
-    // Re-измеряем при layout-settle (шрифты могут догрузиться).
-    const raf = requestAnimationFrame(update);
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
+    tick();
+    if (!livePoll) {
+      // Re-измеряем при layout-settle (шрифты могут догрузиться).
+      raf = requestAnimationFrame(tick);
+    }
+    window.addEventListener("resize", tick);
+    window.addEventListener("scroll", tick, true);
     // На случай если target монтируется позже (popup) — observer на body.
-    const mo = new MutationObserver(update);
+    const mo = new MutationObserver(tick);
     mo.observe(document.body, { childList: true, subtree: true });
     return () => {
       cancelled = true;
       cancelAnimationFrame(raf);
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", tick);
+      window.removeEventListener("scroll", tick, true);
       mo.disconnect();
     };
-  }, [selector]);
+  }, [selector, livePoll]);
 
   return rect;
 }
@@ -105,6 +128,30 @@ function useTargetClick(selector: string, onClick: () => void, enabled = true) {
 }
 
 /**
+ * window.addEventListener в режиме ref-callback: listener подписывается
+ * один раз на mount, но всегда вызывает АКТУАЛЬНУЮ версию handler'а
+ * (через cbRef). Это лечит баг V8/V9 — раньше listener для
+ * mm:popup-closed жил с deps=[onDismiss], а onDismiss — inline-arrow
+ * из родителя; effect пересоздавался каждый ре-рендер и мог пропустить
+ * event между cleanup'ом и re-setup'ом (mm:popup-closed как раз
+ * стреляет из cleanup ForestPopup'а, т.е. в очень неудачный момент).
+ */
+function useWindowEvent(
+  name: string,
+  handler: () => void,
+  enabled = true,
+) {
+  const cbRef = useRef(handler);
+  cbRef.current = handler;
+  useEffect(() => {
+    if (!enabled) return;
+    const fn = () => cbRef.current();
+    window.addEventListener(name, fn);
+    return () => window.removeEventListener(name, fn);
+  }, [name, enabled]);
+}
+
+/**
  * Возвращает X-координату правой границы ближайшей подложки
  * (`[data-onboarding-panel="..."]`). Нужно для V6/V7: текст и стрелка
  * должны начинаться правее подложки, иначе они лезут на саму панель
@@ -113,31 +160,38 @@ function useTargetClick(selector: string, onClick: () => void, enabled = true) {
 function useNearbyPanelRight(
   selector: string,
   ancestorSelector = "[data-onboarding-panel]",
+  livePoll = false,
 ): number | null {
   const [right, setRight] = useState<number | null>(null);
   useLayoutEffect(() => {
-    const update = () => {
+    let cancelled = false;
+    let raf = 0;
+    const tick = () => {
+      if (cancelled) return;
       const target = document.querySelector<HTMLElement>(selector);
       if (!target) {
-        setRight(null);
-        return;
+        setRight((prev) => (prev === null ? prev : null));
+      } else {
+        const panel = target.closest<HTMLElement>(ancestorSelector);
+        const next = panel ? panel.getBoundingClientRect().right : null;
+        setRight((prev) => (prev === next ? prev : next));
       }
-      const panel = target.closest<HTMLElement>(ancestorSelector);
-      setRight(panel ? panel.getBoundingClientRect().right : null);
+      if (livePoll) raf = requestAnimationFrame(tick);
     };
-    update();
-    const raf = requestAnimationFrame(update);
-    window.addEventListener("resize", update);
-    window.addEventListener("scroll", update, true);
-    const mo = new MutationObserver(update);
+    tick();
+    if (!livePoll) raf = requestAnimationFrame(tick);
+    window.addEventListener("resize", tick);
+    window.addEventListener("scroll", tick, true);
+    const mo = new MutationObserver(tick);
     mo.observe(document.body, { childList: true, subtree: true });
     return () => {
+      cancelled = true;
       cancelAnimationFrame(raf);
-      window.removeEventListener("resize", update);
-      window.removeEventListener("scroll", update, true);
+      window.removeEventListener("resize", tick);
+      window.removeEventListener("scroll", tick, true);
       mo.disconnect();
     };
-  }, [selector, ancestorSelector]);
+  }, [selector, ancestorSelector, livePoll]);
   return right;
 }
 
@@ -147,10 +201,25 @@ export function OnboardingHints() {
   const [step, setStepState] = useState<OnboardingStep>(() =>
     getOnboardingStep(),
   );
+  // Между V8 (нажатие на выдел) и V9 (Сохранить спот) показываем
+  // 2.5-секундный loading-оверлей — попап в это время докачивает
+  // forest/soil/water/terrain. Без него юзер видит хаос: карта летит,
+  // тут же выскакивает hint про save-кнопку. localState, не персистим.
+  const [loadingBeforeV9, setLoadingBeforeV9] = useState(false);
 
   const advance = (next: OnboardingStep) => {
+    if (next === 4) {
+      setLoadingBeforeV9(true);
+      return;
+    }
     setOnboardingStep(next);
     setStepState(next);
+  };
+
+  const finishLoading = () => {
+    setLoadingBeforeV9(false);
+    setOnboardingStep(4);
+    setStepState(4);
   };
 
   if (step === "done") return null;
@@ -159,7 +228,8 @@ export function OnboardingHints() {
     <div style={ROOT_STYLE} aria-live="polite">
       {step === 1 && <HintV6 onDismiss={() => advance(2)} onSkip={() => advance("done")} />}
       {step === 2 && <HintV7 onDismiss={() => advance(3)} onSkip={() => advance("done")} />}
-      {step === 3 && <HintV8 onDismiss={() => advance(4)} onSkip={() => advance("done")} />}
+      {step === 3 && !loadingBeforeV9 && <HintV8 onDismiss={() => advance(4)} onSkip={() => advance("done")} />}
+      {step === 3 && loadingBeforeV9 && <LoadingHint onDone={finishLoading} />}
       {step === 4 && <HintV9 onDismiss={() => advance("done")} onSkip={() => advance("done")} />}
     </div>
   );
@@ -270,6 +340,8 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
 
   // Advance ТОЛЬКО когда popup открыт на target-точке (в пределах
   // tolerance). Клик в другой выдел V8 не закроет.
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
   useEffect(() => {
     const onOpened = (e: Event) => {
       const ce = e as CustomEvent<{ lat: number; lon: number }>;
@@ -278,12 +350,12 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
         Math.abs(ce.detail.lat - V8_TARGET.lat) < V8_TARGET_TOLERANCE &&
         Math.abs(ce.detail.lon - V8_TARGET.lon) < V8_TARGET_TOLERANCE
       ) {
-        onDismiss();
+        onDismissRef.current();
       }
     };
     window.addEventListener("mm:popup-opened", onOpened as EventListener);
     return () => window.removeEventListener("mm:popup-opened", onOpened as EventListener);
-  }, [onDismiss]);
+  }, []);
 
   const w = typeof window !== "undefined" ? window.innerWidth : 1200;
   const h = typeof window !== "undefined" ? window.innerHeight : 800;
@@ -415,19 +487,16 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
 }
 
 function HintV9({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
-  const rect = useTargetRect("[data-popup-save]");
-  // Save-кнопка живёт внутри MapLibre popup'а — берём правый край
-  // .maplibregl-popup чтобы текст и start стрелки уходили правее самой
-  // карточки, не накладываясь на неё (как и V6/V7 относительно панели).
-  const popupRight = useNearbyPanelRight("[data-popup-save]", ".maplibregl-popup");
+  // Live-poll включён: save-кнопка живёт в MapLibre popup'е, который
+  // двигается на каждый map-move через CSS transform. Без rAF-цикла
+  // подсветка / стрелка / текст застревали в исходной позиции и при
+  // pan'е карты уезжали относительно реального положения кнопки.
+  const rect = useTargetRect("[data-popup-save]", true);
+  const popupRight = useNearbyPanelRight("[data-popup-save]", ".maplibregl-popup", true);
   useTargetClick("[data-popup-save]", onDismiss);
-
-  // Закрыли попап без save — тоже dismiss.
-  useEffect(() => {
-    const onClosed = () => onDismiss();
-    window.addEventListener("mm:popup-closed", onClosed as EventListener);
-    return () => window.removeEventListener("mm:popup-closed", onClosed as EventListener);
-  }, [onDismiss]);
+  // Закрыли попап без save — тоже dismiss. Ref-pattern: подписываемся
+  // ОДИН раз на mount; cbRef всегда указывает на актуальный onDismiss.
+  useWindowEvent("mm:popup-closed", onDismiss);
 
   if (!rect) return null;
   // Стиль идентичен V6/V7: тугой radial dim вокруг кнопки + glow-кольцо
@@ -450,6 +519,91 @@ function HintV9({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
         delay={0.4}
       />
       <StepBadge n={4} label="сохрани" onSkip={onSkip} />
+    </>
+  );
+}
+
+/**
+ * LoadingHint — переходный экран между V8 и V9. Карта только что
+ * прилетела к выделу и попап начал грузиться. Юзер видит затемнённый
+ * фон + лёгкий спиннер + текст «дождитесь, пока карта загрузится».
+ * Не блокирует клики (pointer-events:none на всём overlay'е, кроме
+ * step-badge). Auto-advance через 2.5 секунды.
+ */
+function LoadingHint({ onDone }: { onDone: () => void }) {
+  const doneRef = useRef(onDone);
+  doneRef.current = onDone;
+  useEffect(() => {
+    const id = window.setTimeout(() => doneRef.current(), 2500);
+    return () => window.clearTimeout(id);
+  }, []);
+  return (
+    <>
+      <div
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(18,16,12,.45)",
+          animation: "geobiom-fadein .35s ease both",
+          zIndex: 1,
+          pointerEvents: "none",
+        }}
+      />
+      <div
+        style={{
+          position: "fixed",
+          left: "50%",
+          top: "50%",
+          transform: "translate(-50%, -50%)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 14,
+          padding: "20px 28px",
+          background: "var(--cream)",
+          borderRadius: 14,
+          boxShadow:
+            "0 14px 36px rgba(20,15,10,.34), 0 0 0 1px rgba(0,0,0,.06)",
+          zIndex: 3,
+          pointerEvents: "none",
+          animation: "hp-fadeup .45s ease both",
+        }}
+      >
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 28 28"
+          style={{
+            animation: "psp-save-spinner 1.1s linear infinite",
+            transformOrigin: "center",
+          }}
+          aria-hidden="true"
+        >
+          <circle
+            cx="14"
+            cy="14"
+            r="11"
+            fill="none"
+            stroke="var(--chanterelle)"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeDasharray="60"
+            strokeDashoffset="30"
+          />
+        </svg>
+        <div
+          style={{
+            fontFamily: "var(--font-body)",
+            fontSize: 14,
+            color: "var(--ink-dim)",
+            textAlign: "center",
+            letterSpacing: "-0.005em",
+          }}
+        >
+          Дождитесь, пока карта загрузится…
+        </div>
+      </div>
     </>
   );
 }
@@ -523,38 +677,47 @@ interface ArrowHintProps {
 }
 
 function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowHintProps) {
-  // Stratifies right of the target — arrow curves from text down to the
-  // button's right edge. Port из hint-породы.jsx ArrowHint side="right".
-  // Если target ближе к правому краю экрана — флипаем влево.
   const k = scale;
   const w = typeof window !== "undefined" ? window.innerWidth : 1200;
   const buttonRight = rect.left + rect.width;
-  // Якорь, от которого считаем смещения текста + arrow-start. По
-  // умолчанию = край кнопки; если задан originX (правая граница
-  // подложки) — берём его, чтобы текст не лез на панель.
+  // Якорь, от которого считаем смещения текста. По умолчанию = край
+  // кнопки; если задан originX (правая граница подложки/попапа) — берём
+  // его, чтобы текст не лез на панель/попап.
   const anchorX = originX != null ? Math.max(originX, buttonRight + 4) : buttonRight + 4;
   const flipLeft = anchorX + 160 * k > w;
+  const sign = flipLeft ? -1 : 1;
 
   const TX = flipLeft ? rect.left - 4 : buttonRight + 4;
   const TY = rect.top + rect.height / 2 + 1;
-  // Стрелка стартует прямо у первой буквы текста — чтобы выглядело
-  // что текст и стрелка едины. startX ≈ textX, чуть-чуть отступ слева
-  // вглубь чтобы стрелка не «вылезала» из-под буквы.
+
+  // Текст и сабтекст — относительно anchorX. На flipLeft зеркалим
+  // знак смещения чтобы текст оказался слева от target'а.
   const textX = flipLeft ? TX - 220 * k : anchorX + 8 * k;
   const textY = TY + 50 * k;
   const subX = flipLeft ? TX - 200 * k : anchorX + 38 * k;
   const subY = TY + 90 * k;
-  const startX = flipLeft ? textX + 30 * k : textX - 4 * k;
-  const startY = TY + 40 * k;
-  // Контрольная точка — на полпути между startX и TX, чуть выше TY,
-  // даёт мягкую дугу.
-  const ctlX = flipLeft ? (startX + TX) / 2 + 10 * k : (startX + TX) / 2 - 10 * k;
-  const ctlY = TY - 6 * k;
+
+  // Стрелка: start у текста (визуально продолжение «руки писателя»),
+  // но не ближе чем 80k от TIP — иначе curve вырождается и arrowhead
+  // указывает не туда. На сильно длинных curve'ах start расширяется
+  // до anchorX.
+  const minSpan = 80 * k;
+  const startX = flipLeft
+    ? Math.min(textX + 30 * k, TX - minSpan)
+    : Math.max(textX - 4 * k, TX + minSpan);
+  const startY = TY + 36 * k;
+  // Control в 55% от TIP к start — гарантирует tangent в TX в
+  // направлении startX (а не в обратную сторону, как было при
+  // -10k offset'е на коротких curve'ах). Лёгкий upward bow через ctlY.
+  const ctlX = TX + (startX - TX) * 0.55;
+  const ctlY = TY - 8 * k;
   const rot = flipLeft ? 5 : -5;
   const subRot = flipLeft ? 4 : -4;
   const dasharray = Math.max(280, Math.hypot(startX - TX, startY - TY) * 1.7);
 
   // Wings of arrowhead aligned to curve tangent at TX/TY.
+  // (ux,uy) — backward direction (от TIP вдоль curve к control'у).
+  // Wings = backward rotated ±30°, длиной 16k для жирного arrowhead'а.
   const vx = ctlX - TX;
   const vy = ctlY - TY;
   const len = Math.hypot(vx, vy) || 1;
@@ -566,9 +729,12 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
     const si = Math.sin(a);
     return [(c * ux - si * uy) * s, (si * ux + c * uy) * s];
   };
-  const [w1x, w1y] = wing(30, 13 * k);
-  const [w2x, w2y] = wing(-30, 13 * k);
-  const strokeW = (2.6 * k).toFixed(2);
+  const wingLen = 16 * k;
+  const [w1x, w1y] = wing(28, wingLen);
+  const [w2x, w2y] = wing(-28, wingLen);
+  const strokeW = (2.8 * k).toFixed(2);
+  // sign unused after refactor — flipLeft branch already handles direction.
+  void sign;
 
   return (
     <>
