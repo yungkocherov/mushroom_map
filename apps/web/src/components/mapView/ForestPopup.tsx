@@ -199,41 +199,13 @@ export function ForestPopup({
   // ── Coordinates string ────────────────────────────────────────────
   const coordStr = `${lat.toFixed(3)}° N · ${lon.toFixed(3)}° E`;
 
-  // ── Anim cleanup ─ Chrome+Windows на любом элементе с CSS-transform
-  // принудительно растеризует текст в композитном GPU-слое БЕЗ ClearType
-  // → текст блюрится. Даже после animationend и снятия transform Chrome
-  // НЕ сразу размонтирует GPU-слой — нужен trigger reflow ИЛИ повторный
-  // layout (юзер ловит это через zoom 110% → 100%).
-  // Решение: animationend → force reflow + дать новый layout-сигнал
-  // (toggle paint-order / change style attribute), чтобы compositor-
-  // layer был released и ClearType вернулся.
-  const [animDone, setAnimDone] = useState(false);
-  const animRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!animDone || !animRef.current) return;
-    const el = animRef.current;
-    // 1. Force reflow (offsetHeight read).
-    // 2. Toggle inline `transform: translateZ(0)` then remove — заставляет
-    //    Chrome пере-собрать compositor-layer и снять grayscale AA.
-    el.style.transform = "translateZ(0)";
-    void el.offsetHeight; // reflow
-    requestAnimationFrame(() => {
-      if (el.isConnected) {
-        el.style.transform = "";
-        void el.offsetHeight; // reflow второй раз
-      }
-    });
-  }, [animDone]);
-
   return (
     <div className="psp-root" style={ROOT_STYLE}>
-      {/* Open-animation wrapper — single anim that scales out of pin tip. */}
-      <div
-        ref={animRef}
-        className="psp-anim"
-        style={animDone ? ANIM_STYLE_DONE : ANIM_STYLE}
-        onAnimationEnd={() => setAnimDone(true)}
-      >
+      {/* Open-animation: чистый opacity fade-in без transform.
+       *  Раньше было `scale(.04→1)` overshoot — красиво, но GPU
+       *  compositor-layer с grayscale AA держался и после анимации
+       *  → блюр latin-names. Убрали transform совсем — текст чёткий. */}
+      <div className="psp-anim" style={ANIM_STYLE}>
         {/* HEADER */}
         <div style={HEADER_STYLE}>
           <button
@@ -655,8 +627,9 @@ function plural(n: number, forms: [string, string, string]): string {
 
 // ─── Styles ─────────────────────────────────────────────────────────
 
-// transform-origin = «50% calc(100% + 14px)» — масштабируется из точки
-// на 14px ниже нижнего края (== кончик пина под попапом).
+// Только opacity-анимация — БЕЗ transform, чтобы Chrome не промоутил
+// карточку в GPU compositor-layer (с grayscale AA, ломающим ClearType
+// на latin-name строчках в блоке «что растёт»).
 const ANIM_STYLE: React.CSSProperties = {
   background: "var(--cream)",
   borderRadius: 14,
@@ -666,21 +639,7 @@ const ANIM_STYLE: React.CSSProperties = {
   color: "var(--ink)",
   overflow: "hidden",
   boxSizing: "border-box",
-  animation: "psp-open .6s cubic-bezier(.25,.85,.3,1) both",
-  transformOrigin: "50% calc(100% + 14px)",
-};
-
-// После завершения open-анимации убираем transform/animation/will-change
-// чтобы Chrome+Windows вернул ClearType (subpixel AA) на тексте.
-const ANIM_STYLE_DONE: React.CSSProperties = {
-  background: "var(--cream)",
-  borderRadius: 14,
-  boxShadow:
-    "0 22px 60px rgba(40,30,15,.28), 0 0 0 1px rgba(0,0,0,.06)",
-  fontFamily: "var(--font-body)",
-  color: "var(--ink)",
-  overflow: "hidden",
-  boxSizing: "border-box",
+  animation: "psp-open .35s ease-out both",
 };
 
 const ROOT_STYLE: React.CSSProperties = {
