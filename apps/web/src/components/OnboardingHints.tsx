@@ -723,30 +723,37 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
       >
         покажу, что там растёт
       </div>
-      {/* Большая ↓ ровно над пином — указывает в центр точки.
-          Раньше ↓ был внутри sub-текста и из-за translate(-50%) + rotate
-          смещался относительно центра пина. Теперь — отдельный элемент,
-          left/top напрямую = pin position, центр через translate. */}
+      {/* SVG-стрелка вниз ровно над пином. Раньше использовали Unicode ↓
+          в font-hand — у Caveat glyph не центрирован в em-box, и hp-fadeup
+          keyframe ставил transform: translateY(0), переписывая inline
+          translate(-50%) → центрировка ломалась. SVG-paths рисуем явно
+          симметрично, opacity-only animation не трогает transform. */}
       {pinXY && (
         <div
           aria-hidden="true"
           style={{
             position: "fixed",
             left: pinXY.x,
-            top: pinXY.y - 48,
+            top: pinXY.y - 46,
             transform: "translate(-50%, -50%)",
-            fontFamily: "var(--font-hand)",
-            fontSize: 44,
-            fontWeight: 700,
-            color: "var(--chanterelle)",
-            lineHeight: 1,
-            animation: "hp-fadeup .45s .55s ease both",
-            textShadow: HAND_TEXT_OUTLINE,
             zIndex: 3,
             pointerEvents: "none",
+            animation: "geobiom-fadein .45s .55s ease both",
+            filter:
+              "drop-shadow(0 0 1.5px rgba(0,0,0,.7)) " +
+              "drop-shadow(0 2px 8px rgba(0,0,0,.4))",
           }}
         >
-          ↓
+          <svg width="36" height="48" viewBox="0 0 36 48">
+            <path
+              d="M 18 4 L 18 38 M 8 28 L 18 38 L 28 28"
+              stroke="var(--chanterelle)"
+              strokeWidth="4"
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
         </div>
       )}
 
