@@ -201,14 +201,35 @@ export function ForestPopup({
 
   // ── Anim cleanup ─ Chrome+Windows на любом элементе с CSS-transform
   // принудительно растеризует текст в композитном GPU-слое БЕЗ ClearType
-  // → текст блюрится. `animation: psp-open ... both` оставляет transform
-  // на финале → блюр сохраняется. После animationend снимаем transform.
+  // → текст блюрится. Даже после animationend и снятия transform Chrome
+  // НЕ сразу размонтирует GPU-слой — нужен trigger reflow ИЛИ повторный
+  // layout (юзер ловит это через zoom 110% → 100%).
+  // Решение: animationend → force reflow + дать новый layout-сигнал
+  // (toggle paint-order / change style attribute), чтобы compositor-
+  // layer был released и ClearType вернулся.
   const [animDone, setAnimDone] = useState(false);
+  const animRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!animDone || !animRef.current) return;
+    const el = animRef.current;
+    // 1. Force reflow (offsetHeight read).
+    // 2. Toggle inline `transform: translateZ(0)` then remove — заставляет
+    //    Chrome пере-собрать compositor-layer и снять grayscale AA.
+    el.style.transform = "translateZ(0)";
+    void el.offsetHeight; // reflow
+    requestAnimationFrame(() => {
+      if (el.isConnected) {
+        el.style.transform = "";
+        void el.offsetHeight; // reflow второй раз
+      }
+    });
+  }, [animDone]);
 
   return (
     <div className="psp-root" style={ROOT_STYLE}>
       {/* Open-animation wrapper — single anim that scales out of pin tip. */}
       <div
+        ref={animRef}
         className="psp-anim"
         style={animDone ? ANIM_STYLE_DONE : ANIM_STYLE}
         onAnimationEnd={() => setAnimDone(true)}
