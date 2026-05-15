@@ -140,10 +140,32 @@ export function CabinetSpotsPage() {
       >
         Мои места
       </p>
-      <h1 className={prose.h1}>
-        {spots && spots.length > 0
-          ? `Сохранённых мест: ${spots.length}`
-          : "Мои места"}
+      <h1
+        className={prose.h1}
+        style={{
+          fontSize: "clamp(2rem, 3vw + 1rem, 3.5rem)",
+          letterSpacing: "-0.02em",
+          lineHeight: 1.05,
+          fontWeight: 600,
+          margin: "0 0 var(--space-3)",
+        }}
+      >
+        {spots && spots.length > 0 ? (
+          <>
+            Сохранённых мест:{" "}
+            <em
+              style={{
+                fontStyle: "italic",
+                color: "var(--chanterelle)",
+                fontWeight: 600,
+              }}
+            >
+              {spots.length}
+            </em>
+          </>
+        ) : (
+          "Мои места"
+        )}
       </h1>
       <p className={prose.lead}>
         Видишь только ты. Никаких агрегаций, ничего не публикуется. Чтобы

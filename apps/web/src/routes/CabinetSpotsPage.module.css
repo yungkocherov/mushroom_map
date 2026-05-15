@@ -203,32 +203,39 @@
   grid-template-columns: auto 1fr auto;
   gap: var(--space-3);
   align-items: start;
-  padding: var(--space-3);
-  background: var(--paper-rise);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  transition: border-color 120ms ease, background 120ms ease;
+  padding: var(--space-4);
+  background: var(--cream);
+  border: 0;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 1px 3px rgba(60, 50, 30, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 160ms ease, transform 160ms ease;
 }
 .list > li[data-highlighted="true"] {
-  border-color: var(--forest);
-  background: color-mix(in srgb, var(--forest) 6%, var(--paper-rise));
+  box-shadow: 0 4px 18px rgba(60, 50, 30, 0.12),
+              0 0 0 1.5px var(--chanterelle);
+  transform: translateY(-1px);
 }
 
 .markerDot {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  margin-top: 4px;
+  margin-top: 8px;
+  box-shadow: 0 0 0 2px var(--cream);
 }
 
 .rowBody {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .rowTitle {
-  font-weight: 500;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--ink);
+  line-height: 1.2;
 }
 
 .rowTitleLink {
