@@ -197,19 +197,38 @@ function useNearbyPanelRight(
 
 // ─── Root ───────────────────────────────────────────────────────────
 
+/**
+ * Какой step разрешает interaction с каким селектором. Используется
+ * блокировщиком кликов: всё что не matches allowedSelector — игнор.
+ * 'done' и loading-фазы блокируют всё кроме [data-onboarding-control].
+ */
+const ALLOWED_SELECTOR_BY_STEP: Record<Exclude<OnboardingStep, "done">, string> = {
+  1: '[data-onboarding="species"]',
+  2: '[data-onboarding="wetland"]',
+  // V8 — клик по карте; нужно разрешить .maplibregl-canvas
+  3: ".maplibregl-canvas",
+  // V9 — кнопка save в попапе
+  4: "[data-popup-save]",
+};
+
 export function OnboardingHints() {
   const [step, setStepState] = useState<OnboardingStep>(() =>
     getOnboardingStep(),
   );
-  // Между V8 (нажатие на выдел) и V9 (Сохранить спот) показываем
-  // 2.5-секундный loading-оверлей — попап в это время докачивает
-  // forest/soil/water/terrain. Без него юзер видит хаос: карта летит,
-  // тут же выскакивает hint про save-кнопку. localState, не персистим.
-  const [loadingBeforeV9, setLoadingBeforeV9] = useState(false);
+  // Loading-overlay между шагами: после V6 (Породы) ждём пока загрузится
+  // forest pmtiles + раскраска применится; после V7 (Болота) — wetland.
+  // 2.5 сек хватает с запасом для cold-load'а тайлов. localState, не
+  // персистим (если юзер перезагрузит во время loading — продолжит со
+  // следующего шага без задержки).
+  const [loadingPhase, setLoadingPhase] = useState<null | "after-v6" | "after-v7">(null);
 
   const advance = (next: OnboardingStep) => {
-    if (next === 4) {
-      setLoadingBeforeV9(true);
+    if (step === 1 && next === 2) {
+      setLoadingPhase("after-v6");
+      return;
+    }
+    if (step === 2 && next === 3) {
+      setLoadingPhase("after-v7");
       return;
     }
     setOnboardingStep(next);
@@ -217,21 +236,131 @@ export function OnboardingHints() {
   };
 
   const finishLoading = () => {
-    setLoadingBeforeV9(false);
-    setOnboardingStep(4);
-    setStepState(4);
+    if (loadingPhase === "after-v6") {
+      setLoadingPhase(null);
+      setOnboardingStep(2);
+      setStepState(2);
+    } else if (loadingPhase === "after-v7") {
+      setLoadingPhase(null);
+      setOnboardingStep(3);
+      setStepState(3);
+    }
   };
+
+  const skipAll = () => {
+    setLoadingPhase(null);
+    setOnboardingStep("done");
+    setStepState("done");
+  };
+
+  // Блок не-target кликов: всё что не allowedSelector или
+  // [data-onboarding-control] (skip/help-кнопки) — preventDefault +
+  // stopImmediatePropagation. Работает в capture-фазе, прежде чем
+  // app handler'ы успеют отреагировать.
+  const allowedSelector =
+    step !== "done" && loadingPhase === null
+      ? ALLOWED_SELECTOR_BY_STEP[step]
+      : null;
+  useBlockNonTargetClicks(allowedSelector);
 
   if (step === "done") return null;
 
   return (
     <div style={ROOT_STYLE} aria-live="polite">
-      {step === 1 && <HintV6 onDismiss={() => advance(2)} onSkip={() => advance("done")} />}
-      {step === 2 && <HintV7 onDismiss={() => advance(3)} onSkip={() => advance("done")} />}
-      {step === 3 && !loadingBeforeV9 && <HintV8 onDismiss={() => advance(4)} onSkip={() => advance("done")} />}
-      {step === 3 && loadingBeforeV9 && <LoadingHint onDone={finishLoading} />}
-      {step === 4 && <HintV9 onDismiss={() => advance("done")} onSkip={() => advance("done")} />}
+      {loadingPhase === null && step === 1 && <HintV6 onDismiss={() => advance(2)} onSkip={skipAll} />}
+      {loadingPhase === null && step === 2 && <HintV7 onDismiss={() => advance(3)} onSkip={skipAll} />}
+      {loadingPhase === null && step === 3 && <HintV8 onDismiss={() => advance(4)} onSkip={skipAll} />}
+      {loadingPhase === null && step === 4 && <HintV9 onDismiss={() => advance("done")} onSkip={skipAll} />}
+      {loadingPhase !== null && (
+        <LoadingHint
+          message={
+            loadingPhase === "after-v6"
+              ? "Подгружаем породы леса…"
+              : "Подгружаем болота…"
+          }
+          onDone={finishLoading}
+        />
+      )}
+      <SkipTourButton onClick={skipAll} />
     </div>
+  );
+}
+
+/**
+ * Блокирует все клики кроме intended-target и [data-onboarding-control].
+ * Capture-phase listener — прерывает propagation до app handler'ов.
+ */
+function useBlockNonTargetClicks(allowedSelector: string | null) {
+  const allowedRef = useRef(allowedSelector);
+  allowedRef.current = allowedSelector;
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      const sel = allowedRef.current;
+      if (!sel) return; // блокировка выключена
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      // Разрешаем skip/help-кнопки оверлея.
+      if (target.closest("[data-onboarding-control]")) return;
+      // Разрешаем любые открытые modal'ы (SaveSpotModal etc) — иначе
+      // юзер открыл бы save-button, дальше не смог бы заполнить форму.
+      if (target.closest('[role="dialog"]')) return;
+      // Разрешаем intended target.
+      if (target.closest(sel)) return;
+      // Всё остальное — блок.
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+    };
+    document.addEventListener("click", handler, true);
+    document.addEventListener("mousedown", handler, true);
+    return () => {
+      document.removeEventListener("click", handler, true);
+      document.removeEventListener("mousedown", handler, true);
+    };
+  }, []);
+}
+
+/**
+ * Skip-tour кнопка снизу справа. Видна на всех шагах онбординга;
+ * клик → step='done' (persist), все хинты убираются.
+ */
+function SkipTourButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      data-onboarding-control="skip"
+      onClick={onClick}
+      style={SKIP_TOUR_BTN_STYLE}
+      title="Пропустить обучение и вернуться к карте"
+    >
+      Пропустить обучение
+    </button>
+  );
+}
+
+/**
+ * «?» — публичная кнопка «запустить обучение заново». Рендерится
+ * MapHomePage'ом всегда, не только во время онбординга. Сбрасывает
+ * localStorage.step на 1 → OnboardingHints поднимется заново.
+ */
+export function OnboardingRestartButton() {
+  const handle = () => {
+    setOnboardingStep(1);
+    // Force re-render OnboardingHints via reload — иначе нужно
+    // прокидывать setStep через context. Дешевле reload.
+    if (typeof window !== "undefined") window.location.reload();
+  };
+  return (
+    <button
+      type="button"
+      data-onboarding-control="help"
+      onClick={handle}
+      style={HELP_BTN_STYLE}
+      title="Запустить обучение заново"
+      aria-label="Запустить обучение заново"
+    >
+      ?
+    </button>
   );
 }
 
@@ -524,13 +653,18 @@ function HintV9({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
 }
 
 /**
- * LoadingHint — переходный экран между V8 и V9. Карта только что
- * прилетела к выделу и попап начал грузиться. Юзер видит затемнённый
- * фон + лёгкий спиннер + текст «дождитесь, пока карта загрузится».
- * Не блокирует клики (pointer-events:none на всём overlay'е, кроме
- * step-badge). Auto-advance через 2.5 секунды.
+ * LoadingHint — переходный экран между шагами онбординга. Используется
+ * после V6 (ждём applied forest pmtiles + colors) и V7 (wetland). Юзер
+ * видит затемнённый фон + спиннер + кастомное сообщение. Auto-advance
+ * через 2.5 секунды.
  */
-function LoadingHint({ onDone }: { onDone: () => void }) {
+function LoadingHint({
+  onDone,
+  message = "Дождитесь, пока карта загрузится…",
+}: {
+  onDone: () => void;
+  message?: string;
+}) {
   const doneRef = useRef(onDone);
   doneRef.current = onDone;
   useEffect(() => {
@@ -601,7 +735,7 @@ function LoadingHint({ onDone }: { onDone: () => void }) {
             letterSpacing: "-0.005em",
           }}
         >
-          Дождитесь, пока карта загрузится…
+          {message}
         </div>
       </div>
     </>
@@ -846,6 +980,7 @@ function StepBadge({
       </div>
       <button
         type="button"
+        data-onboarding-control="skip"
         onClick={onSkip}
         style={STEP_BADGE_SKIP}
         title="Скрыть подсказки"
@@ -932,4 +1067,53 @@ const STEP_BADGE_SKIP: React.CSSProperties = {
   cursor: "pointer",
   padding: "2px 8px",
   textShadow: "0 1px 6px rgba(0,0,0,.4)",
+};
+
+// Skip-tour pill снизу справа (выше .maplibregl-ctrl-bottom-right в
+// 12+38*N+gap, чтобы не залезать на zoom-кнопки). Помечен как
+// data-onboarding-control — не блокируется глобальным click-блокером.
+const SKIP_TOUR_BTN_STYLE: React.CSSProperties = {
+  position: "fixed",
+  right: 60,
+  bottom: 16,
+  zIndex: 5,
+  pointerEvents: "auto",
+  padding: "9px 16px",
+  background: "var(--cream)",
+  color: "var(--ink-dim)",
+  border: 0,
+  borderRadius: 999,
+  fontFamily: "var(--font-body)",
+  fontSize: 13,
+  fontWeight: 500,
+  cursor: "pointer",
+  boxShadow:
+    "0 6px 22px rgba(60,50,30,.18), 0 0 0 1px rgba(0,0,0,.06)",
+  animation: "hp-fadeup .5s ease both",
+};
+
+// «?» help-кнопка — независима от онбординга, рендерится MapHomePage'ом
+// всегда. Сбрасывает step на 1 + перезагружает страницу.
+const HELP_BTN_STYLE: React.CSSProperties = {
+  position: "fixed",
+  right: 16,
+  bottom: 60,
+  zIndex: 5,
+  pointerEvents: "auto",
+  width: 36,
+  height: 36,
+  background: "var(--cream)",
+  color: "var(--ink-dim)",
+  border: 0,
+  borderRadius: "50%",
+  fontFamily: "var(--font-display)",
+  fontSize: 18,
+  fontWeight: 600,
+  cursor: "pointer",
+  boxShadow:
+    "0 6px 22px rgba(60,50,30,.18), 0 0 0 1px rgba(0,0,0,.06)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  lineHeight: 1,
 };

@@ -26,7 +26,10 @@ import type { UserSpot } from "@mushroom-map/types";
 
 import { MapView } from "../components/MapView";
 import { SaveSpotModal } from "../components/SaveSpotModal";
-import { OnboardingHints } from "../components/OnboardingHints";
+import {
+  OnboardingHints,
+  OnboardingRestartButton,
+} from "../components/OnboardingHints";
 import { MapTopBar } from "../components/mapView/MapTopBar";
 import { MapForecastPanel } from "../components/mapView/MapForecastPanel";
 import { useAuth } from "../auth/useAuth";
@@ -168,6 +171,7 @@ export function MapHomePage() {
       )}
 
       <OnboardingHints />
+      <OnboardingRestartButton />
 
       {saveTarget && (
         <SaveSpotModal
