@@ -6,6 +6,7 @@ import { addPlaceLabelsLayer } from "./mapView/layers/places";
 import { addUserSpotsLayer } from "./mapView/layers/userSpots";
 import { useMapLayers } from "./mapView/hooks/useMapLayers";
 import { useMapInstance, parseInitialView } from "./mapView/hooks/useMapInstance";
+import { setMapInstance } from "../lib/mapInstance";
 import { useMapPopup } from "./mapView/hooks/useMapPopup";
 import { useMapUrl } from "./mapView/hooks/useMapUrl";
 import { useUserSpotsSync } from "./mapView/hooks/useUserSpotsSync";
@@ -46,6 +47,28 @@ export function MapView({ userSpots = null }: MapViewProps = {}) {
     const spots = userSpotsRef.current;
     if (spots && spots.length > 0) addUserSpotsLayer(m, spots);
   });
+
+  // Экспонируем map в singleton ref — OnboardingHints V8 нужен для
+  // flyTo + project(lat, lon) → screen-координаты стрелки. Поллим map.current
+  // раз в 100ms пока он не появится (mapReady чем-то не срабатывает на
+  // dev'е React-Fast-Refresh, инвалидный onReady-замыкание; mapRef sync
+  // обновляется в useMapInstance constructor сразу после `new Map(...)`).
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      if (cancelled) return;
+      if (map.current) {
+        setMapInstance(map.current);
+      } else {
+        window.setTimeout(tick, 100);
+      }
+    };
+    tick();
+    return () => {
+      cancelled = true;
+      setMapInstance(null);
+    };
+  }, [map]);
 
   const { reapplyAll } = useMapLayers(map, mapReady);
   useMapPopup(map, userSpotsRef);

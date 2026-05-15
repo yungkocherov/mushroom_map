@@ -199,10 +199,20 @@ export function ForestPopup({
   // ── Coordinates string ────────────────────────────────────────────
   const coordStr = `${lat.toFixed(3)}° N · ${lon.toFixed(3)}° E`;
 
+  // ── Anim cleanup ─ Chrome+Windows на любом элементе с CSS-transform
+  // принудительно растеризует текст в композитном GPU-слое БЕЗ ClearType
+  // → текст блюрится. `animation: psp-open ... both` оставляет transform
+  // на финале → блюр сохраняется. После animationend снимаем transform.
+  const [animDone, setAnimDone] = useState(false);
+
   return (
     <div className="psp-root" style={ROOT_STYLE}>
       {/* Open-animation wrapper — single anim that scales out of pin tip. */}
-      <div className="psp-anim" style={ANIM_STYLE}>
+      <div
+        className="psp-anim"
+        style={animDone ? ANIM_STYLE_DONE : ANIM_STYLE}
+        onAnimationEnd={() => setAnimDone(true)}
+      >
         {/* HEADER */}
         <div style={HEADER_STYLE}>
           <button
@@ -213,11 +223,6 @@ export function ForestPopup({
           >
             ×
           </button>
-
-          <div style={EYEBROW_STYLE}>
-            <span style={EYEBROW_DOT_STYLE} />
-            выдел леса
-          </div>
 
           <div style={TITLE_STYLE}>{forestName}</div>
 
@@ -652,6 +657,19 @@ const ANIM_STYLE: React.CSSProperties = {
   transformOrigin: "50% calc(100% + 14px)",
 };
 
+// После завершения open-анимации убираем transform/animation/will-change
+// чтобы Chrome+Windows вернул ClearType (subpixel AA) на тексте.
+const ANIM_STYLE_DONE: React.CSSProperties = {
+  background: "var(--cream)",
+  borderRadius: 14,
+  boxShadow:
+    "0 22px 60px rgba(40,30,15,.28), 0 0 0 1px rgba(0,0,0,.06)",
+  fontFamily: "var(--font-body)",
+  color: "var(--ink)",
+  overflow: "hidden",
+  boxSizing: "border-box",
+};
+
 const ROOT_STYLE: React.CSSProperties = {
   width: 320,
   position: "relative",
@@ -692,13 +710,6 @@ const EYEBROW_STYLE: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   gap: 6,
-};
-
-const EYEBROW_DOT_STYLE: React.CSSProperties = {
-  width: 6,
-  height: 6,
-  borderRadius: 2,
-  background: "var(--forest)",
 };
 
 const TITLE_STYLE: React.CSSProperties = {

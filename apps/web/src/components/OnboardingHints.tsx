@@ -17,11 +17,13 @@
  */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { Map as MaplibreMap } from "maplibre-gl";
 import {
   getOnboardingStep,
   setOnboardingStep,
   type OnboardingStep,
 } from "../lib/onboardingStorage";
+import { subscribeMap } from "../lib/mapInstance";
 
 interface DOMRectLite {
   left: number;
@@ -166,7 +168,6 @@ function HintV6({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
   const rect = useTargetRect('[data-onboarding="species"]');
   const panelRight = useNearbyPanelRight('[data-onboarding="species"]');
   useTargetClick('[data-onboarding="species"]', onDismiss);
-  // Никаких auto-dismiss: юзер сам решает когда продолжить.
 
   if (!rect) return null;
   return (
@@ -175,7 +176,7 @@ function HintV6({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
       <TargetGlow rect={rect} />
       <ArrowHint
         rect={rect}
-        scale={1.8}
+        scale={2.2}
         originX={panelRight != null ? panelRight + 24 : undefined}
         title={
           <>
@@ -202,7 +203,7 @@ function HintV7({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
       <TargetGlow rect={rect} />
       <ArrowHint
         rect={rect}
-        scale={1.6}
+        scale={2.0}
         originX={panelRight != null ? panelRight + 24 : undefined}
         title={
           <>
@@ -217,72 +218,194 @@ function HintV7({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
   );
 }
 
+/**
+ * V8 — «нажми на этот выдел». При входе летим картой на Кирпичное,
+ * подсвечиваем конкретный выдел стрелкой + рукописной подписью
+ * по центру. Advance только когда юзер откроет popup в пределах
+ * tolerance от target lat/lon.
+ *
+ * Конкретный выдел выбран автором руками — известно что в этой точке
+ * сидит характерный сосновый бор с белыми/лисичками, прогноз ≥4.
+ */
+const V8_FLY = { lat: 60.468, lon: 29.368, zoom: 13 };
+const V8_TARGET = { lat: 60.47479, lon: 29.32768 };
+const V8_TARGET_TOLERANCE = 0.002; // ≈ 200m в широте; в долготе чуть уже
+
 function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
-  // Advance когда юзер открыл popup (= кликнул по карте → popup mount).
+  // Subscribed map-instance — нужен для project(lat,lon) + flyTo.
+  const [map, setMap] = useState<MaplibreMap | null>(null);
+  useEffect(() => subscribeMap(setMap), []);
+
+  // flyTo на Кирпичное один раз на mount.
   useEffect(() => {
-    const onOpened = () => onDismiss();
+    if (!map) return;
+    map.flyTo({
+      center: [V8_FLY.lon, V8_FLY.lat],
+      zoom: V8_FLY.zoom,
+      speed: 1.6,
+      essential: true,
+    });
+  }, [map]);
+
+  // Проецируем target lat/lon в screen-координаты и пересчитываем на
+  // каждый map move/zoom событие, чтобы стрелка следила за выделом.
+  const [pinXY, setPinXY] = useState<{ x: number; y: number } | null>(null);
+  useEffect(() => {
+    if (!map) return;
+    const update = () => {
+      const p = map.project([V8_TARGET.lon, V8_TARGET.lat]);
+      setPinXY({ x: p.x, y: p.y });
+    };
+    update();
+    map.on("move", update);
+    map.on("zoom", update);
+    return () => {
+      map.off("move", update);
+      map.off("zoom", update);
+    };
+  }, [map]);
+
+  // Advance ТОЛЬКО когда popup открыт на target-точке (в пределах
+  // tolerance). Клик в другой выдел V8 не закроет.
+  useEffect(() => {
+    const onOpened = (e: Event) => {
+      const ce = e as CustomEvent<{ lat: number; lon: number }>;
+      if (!ce.detail) return;
+      if (
+        Math.abs(ce.detail.lat - V8_TARGET.lat) < V8_TARGET_TOLERANCE &&
+        Math.abs(ce.detail.lon - V8_TARGET.lon) < V8_TARGET_TOLERANCE
+      ) {
+        onDismiss();
+      }
+    };
     window.addEventListener("mm:popup-opened", onOpened as EventListener);
     return () => window.removeEventListener("mm:popup-opened", onOpened as EventListener);
   }, [onDismiss]);
 
-  // Хинт сидит в правой части viewport'а, не over-target — у нас нет
-  // конкретного «discoverable pin», просто словесная подсказка.
   const w = typeof window !== "undefined" ? window.innerWidth : 1200;
   const h = typeof window !== "undefined" ? window.innerHeight : 800;
-  const hintX = Math.max(w - 320, w * 0.6);
-  const hintY = Math.max(h - 200, h * 0.55);
+
+  // Caption — по центру экрана, над пином (если пин видим), иначе
+  // по центру viewport'а. Большой Caveat, terra.
+  const captionX = pinXY ? pinXY.x : w / 2;
+  const captionY = pinXY ? Math.max(40, pinXY.y - 140) : h / 2 - 60;
 
   return (
     <>
-      {/* Тонкая радиальная дымка по центру — внимание на карту */}
+      {/* Радиальная дымка центрированная на target-пине (если есть) */}
+      {pinXY && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: `radial-gradient(circle 220px at ${pinXY.x}px ${pinXY.y}px, rgba(18,16,12,0) 0%, rgba(18,16,12,0) 30%, rgba(18,16,12,.45) 80%, rgba(18,16,12,.55) 100%)`,
+            pointerEvents: "none",
+            animation: "geobiom-fadein .6s ease both",
+            zIndex: 1,
+          }}
+        />
+      )}
+
+      {/* Discoverable pin — пульсирующий terra-маркер на target-точке */}
+      {pinXY && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            left: pinXY.x,
+            top: pinXY.y,
+            transform: "translate(-50%, -50%)",
+            zIndex: 3,
+            pointerEvents: "none",
+          }}
+        >
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              width: 28,
+              height: 28,
+              marginLeft: -14,
+              marginTop: -14,
+              borderRadius: "50%",
+              border: "2px solid var(--chanterelle)",
+              animation: "hp-pulse-ring 2.4s ease-out infinite",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              width: 28,
+              height: 28,
+              marginLeft: -14,
+              marginTop: -14,
+              borderRadius: "50%",
+              border: "2px solid var(--chanterelle)",
+              animation: "hp-pulse-ring 2.4s 1.2s ease-out infinite",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: "50%",
+              top: "50%",
+              width: 22,
+              height: 22,
+              marginLeft: -11,
+              marginTop: -11,
+              borderRadius: "50%",
+              background: "var(--chanterelle)",
+              boxShadow:
+                "0 0 0 4px var(--cream), 0 6px 14px rgba(184,106,58,.55)",
+            }}
+          />
+        </div>
+      )}
+
+      {/* Caption над пином — Caveat-handwriting, по центру */}
       <div
         style={{
           position: "fixed",
-          inset: 0,
-          background: `radial-gradient(circle ${Math.min(w, h) * 0.4}px at ${w / 2}px ${h / 2}px, rgba(18,16,12,0) 0%, rgba(18,16,12,0) 35%, rgba(18,16,12,.35) 85%, rgba(18,16,12,.45) 100%)`,
-          pointerEvents: "none",
-          animation: "geobiom-fadein .5s ease both",
-          zIndex: 1,
-        }}
-      />
-      <div
-        style={{
-          position: "fixed",
-          left: hintX,
-          top: hintY,
+          left: captionX,
+          top: captionY,
+          transform: "translate(-50%, 0) rotate(-3deg)",
           fontFamily: "var(--font-hand)",
-          fontSize: 40,
+          fontSize: 52,
           color: "var(--chanterelle)",
-          transform: "rotate(-4deg)",
           lineHeight: 1.05,
           whiteSpace: "nowrap",
-          animation: "hp-fadeup .55s .25s ease both",
-          textShadow: "0 2px 14px rgba(0,0,0,.4)",
+          animation: "hp-fadeup .55s .35s ease both",
+          textShadow: "0 2px 14px rgba(0,0,0,.45)",
           zIndex: 3,
           pointerEvents: "none",
         }}
       >
-        нажми <em style={EM}>на лес</em>
+        нажми <em style={EM}>сюда</em>
       </div>
       <div
         style={{
           position: "fixed",
-          left: hintX + 20,
-          top: hintY + 50,
+          left: captionX,
+          top: captionY + 56,
+          transform: "translate(-50%, 0) rotate(-2deg)",
           fontFamily: "var(--font-hand)",
-          fontSize: 22,
+          fontSize: 26,
           color: "rgba(250,245,232,.9)",
-          transform: "rotate(-3deg)",
-          lineHeight: 1.05,
+          lineHeight: 1,
           whiteSpace: "nowrap",
-          animation: "hp-fadeup .55s .6s ease both",
-          textShadow: "0 2px 12px rgba(0,0,0,.5)",
+          animation: "hp-fadeup .55s .7s ease both",
+          textShadow: "0 2px 12px rgba(0,0,0,.55)",
           zIndex: 3,
           pointerEvents: "none",
         }}
       >
-        ↘ покажу, что там растёт
+        ↓ покажу, что там растёт
       </div>
+
       <StepBadge n={3} label="точка" onSkip={onSkip} />
     </>
   );
@@ -406,17 +529,22 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
 
   const TX = flipLeft ? rect.left - 4 : buttonRight + 4;
   const TY = rect.top + rect.height / 2 + 1;
-  const ctlX = flipLeft ? TX - 56 * k : Math.max(TX + 56 * k, anchorX - 40 * k);
-  const ctlY = TY - 4 * k;
-  const startX = flipLeft ? TX - 96 * k : Math.max(TX + 96 * k, anchorX);
-  const startY = TY + 36 * k;
+  // Стрелка стартует прямо у первой буквы текста — чтобы выглядело
+  // что текст и стрелка едины. startX ≈ textX, чуть-чуть отступ слева
+  // вглубь чтобы стрелка не «вылезала» из-под буквы.
   const textX = flipLeft ? TX - 220 * k : anchorX + 8 * k;
   const textY = TY + 50 * k;
   const subX = flipLeft ? TX - 200 * k : anchorX + 38 * k;
   const subY = TY + 90 * k;
+  const startX = flipLeft ? textX + 30 * k : textX - 4 * k;
+  const startY = TY + 40 * k;
+  // Контрольная точка — на полпути между startX и TX, чуть выше TY,
+  // даёт мягкую дугу.
+  const ctlX = flipLeft ? (startX + TX) / 2 + 10 * k : (startX + TX) / 2 - 10 * k;
+  const ctlY = TY - 6 * k;
   const rot = flipLeft ? 5 : -5;
   const subRot = flipLeft ? 4 : -4;
-  const dasharray = Math.max(320, Math.hypot(startX - TX, startY - TY) * 1.8);
+  const dasharray = Math.max(280, Math.hypot(startX - TX, startY - TY) * 1.7);
 
   // Wings of arrowhead aligned to curve tangent at TX/TY.
   const vx = ctlX - TX;

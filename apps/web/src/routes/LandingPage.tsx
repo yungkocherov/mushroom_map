@@ -18,7 +18,7 @@ import styles from "./LandingPage.module.css";
  */
 
 interface StatRow {
-  value: number;
+  value: number | null;
   label: string;
   /** Suffix к value — «км²», «лет», и т.п. Optional. */
   suffix?: string;
@@ -37,9 +37,13 @@ function formatStat(n: number): string {
   return String(n);
 }
 
-function useCountUp(target: number, duration = 1100): number {
-  const [n, setN] = useState(0);
+function useCountUp(target: number | null, duration = 1100): number | null {
+  const [n, setN] = useState<number | null>(target);
   useEffect(() => {
+    if (target == null) {
+      setN(null);
+      return;
+    }
     let raf = 0;
     const start = performance.now();
     const tick = (t: number) => {
@@ -55,12 +59,15 @@ function useCountUp(target: number, duration = 1100): number {
 }
 
 function StatBlock({ value, label, suffix }: StatRow) {
+  // V4.10: пока stats не пришёл, показываем «—» вместо нулевого/
+  // хардкод-значения. Юзер жаловался что 0 км²/72k выделов появляются
+  // первыми и потом перестраиваются на реальные — выглядит как баг.
   const animated = useCountUp(value);
   return (
     <div className={styles.stat}>
       <div className={styles.statValue}>
-        {formatStat(animated)}
-        {suffix && <span className={styles.statSuffix}>{suffix}</span>}
+        {animated == null ? "—" : formatStat(animated)}
+        {animated != null && suffix && <span className={styles.statSuffix}>{suffix}</span>}
       </div>
       <div className={styles.statLabel}>{label}</div>
     </div>
@@ -96,17 +103,20 @@ export function LandingPage() {
   const year = new Date().getFullYear();
   const updatedLabel = formatUpdated(stats?.forest_last_updated ?? null);
 
+  // V4.10: НЕ показываем хардкод-fallback'и до прихода API — иначе
+  // юзер видит 18/72k/0, потом значения перестраиваются на реальные
+  // (≈18/1.2млн/47k). Лучше «—» до загрузки.
   const STATS: StatRow[] = [
     {
-      value: stats?.district_count ?? 18,
+      value: stats?.district_count ?? null,
       label: "районов ЛО",
     },
     {
-      value: stats?.forest_polygon_count ?? 72_000,
+      value: stats?.forest_polygon_count ?? null,
       label: "выделов леса",
     },
     {
-      value: Math.round(stats?.forest_area_km2 ?? 0),
+      value: stats?.forest_area_km2 != null ? Math.round(stats.forest_area_km2) : null,
       label: "км² покрытия",
     },
   ];
