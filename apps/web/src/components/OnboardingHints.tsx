@@ -110,7 +110,10 @@ function useTargetClick(selector: string, onClick: () => void, enabled = true) {
  * должны начинаться правее подложки, иначе они лезут на саму панель
  * и читаются плохо.
  */
-function useNearbyPanelRight(selector: string): number | null {
+function useNearbyPanelRight(
+  selector: string,
+  ancestorSelector = "[data-onboarding-panel]",
+): number | null {
   const [right, setRight] = useState<number | null>(null);
   useLayoutEffect(() => {
     const update = () => {
@@ -119,7 +122,7 @@ function useNearbyPanelRight(selector: string): number | null {
         setRight(null);
         return;
       }
-      const panel = target.closest<HTMLElement>("[data-onboarding-panel]");
+      const panel = target.closest<HTMLElement>(ancestorSelector);
       setRight(panel ? panel.getBoundingClientRect().right : null);
     };
     update();
@@ -134,7 +137,7 @@ function useNearbyPanelRight(selector: string): number | null {
       window.removeEventListener("scroll", update, true);
       mo.disconnect();
     };
-  }, [selector]);
+  }, [selector, ancestorSelector]);
   return right;
 }
 
@@ -413,6 +416,10 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
 
 function HintV9({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
   const rect = useTargetRect("[data-popup-save]");
+  // Save-кнопка живёт внутри MapLibre popup'а — берём правый край
+  // .maplibregl-popup чтобы текст и start стрелки уходили правее самой
+  // карточки, не накладываясь на неё (как и V6/V7 относительно панели).
+  const popupRight = useNearbyPanelRight("[data-popup-save]", ".maplibregl-popup");
   useTargetClick("[data-popup-save]", onDismiss);
 
   // Закрыли попап без save — тоже dismiss.
@@ -423,16 +430,17 @@ function HintV9({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
   }, [onDismiss]);
 
   if (!rect) return null;
-  // Дим вокруг save-кнопки + сама кнопка получает контурную пульсацию
-  // через ForestPopup.saveHint — но мы её не управляем извне, у нас
-  // только внешний overlay. Делаем тёмное «radial» вокруг кнопки.
+  // Стиль идентичен V6/V7: тугой radial dim вокруг кнопки + glow-кольцо
+  // + рукописная стрелка на scale 1.8. Дим частично затемнит верх
+  // попап-карточки — это OK, фокус юзера должен быть на save-button.
   return (
     <>
-      <RadialDim cx={rect.cx} cy={rect.cy - 80} radius={280} fadeStart={0.42} maxAlpha={0.58} />
+      <RadialDim cx={rect.cx} cy={rect.cy} radius={170} />
       <TargetGlow rect={rect} />
       <ArrowHint
         rect={rect}
-        scale={1.35}
+        scale={1.8}
+        originX={popupRight != null ? popupRight + 24 : undefined}
         title={
           <>
             сохрани <em style={EM}>спот</em>
