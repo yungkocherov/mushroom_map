@@ -108,6 +108,14 @@ a:focus-visible {
  * background, чтобы попап стакался с остальными cream-cards
  * (LayerGrid / MapForecastPanel / MapTopBar). Кастомизация
  * перекрывает default styles из maplibre-gl.css.
+ *
+ * V5 (2026-05-15): для forest-попапа (.popup-forest) обнуляем wrapper
+ * полностью — ForestPopup-компонент сам рисует cream-карточку с
+ * border-radius/shadow. Без сброса получали двойной cream-pad вокруг
+ * внутренней карточки (видно в скриншоте юзера: «зелёная» padding-зона
+ * вокруг ForestPopup'а). userSpots-попапы пользуются дефолтной
+ * стилизацией ниже, потому что они HTML-string'ами рисуют контент
+ * прямо в .maplibregl-popup-content и ждут готового cream-card.
  */
 .maplibregl-popup-content {
   background: var(--cream) !important;
@@ -116,6 +124,20 @@ a:focus-visible {
   box-shadow: var(--shadow-card) !important;
   padding: 14px 16px !important;
   font-family: var(--font-body) !important;
+}
+
+.maplibregl-popup.popup-forest .maplibregl-popup-content {
+  background: transparent !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+/* Также убираем дефолтный CSS-tip — ForestPopup сам не рисует «хвостик»,
+   и без обёртки cream tip превратился бы в чёрный/прозрачный треугольник.
+   Визуальный якорь — pin-marker под попапом, его достаточно. */
+.maplibregl-popup.popup-forest .maplibregl-popup-tip {
+  display: none !important;
 }
 
 /* Treugol'nik попапа — нужно перекрасить border-color (он образует

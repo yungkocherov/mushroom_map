@@ -93,6 +93,10 @@ export function useMapPopup(
         maxWidth: popupMaxWidth,
         anchor: "bottom",
         offset: 18, // место для якорного пина под попапом
+        // CSS .popup-forest сбрасывает обёртку maplibregl-popup-content
+        // (cream-bg/padding/shadow), потому что ForestPopup сам рисует
+        // cream-карточку. Без этого видна padding-рамка вокруг карточки.
+        className: "popup-forest",
       })
         .setLngLat([lng, lat])
         .setDOMContent(container)
