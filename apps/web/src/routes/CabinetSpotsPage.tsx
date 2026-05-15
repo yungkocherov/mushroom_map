@@ -1,15 +1,11 @@
 /**
  * /spots — список сохранённых юзером мест.
  *
- * V4 (redesign-2026-05-10):
- *   - убрали хлебные крошки «Кабинет / Сохранённые места» — `/spots` стал
- *     самостоятельной страницей в нав-уровне «Мои места»
- *   - убрали форму ручного создания (имя/заметка/координаты): добавлять
- *     место теперь можно только через клик по карте → SaveSpotModal
- *   - mini-map теперь использует scheme-подложку (Versatiles), как /map
- *   - клик по строке списка делает flyTo на координаты spot'а (zoom 13)
- *   - кнопка удаления — иконка корзины (lucide Trash2) красным
- *   - добавили вторую группу фильтров: по тэгам (грибы / деревья / ягоды)
+ * V5 (redesign-2026-05-15, Geobiom (3).zip → d1v2-pages.jsx → D1VSavedSpots):
+ *   - hero «Сохранённых мест: N» Fraunces 48px, italic terra-цифра
+ *   - один компактный filter-card с 4 inline-рядами (оценка/грибы/деревья/ягоды)
+ *   - cream-cards для spots с категорными чипами (mush=terra, tree=moss, berry=blue)
+ *   - две колонки 1.2fr | 1fr, sticky-карта справа с footer'ом «N точек · ЛО»
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -31,7 +27,14 @@ import {
 } from "../lib/spotTags";
 import { usePageTitle } from "../lib/usePageTitle";
 import styles from "./CabinetSpotsPage.module.css";
-import prose from "./Prose.module.css";
+
+type CatKind = "mushroom" | "tree" | "berry";
+
+function categoryOf(slug: string): CatKind {
+  if (MUSHROOM_TAGS.some((t) => t.slug === slug)) return "mushroom";
+  if (TREE_TAGS.some((t) => t.slug === slug)) return "tree";
+  return "berry"; // BERRY_TAGS — последняя группа; fallback тоже сюда.
+}
 
 export function CabinetSpotsPage() {
   usePageTitle(
@@ -46,7 +49,6 @@ export function CabinetSpotsPage() {
   // Фильтр по rating + tag-slug. Пустой Set = «всё включено».
   const [ratingFilter, setRatingFilter] = useState<Set<SpotRating>>(new Set());
   const [tagFilter, setTagFilter] = useState<Set<string>>(new Set());
-  // Подсветка точки на мини-карте при hover'е по строке списка.
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const mapHandleRef = useRef<SpotsMiniMapHandle>(null);
 
@@ -56,7 +58,6 @@ export function CabinetSpotsPage() {
       if (ratingFilter.size > 0 && !ratingFilter.has(s.rating)) return false;
       if (tagFilter.size > 0) {
         const tags = s.tags ?? [];
-        // OR-семантика: spot подходит если у него есть хоть один из выбранных тэгов.
         if (!tags.some((t) => tagFilter.has(t))) return false;
       }
       return true;
@@ -98,7 +99,7 @@ export function CabinetSpotsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (!user) return null; // ProtectedRoute уже отфильтровал.
+  if (!user) return null;
 
   const handleDelete = async (id: string) => {
     const tok = getAccessToken();
@@ -112,139 +113,108 @@ export function CabinetSpotsPage() {
     }
   };
 
-  // Tag-набор, который реально встречается у юзерских spot'ов — иначе
-  // показывать все 29 тэгов с нулевым counter'ом нет смысла.
+  // Tag-набор, который реально встречается у юзерских spot'ов.
   const usedTags = useMemo(() => {
     const set = new Set<string>();
     for (const s of spots ?? []) for (const t of s.tags ?? []) set.add(t);
     return set;
   }, [spots]);
 
-  const tagGroups: Array<{ title: string; tags: { slug: string; label: string }[] }> = [
-    { title: "Грибы",   tags: MUSHROOM_TAGS.filter((t) => usedTags.has(t.slug)) },
-    { title: "Деревья", tags: TREE_TAGS.filter((t) => usedTags.has(t.slug)) },
-    { title: "Ягоды",   tags: BERRY_TAGS.filter((t) => usedTags.has(t.slug)) },
-  ].filter((g) => g.tags.length > 0);
+  const visibleMushroomTags = MUSHROOM_TAGS.filter((t) => usedTags.has(t.slug));
+  const visibleTreeTags     = TREE_TAGS.filter((t) => usedTags.has(t.slug));
+  const visibleBerryTags    = BERRY_TAGS.filter((t) => usedTags.has(t.slug));
 
   return (
     <Container as="article" size="default">
-      <p
-        style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--fs-xs)",
-          letterSpacing: "0.16em",
-          textTransform: "uppercase",
-          color: "var(--moss)",
-          margin: "0 0 var(--space-2)",
-        }}
-      >
-        Мои места
-      </p>
-      <h1
-        className={prose.h1}
-        style={{
-          fontSize: "clamp(2rem, 3vw + 1rem, 3.5rem)",
-          letterSpacing: "-0.02em",
-          lineHeight: 1.05,
-          fontWeight: 600,
-          margin: "0 0 var(--space-3)",
-        }}
-      >
+      <p className={styles.eyebrow}>Мои места</p>
+      <h1 className={styles.hero}>
         {spots && spots.length > 0 ? (
           <>
             Сохранённых мест:{" "}
-            <em
-              style={{
-                fontStyle: "italic",
-                color: "var(--chanterelle)",
-                fontWeight: 600,
-              }}
-            >
-              {spots.length}
-            </em>
+            <span className={styles.heroNum}>{spots.length}</span>
           </>
         ) : (
           "Мои места"
         )}
       </h1>
-      <p className={prose.lead}>
+      <p className={styles.lead}>
         Видишь только ты. Никаких агрегаций, ничего не публикуется. Чтобы
         добавить место — кликни в нужную точку на карте.
       </p>
 
-      {error && (
-        <p className={prose.p} style={{ color: "var(--danger)" }}>{error}</p>
-      )}
+      {error && <p className={styles.error}>{error}</p>}
 
       {spots === null && !error && (
-        <p className={prose.p} style={{ color: "var(--ink-dim)" }}>Загрузка…</p>
+        <p style={{ color: "var(--ink-dim)" }}>Загрузка…</p>
       )}
 
       {spots && spots.length === 0 && (
-        <p className={prose.p} style={{ color: "var(--ink-dim)" }}>
+        <p style={{ color: "var(--ink-dim)" }}>
           Пока пусто. Открой карту, кликни в нужное место и сохрани его.
         </p>
       )}
 
       {spots && spots.length > 0 && (
-        <>
-          <div className={styles.filterRow} role="group" aria-label="Фильтр по оценке">
-            <span className={styles.filterLabel}>Оценка:</span>
+        <div className={styles.filterCard}>
+          <FilterGroup label="оценка">
             {RATING_OPTIONS.map((r) => {
-              const active = ratingFilter.size === 0 || ratingFilter.has(r.value);
+              const on = ratingFilter.has(r.value);
               return (
                 <button
                   key={r.value}
                   type="button"
-                  className={styles.filterChip}
-                  data-active={active}
+                  className={styles.tinyChip}
+                  data-on={on}
                   onClick={() => toggleRatingFilter(r.value)}
-                  aria-pressed={ratingFilter.has(r.value)}
+                  aria-pressed={on}
                   title={r.label}
                 >
-                  <span className={styles.filterDot} style={{ background: r.hex }} />
+                  <span className={styles.tinyChipDot} style={{ background: r.hex }} />
                   <span>{r.value} · {r.label}</span>
                 </button>
               );
             })}
-            {ratingFilter.size > 0 && (
-              <button
-                type="button"
-                className={styles.filterReset}
-                onClick={() => setRatingFilter(new Set())}
-              >
-                Сбросить
-              </button>
-            )}
-          </div>
+          </FilterGroup>
 
-          {tagGroups.map((g) => (
-            <div
-              key={g.title}
-              className={styles.filterRow}
-              role="group"
-              aria-label={`Фильтр по тэгам: ${g.title}`}
-            >
-              <span className={styles.filterLabel}>{g.title}:</span>
-              {g.tags.map((t) => {
-                const active = tagFilter.has(t.slug);
-                return (
-                  <button
-                    key={t.slug}
-                    type="button"
-                    className={styles.filterChip}
-                    data-active={tagFilter.size === 0 || active}
-                    onClick={() => toggleTagFilter(t.slug)}
-                    aria-pressed={active}
-                    title={t.label}
-                  >
-                    <span>{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </>
+          {visibleMushroomTags.length > 0 && (
+            <FilterGroup label="грибы">
+              {visibleMushroomTags.map((t) => (
+                <FilterTinyChip
+                  key={t.slug}
+                  on={tagFilter.has(t.slug)}
+                  onClick={() => toggleTagFilter(t.slug)}
+                  label={t.label}
+                />
+              ))}
+            </FilterGroup>
+          )}
+
+          {visibleTreeTags.length > 0 && (
+            <FilterGroup label="деревья">
+              {visibleTreeTags.map((t) => (
+                <FilterTinyChip
+                  key={t.slug}
+                  on={tagFilter.has(t.slug)}
+                  onClick={() => toggleTagFilter(t.slug)}
+                  label={t.label}
+                />
+              ))}
+            </FilterGroup>
+          )}
+
+          {visibleBerryTags.length > 0 && (
+            <FilterGroup label="ягоды">
+              {visibleBerryTags.map((t) => (
+                <FilterTinyChip
+                  key={t.slug}
+                  on={tagFilter.has(t.slug)}
+                  onClick={() => toggleTagFilter(t.slug)}
+                  label={t.label}
+                />
+              ))}
+            </FilterGroup>
+          )}
+        </div>
       )}
 
       {spots && spots.length > 0 && (
@@ -260,54 +230,25 @@ export function CabinetSpotsPage() {
               return (
                 <li
                   key={s.id}
-                  className={styles.row}
+                  className={styles.card}
                   data-highlighted={highlightedId === s.id}
                   onMouseEnter={() => setHighlightedId(s.id)}
                   onMouseLeave={() => setHighlightedId((h) => (h === s.id ? null : h))}
                   onClick={() => {
-                    // flyTo на mini-map'е без перехода на /spots/<id> — юзер
-                    // хочет видеть место на превью без ухода со страницы.
                     mapHandleRef.current?.flyTo(s.lat, s.lon, 13);
                   }}
-                  style={{ cursor: "pointer" }}
                 >
                   <span
-                    className={styles.markerDot}
+                    className={styles.ratingDot}
                     style={{ background: dotColor }}
                     aria-label={`Оценка ${s.rating} (${RATING_LABEL[s.rating]})`}
                     title={`${s.rating} — ${RATING_LABEL[s.rating]}`}
                   />
-                  <div className={styles.rowBody}>
-                    <div className={styles.rowTitle}>
-                      <span className={styles.rowTitleText}>{s.name}</span>
-                    </div>
-                    {s.note && <div className={styles.rowNote}>{s.note}</div>}
-                    {s.tags && s.tags.length > 0 ? (
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 2 }}>
-                        {s.tags.map((slug) => (
-                          <span
-                            key={slug}
-                            style={{
-                              padding: "1px 8px",
-                              border: "1px solid var(--rule)",
-                              borderRadius: 999,
-                              fontSize: "var(--fs-xs)",
-                              color: "var(--ink-dim)",
-                              background: "var(--paper)",
-                            }}
-                          >
-                            {tagLabel(slug)}
-                          </span>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className={styles.rowMeta}>
-                      <span>
-                        {s.lat.toFixed(5)}, {s.lon.toFixed(5)}
-                      </span>
-                      {" · "}
-                      <span>{new Date(s.created_at).toLocaleDateString("ru-RU")}</span>
-                    </div>
+                  <div className={styles.cardTitleRow}>
+                    <span className={styles.cardTitle}>{s.name}</span>
+                    {s.note && (
+                      <span className={styles.cardNote}>· {s.note}</span>
+                    )}
                   </div>
                   <button
                     type="button"
@@ -319,22 +260,83 @@ export function CabinetSpotsPage() {
                     aria-label="Удалить"
                     title="Удалить"
                   >
-                    <Trash2 size={16} aria-hidden="true" />
+                    <Trash2 size={14} aria-hidden="true" />
                   </button>
+                  {s.tags && s.tags.length > 0 && (
+                    <div className={styles.chipsRow}>
+                      {s.tags.map((slug) => {
+                        const cat = categoryOf(slug);
+                        const catClass =
+                          cat === "mushroom" ? styles.catChipMushroom
+                          : cat === "tree"   ? styles.catChipTree
+                          : styles.catChipBerry;
+                        return (
+                          <span key={slug} className={`${styles.catChip} ${catClass}`}>
+                            {tagLabel(slug)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <div className={styles.cardMeta}>
+                    <span>{s.lat.toFixed(5)}, {s.lon.toFixed(5)}</span>
+                    <span className={styles.cardMetaSep}>·</span>
+                    <span>{new Date(s.created_at).toLocaleDateString("ru-RU", {
+                      day: "2-digit", month: "short", year: "numeric",
+                    })}</span>
+                  </div>
                 </li>
               );
             })}
           </ul>
 
-          <aside className={styles.mapPane} aria-label="Превью на карте">
-            <SpotsMiniMap
-              ref={mapHandleRef}
-              spots={visibleSpots}
-              highlightedId={highlightedId}
-            />
-          </aside>
+          <div className={styles.mapPaneWrap}>
+            <aside className={styles.mapPane} aria-label="Превью на карте">
+              <SpotsMiniMap
+                ref={mapHandleRef}
+                spots={visibleSpots}
+                highlightedId={highlightedId}
+              />
+            </aside>
+            <div className={styles.mapFooter}>
+              <span>{visibleSpots.length} {pluralPoints(visibleSpots.length)} · ЛО</span>
+              <span className={styles.mapFooterHand}>клик на карте — добавить →</span>
+            </div>
+          </div>
         </div>
       )}
     </Container>
   );
+}
+
+function FilterGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className={styles.filterGroup}>
+      <span className={styles.filterGroupLabel}>{label}</span>
+      <div className={styles.filterGroupChips}>{children}</div>
+    </div>
+  );
+}
+
+function FilterTinyChip({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
+  return (
+    <button
+      type="button"
+      className={styles.tinyChip}
+      data-on={on}
+      onClick={onClick}
+      aria-pressed={on}
+    >
+      {label}
+    </button>
+  );
+}
+
+function pluralPoints(n: number): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod100 >= 11 && mod100 <= 14) return "точек";
+  if (mod10 === 1) return "точка";
+  if (mod10 >= 2 && mod10 <= 4) return "точки";
+  return "точек";
 }

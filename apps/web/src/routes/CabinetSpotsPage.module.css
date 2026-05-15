@@ -1,286 +1,318 @@
-.breadcrumbs {
+/*
+ * /spots — порт D1VSavedSpots из dropbox-design-2026-05-15 (Geobiom (3).zip).
+ * Source: docs/redesign-2026-05/claude-design/src/d1v2-pages.jsx (D1VSavedSpots, SpotCard).
+ *
+ * Один компактный card-блок с 4 рядами фильтров (оценка, грибы, деревья,
+ * ягоды), затем две колонки: список (1.2fr) + sticky-карта (1fr).
+ * Каждая карточка spot'а — grid с rating-точкой слева, title+note справа,
+ * чипы по категориям (mush=terra, tree=moss, berry=blue), coords+date
+ * mono снизу.
+ */
+
+/* ─── Hero ──────────────────────────────────────────────────────── */
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--ink-dim);
+  text-transform: uppercase;
+  margin: 0 0 var(--space-2);
+}
+
+.hero {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3.2vw + 1rem, 3rem);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  margin: 0 0 var(--space-2);
+}
+
+.heroNum {
+  color: var(--chanterelle);
+  font-style: normal;
+}
+
+.lead {
+  font-size: var(--fs-sm);
+  color: var(--ink-dim);
+  max-width: 600px;
+  line-height: 1.55;
+  margin: 0 0 var(--space-5);
+}
+
+/* ─── Filters ───────────────────────────────────────────────────── */
+
+.filterCard {
+  background: var(--cream);
+  border-radius: 12px;
+  padding: 14px 18px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
   display: flex;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--space-5);
+}
+
+.filterGroup {
+  display: flex;
   align-items: center;
-  font-size: var(--fs-sm);
-  color: var(--ink-dim);
-  margin-bottom: var(--space-4);
-}
-.breadcrumbs a {
-  color: var(--ink-dim);
-  text-decoration: none;
-  border-bottom: 1px dotted var(--ink-faint);
-}
-.breadcrumbs a:hover { color: var(--forest); border-bottom-color: var(--forest); }
-
-.form {
-  display: grid;
-  gap: var(--space-3);
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-.field {
-  display: grid;
-  gap: var(--space-1);
-  font-size: var(--fs-sm);
-}
-.field span {
+.filterGroupLabel {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
   color: var(--ink-dim);
+  text-transform: uppercase;
+  flex: 0 0 78px;
+  width: 78px;
 }
-.field input,
-.field textarea {
-  font: inherit;
+
+.filterGroupChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.tinyChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  line-height: 1.4;
   font-family: var(--font-body);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  background: var(--paper);
+  background: rgba(0, 0, 0, 0.04);
   color: var(--ink);
-  resize: vertical;
-}
-.field input:focus,
-.field textarea:focus {
-  outline: none;
-  border-color: var(--focus-ring);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring) 30%, transparent);
-}
-
-.row {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: var(--space-3);
-  align-items: end;
-}
-@media (max-width: 540px) {
-  .row {
-    grid-template-columns: 1fr 1fr;
-  }
-  .geoBtn { grid-column: span 2; }
-}
-
-.geoBtn {
-  font-size: var(--fs-sm);
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  background: var(--paper-rise);
-  cursor: pointer;
-  color: var(--ink-dim);
-}
-.geoBtn:hover { color: var(--ink); border-color: var(--forest); }
-
-.colorRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  border: none;
-  padding: 0;
-  margin: 0;
-}
-.colorLegend {
-  display: block;
-  font-size: var(--fs-sm);
-  color: var(--ink-dim);
-  margin-bottom: var(--space-2);
-  width: 100%;
-}
-.colorOpt {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--fs-sm);
-  cursor: pointer;
-}
-.colorDot {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 1px solid var(--rule);
-}
-
-/* Фильтр по цвету маркера. */
-.filterRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  align-items: center;
-  margin: var(--space-5) 0 var(--space-3);
-}
-
-.filterLabel {
-  font-size: var(--fs-sm);
-  color: var(--ink-dim);
-  margin-right: var(--space-1);
-}
-
-.filterChip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-1) var(--space-3);
-  border: 1px solid var(--rule);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 999px;
-  background: var(--paper-rise);
-  color: var(--ink);
-  font-size: var(--fs-sm);
   cursor: pointer;
-  transition: opacity 120ms ease, border-color 120ms ease;
-}
-.filterChip[data-active="false"] {
-  opacity: 0.4;
-}
-.filterChip:hover {
-  border-color: var(--forest);
+  transition: all 0.15s ease;
 }
 
-.filterDot {
-  width: 10px;
-  height: 10px;
+.tinyChip:hover {
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+.tinyChip[data-on="true"] {
+  background: var(--ink);
+  color: var(--cream);
+  border-color: var(--ink);
+}
+
+.tinyChipDot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  border: 1px solid var(--rule);
-  flex: 0 0 auto;
+  flex: 0 0 7px;
 }
 
-.filterReset {
-  font-size: var(--fs-xs);
-  color: var(--ink-dim);
-  background: transparent;
-  border: 0;
-  padding: var(--space-1) var(--space-2);
-  cursor: pointer;
-  text-decoration: underline dotted;
-}
-.filterReset:hover { color: var(--forest); }
+/* ─── Body grid ─────────────────────────────────────────────────── */
 
-/* Двухпанельный layout: список слева, мини-карта справа. */
 .pane {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-4);
+  grid-template-columns: 1.2fr 1fr;
+  gap: 20px;
   align-items: start;
-  margin-top: var(--space-2);
 }
+
 @media (max-width: 900px) {
   .pane {
     grid-template-columns: 1fr;
   }
   .mapPane {
     position: static !important;
-    height: 320px;
   }
 }
 
-.mapPane {
-  position: sticky;
-  top: var(--space-5);
-  height: clamp(360px, 60vh, 640px);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  overflow: hidden;
-  background: var(--paper-rise);
-}
-
-.emptyHint {
-  padding: var(--space-3);
-  background: var(--paper-rise);
-  border: 1px dashed var(--rule);
-  border-radius: 8px;
-  color: var(--ink-dim);
-  font-size: var(--fs-sm);
-  text-align: center;
-}
+/* ─── List of spots ─────────────────────────────────────────────── */
 
 .list {
   list-style: none;
   padding: 0;
   margin: 0;
-  display: grid;
-  gap: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.list > li {
+.card {
+  background: var(--cream);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06);
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: var(--space-3);
+  column-gap: 12px;
+  row-gap: 8px;
   align-items: start;
-  padding: var(--space-4);
-  background: var(--cream);
-  border: 0;
-  border-radius: var(--radius-lg);
-  box-shadow: 0 1px 3px rgba(60, 50, 30, 0.06), 0 0 0 1px rgba(0, 0, 0, 0.04);
-  transition: box-shadow 160ms ease, transform 160ms ease;
-}
-.list > li[data-highlighted="true"] {
-  box-shadow: 0 4px 18px rgba(60, 50, 30, 0.12),
-              0 0 0 1.5px var(--chanterelle);
-  transform: translateY(-1px);
+  cursor: pointer;
+  transition: box-shadow 0.18s ease, background 0.18s ease;
 }
 
-.markerDot {
-  width: 12px;
-  height: 12px;
+.card:hover {
+  box-shadow: 0 2px 10px rgba(60, 50, 30, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.card[data-highlighted="true"] {
+  background: #fff;
+  box-shadow: 0 0 0 1.5px var(--forest), 0 4px 14px rgba(60, 50, 30, 0.12);
+}
+
+.ratingDot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  margin-top: 8px;
-  box-shadow: 0 0 0 2px var(--cream);
+  margin-top: 5px;
+  grid-row: 1 / span 3;
 }
 
-.rowBody {
-  display: grid;
-  gap: var(--space-2);
+.cardTitleRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
 }
 
-.rowTitle {
+.cardTitle {
   font-family: var(--font-display);
-  font-size: 1.15rem;
+  font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--ink);
-  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.rowTitleLink {
+.cardTitleLink {
   color: inherit;
   text-decoration: none;
-  border-bottom: 1px dotted transparent;
-  transition: border-color 120ms ease, color 120ms ease;
 }
+.cardTitleLink:hover { color: var(--forest); }
 
-.rowTitleLink:hover {
-  color: var(--forest);
-  border-bottom-color: var(--forest);
-}
-
-.rowNote {
+.cardNote {
+  font-size: 12px;
   color: var(--ink-dim);
-  font-size: var(--fs-sm);
-  white-space: pre-wrap;
+  font-style: italic;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-
-.rowMeta {
-  font-size: var(--fs-xs);
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-}
-.rowMeta a {
-  color: var(--ink-dim);
-  text-decoration: none;
-  border-bottom: 1px dotted var(--ink-faint);
-}
-.rowMeta a:hover { color: var(--forest); border-bottom-color: var(--forest); }
 
 .deleteBtn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
   background: transparent;
-  border: 1px solid transparent;
+  border: 0;
   color: var(--ink-faint);
-  font-size: 1.2rem;
-  line-height: 1;
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
   cursor: pointer;
+  border-radius: 4px;
 }
 .deleteBtn:hover {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
   color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 25%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.chipsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  grid-column: 2 / span 2;
+}
+
+.catChip {
+  padding: 2px 8px;
+  font-size: 11px;
+  line-height: 1.5;
+  border-radius: 999px;
+}
+
+.catChipMushroom {
+  background: rgba(184, 106, 58, 0.12);
+  color: var(--chanterelle);
+}
+
+.catChipTree {
+  background: rgba(93, 106, 58, 0.12);
+  color: var(--forest);
+}
+
+.catChipBerry {
+  background: rgba(60, 90, 150, 0.10);
+  color: #3a5a90;
+}
+
+.cardMeta {
+  display: flex;
+  gap: 10px;
+  grid-column: 2 / span 2;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-faint);
+  letter-spacing: 0.03em;
+}
+
+.cardMetaSep {
+  color: rgba(0, 0, 0, 0.18);
+}
+
+.emptyHint {
+  padding: var(--space-4);
+  background: var(--cream);
+  border: 1px dashed var(--rule);
+  border-radius: 10px;
+  color: var(--ink-dim);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+/* ─── Map pane ─────────────────────────────────────────────────── */
+
+.mapPaneWrap {
+  position: sticky;
+  top: 96px;
+}
+
+.mapPane {
+  position: relative;
+  aspect-ratio: 5 / 6;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 6px 22px rgba(60, 50, 30, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06);
+  background: var(--paper-rise);
+}
+
+.mapFooter {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--cream);
+  border-radius: 10px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  letter-spacing: 0.04em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mapFooterHand {
+  font-family: var(--font-hand);
+  font-size: 16px;
+  color: var(--chanterelle);
+  letter-spacing: normal;
+}
+
+.error {
+  color: var(--danger);
+  font-size: var(--fs-sm);
+  margin: 0 0 var(--space-3);
 }
