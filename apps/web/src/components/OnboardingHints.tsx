@@ -203,32 +203,32 @@ function useNearbyPanelRight(
  * 'done' и loading-фазы блокируют всё кроме [data-onboarding-control].
  */
 const ALLOWED_SELECTOR_BY_STEP: Record<Exclude<OnboardingStep, "done">, string> = {
-  1: '[data-onboarding="species"]',
-  2: '[data-onboarding="wetland"]',
-  // V8 — клик по карте; нужно разрешить .maplibregl-canvas
-  3: ".maplibregl-canvas",
-  // V9 — кнопка save в попапе
-  4: "[data-popup-save]",
+  1: '[data-onboarding="basemap-hybrid"]',
+  2: '[data-onboarding="species"]',
+  3: '[data-onboarding="wetland"]',
+  // Шаг 4 — клик по карте; нужно разрешить .maplibregl-canvas
+  4: ".maplibregl-canvas",
+  // Шаг 5 (info-only) — любой клик закрывает; селектор = '*'
+  5: "*",
 };
 
 export function OnboardingHints() {
   const [step, setStepState] = useState<OnboardingStep>(() =>
     getOnboardingStep(),
   );
-  // Loading-overlay между шагами: после V6 (Породы) ждём пока загрузится
-  // forest pmtiles + раскраска применится; после V7 (Болота) — wetland.
-  // 2.5 сек хватает с запасом для cold-load'а тайлов. localState, не
-  // персистим (если юзер перезагрузит во время loading — продолжит со
-  // следующего шага без задержки).
-  const [loadingPhase, setLoadingPhase] = useState<null | "after-v6" | "after-v7">(null);
+  // Loading-overlay между шагами: после step 2 (Породы) ждём forest
+  // pmtiles + colors; после step 3 (Болота) — wetland. 2.5 сек хватает
+  // с запасом. localState, не персистим.
+  const [loadingPhase, setLoadingPhase] = useState<null | "after-species" | "after-wetland">(null);
 
   const advance = (next: OnboardingStep) => {
-    if (step === 1 && next === 2) {
-      setLoadingPhase("after-v6");
+    // Loading-фазы только после Породы (step 2 → 3) и Болота (3 → 4).
+    if (step === 2 && next === 3) {
+      setLoadingPhase("after-species");
       return;
     }
-    if (step === 2 && next === 3) {
-      setLoadingPhase("after-v7");
+    if (step === 3 && next === 4) {
+      setLoadingPhase("after-wetland");
       return;
     }
     setOnboardingStep(next);
@@ -236,14 +236,14 @@ export function OnboardingHints() {
   };
 
   const finishLoading = () => {
-    if (loadingPhase === "after-v6") {
-      setLoadingPhase(null);
-      setOnboardingStep(2);
-      setStepState(2);
-    } else if (loadingPhase === "after-v7") {
+    if (loadingPhase === "after-species") {
       setLoadingPhase(null);
       setOnboardingStep(3);
       setStepState(3);
+    } else if (loadingPhase === "after-wetland") {
+      setLoadingPhase(null);
+      setOnboardingStep(4);
+      setStepState(4);
     }
   };
 
@@ -253,28 +253,29 @@ export function OnboardingHints() {
     setStepState("done");
   };
 
-  // Блок не-target кликов: всё что не allowedSelector или
-  // [data-onboarding-control] (skip/help-кнопки) — preventDefault +
-  // stopImmediatePropagation. Работает в capture-фазе, прежде чем
-  // app handler'ы успеют отреагировать.
+  // Блок не-target кликов.
   const allowedSelector =
     step !== "done" && loadingPhase === null
       ? ALLOWED_SELECTOR_BY_STEP[step]
       : null;
   useBlockNonTargetClicks(allowedSelector);
 
+  // Блок map-interactions (zoom/pan/double-click) во время онбординга.
+  useBlockMapInteractions(step !== "done");
+
   if (step === "done") return null;
 
   return (
     <div style={ROOT_STYLE} aria-live="polite">
-      {loadingPhase === null && step === 1 && <HintV6 onDismiss={() => advance(2)} onSkip={skipAll} />}
-      {loadingPhase === null && step === 2 && <HintV7 onDismiss={() => advance(3)} onSkip={skipAll} />}
-      {loadingPhase === null && step === 3 && <HintV8 onDismiss={() => advance(4)} onSkip={skipAll} />}
-      {loadingPhase === null && step === 4 && <HintV9 onDismiss={() => advance("done")} onSkip={skipAll} />}
+      {loadingPhase === null && step === 1 && <HintV5Hybrid onDismiss={() => advance(2)} onSkip={skipAll} />}
+      {loadingPhase === null && step === 2 && <HintV6 onDismiss={() => advance(3)} onSkip={skipAll} />}
+      {loadingPhase === null && step === 3 && <HintV7 onDismiss={() => advance(4)} onSkip={skipAll} />}
+      {loadingPhase === null && step === 4 && <HintV8 onDismiss={() => advance(5)} onSkip={skipAll} />}
+      {loadingPhase === null && step === 5 && <HintV9Info onDismiss={() => advance("done")} onSkip={skipAll} />}
       {loadingPhase !== null && (
         <LoadingHint
           message={
-            loadingPhase === "after-v6"
+            loadingPhase === "after-species"
               ? "Подгружаем породы леса…"
               : "Подгружаем болота…"
           }
@@ -284,6 +285,37 @@ export function OnboardingHints() {
       <SkipTourButton onClick={skipAll} />
     </div>
   );
+}
+
+/**
+ * Блокирует scrollZoom / doubleClickZoom / dragPan / keyboard на
+ * MapLibre instance во время онбординга. Включаем обратно на cleanup.
+ */
+function useBlockMapInteractions(enabled: boolean) {
+  const [map, setMap] = useState<MaplibreMap | null>(null);
+  useEffect(() => subscribeMap(setMap), []);
+  useEffect(() => {
+    if (!map || !enabled) return;
+    map.scrollZoom.disable();
+    map.doubleClickZoom.disable();
+    map.boxZoom.disable();
+    map.keyboard.disable();
+    map.touchZoomRotate.disable();
+    map.touchPitch.disable();
+    // dragPan и dragRotate оставляем — пользователь может нечаянно
+    // тронуть карту, но в целом перемещение не критично. Если решим
+    // блокировать тоже — раскомментируй.
+    // map.dragPan.disable();
+    return () => {
+      map.scrollZoom.enable();
+      map.doubleClickZoom.enable();
+      map.boxZoom.enable();
+      map.keyboard.enable();
+      map.touchZoomRotate.enable();
+      map.touchPitch.enable();
+      // map.dragPan.enable();
+    };
+  }, [map, enabled]);
 }
 
 /**
@@ -366,6 +398,37 @@ export function OnboardingRestartButton() {
 
 // ─── Step components ────────────────────────────────────────────────
 
+// Глобальные тайминги анимаций. Юзер хотел чтоб текст и стрелка
+// появлялись раньше: 0.6 → 0.1 сек delay. hp-draw 1.1s → 0.7s.
+const HINT_DELAY = 0.1;
+
+function HintV5Hybrid({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
+  const rect = useTargetRect('[data-onboarding="basemap-hybrid"]');
+  const panelRight = useNearbyPanelRight('[data-onboarding="basemap-hybrid"]');
+  useTargetClick('[data-onboarding="basemap-hybrid"]', onDismiss);
+
+  if (!rect) return null;
+  return (
+    <>
+      <RadialDim cx={rect.cx} cy={rect.cy} radius={170} />
+      <TargetGlow rect={rect} />
+      <ArrowHint
+        rect={rect}
+        scale={2.0}
+        originX={panelRight != null ? panelRight + 24 : undefined}
+        title={
+          <>
+            включи <em style={EM}>гибрид</em>
+          </>
+        }
+        sub="спутник + надписи →"
+        delay={HINT_DELAY}
+      />
+      <StepBadge n={1} label="гибрид" onSkip={onSkip} />
+    </>
+  );
+}
+
 function HintV6({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
   const rect = useTargetRect('[data-onboarding="species"]');
   const panelRight = useNearbyPanelRight('[data-onboarding="species"]');
@@ -386,9 +449,9 @@ function HintV6({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
           </>
         }
         sub="покажу что растёт →"
-        delay={0.6}
+        delay={HINT_DELAY}
       />
-      <StepBadge n={1} label="породы" onSkip={onSkip} />
+      <StepBadge n={2} label="породы" onSkip={onSkip} />
     </>
   );
 }
@@ -413,9 +476,9 @@ function HintV7({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
           </>
         }
         sub="где грибы лезут после дождей →"
-        delay={0.5}
+        delay={HINT_DELAY}
       />
-      <StepBadge n={2} label="болота" onSkip={onSkip} />
+      <StepBadge n={3} label="болота" onSkip={onSkip} />
     </>
   );
 }
@@ -570,7 +633,8 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
         </div>
       )}
 
-      {/* Caption над пином — Caveat-handwriting, по центру */}
+      {/* Caption над пином — Caveat-handwriting, по центру.
+          Жирнее (fontWeight 700) + крупнее (80 / 38) — юзер просил. */}
       <div
         style={{
           position: "fixed",
@@ -578,12 +642,13 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
           top: captionY,
           transform: "translate(-50%, 0) rotate(-3deg)",
           fontFamily: "var(--font-hand)",
-          fontSize: 52,
+          fontSize: 80,
+          fontWeight: 700,
           color: "var(--chanterelle)",
           lineHeight: 1.05,
           whiteSpace: "nowrap",
-          animation: "hp-fadeup .55s .35s ease both",
-          textShadow: "0 2px 14px rgba(0,0,0,.45)",
+          animation: "hp-fadeup .45s .1s ease both",
+          textShadow: "0 2px 18px rgba(0,0,0,.5)",
           zIndex: 3,
           pointerEvents: "none",
         }}
@@ -594,15 +659,16 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
         style={{
           position: "fixed",
           left: captionX,
-          top: captionY + 56,
+          top: captionY + 78,
           transform: "translate(-50%, 0) rotate(-2deg)",
           fontFamily: "var(--font-hand)",
-          fontSize: 26,
-          color: "rgba(250,245,232,.9)",
+          fontSize: 38,
+          fontWeight: 600,
+          color: "rgba(250,245,232,.95)",
           lineHeight: 1,
           whiteSpace: "nowrap",
-          animation: "hp-fadeup .55s .7s ease both",
-          textShadow: "0 2px 12px rgba(0,0,0,.55)",
+          animation: "hp-fadeup .45s .35s ease both",
+          textShadow: "0 2px 14px rgba(0,0,0,.6)",
           zIndex: 3,
           pointerEvents: "none",
         }}
@@ -610,44 +676,59 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
         ↓ покажу, что там растёт
       </div>
 
-      <StepBadge n={3} label="точка" onSkip={onSkip} />
+      <StepBadge n={4} label="точка" onSkip={onSkip} />
     </>
   );
 }
 
-function HintV9({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
-  // Live-poll включён: save-кнопка живёт в MapLibre popup'е, который
-  // двигается на каждый map-move через CSS transform. Без rAF-цикла
-  // подсветка / стрелка / текст застревали в исходной позиции и при
-  // pan'е карты уезжали относительно реального положения кнопки.
+/**
+ * V9 Info — финальный info-only шаг. Просто стрелка к save-кнопке +
+ * пояснение что можно сохранить место, нужен только аккаунт. Без dim,
+ * без glow вокруг кнопки. Любой клик где-угодно → done.
+ */
+function HintV9Info({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
   const rect = useTargetRect("[data-popup-save]", true);
   const popupRight = useNearbyPanelRight("[data-popup-save]", ".maplibregl-popup", true);
-  useTargetClick("[data-popup-save]", onDismiss);
-  // Закрыли попап без save — тоже dismiss. Ref-pattern: подписываемся
-  // ОДИН раз на mount; cbRef всегда указывает на актуальный onDismiss.
+  // Любой клик закрывает шаг — ставим listener на document'е в bubble-фазе
+  // (после blocker'а, чтобы блок-клик до нас всё равно дошёл).
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  useEffect(() => {
+    const handler = () => onDismissRef.current();
+    document.addEventListener("click", handler);
+    return () => document.removeEventListener("click", handler);
+  }, []);
+  // Закрытие попапа тоже advance'ит.
   useWindowEvent("mm:popup-closed", onDismiss);
 
   if (!rect) return null;
-  // Стиль идентичен V6/V7: тугой radial dim вокруг кнопки + glow-кольцо
-  // + рукописная стрелка на scale 1.8. Дим частично затемнит верх
-  // попап-карточки — это OK, фокус юзера должен быть на save-button.
+  // Без dim, без TargetGlow вокруг save-кнопки. Только arrow + текст.
   return (
     <>
-      <RadialDim cx={rect.cx} cy={rect.cy} radius={170} />
-      <TargetGlow rect={rect} />
       <ArrowHint
         rect={rect}
         scale={1.8}
         originX={popupRight != null ? popupRight + 24 : undefined}
         title={
           <>
-            сохрани <em style={EM}>спот</em>
+            сохрани <em style={EM}>место</em>
           </>
         }
-        sub="и вернёшься сюда осенью →"
-        delay={0.4}
+        sub="нужен только аккаунт →"
+        delay={HINT_DELAY}
       />
-      <StepBadge n={4} label="сохрани" onSkip={onSkip} />
+      {/* Поясняющий банер по центру внизу */}
+      <div style={V9_INFO_BANNER}>
+        <div style={V9_INFO_TITLE}>
+          Можешь сохранять любимые места
+        </div>
+        <div style={V9_INFO_SUB}>
+          Для этого нужно войти в аккаунт.
+          <br />
+          <span style={V9_INFO_DISMISS_HINT}>клик где угодно — закроет подсказку</span>
+        </div>
+      </div>
+      <StepBadge n={5} label="сохрани" onSkip={onSkip} />
     </>
   );
 }
@@ -891,7 +972,8 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
           style={{
             strokeDasharray: dasharray,
             strokeDashoffset: dasharray,
-            animation: `hp-draw 1.1s ${delay}s cubic-bezier(.2,.7,.2,1) forwards`,
+            // 0.7s (был 1.1s) — стрелка появляется быстрее.
+            animation: `hp-draw 0.7s ${delay}s cubic-bezier(.2,.7,.2,1) forwards`,
             // CSS custom property used by keyframe
             ["--len" as string]: dasharray,
           } as React.CSSProperties}
@@ -899,7 +981,9 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
         <g
           style={{
             opacity: 0,
-            animation: `geobiom-fadein .25s ${delay + 0.9}s ease forwards`,
+            // Wings fade-in появляются прямо в конце draw'а стрелки —
+            // delay = stroke-draw duration (0.7s).
+            animation: `geobiom-fadein .2s ${delay + 0.55}s ease forwards`,
           }}
         >
           <path
@@ -918,6 +1002,8 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
           />
         </g>
       </svg>
+      {/* Текст появляется раньше: delay = stroke-draw start. Сам fade
+          0.4s — быстрее. Юзер просил «текст пораньше». */}
       <div
         style={{
           position: "fixed",
@@ -929,7 +1015,7 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
           lineHeight: 1,
           transform: `rotate(${rot}deg)`,
           whiteSpace: "nowrap",
-          animation: `hp-fadeup .55s ${delay + 1.05}s ease both`,
+          animation: `hp-fadeup .4s ${delay}s ease both`,
           zIndex: 3,
           pointerEvents: "none",
           textShadow: "0 2px 14px rgba(0,0,0,.35)",
@@ -948,7 +1034,7 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
           lineHeight: 1,
           transform: `rotate(${subRot}deg)`,
           whiteSpace: "nowrap",
-          animation: `hp-fadeup .55s ${delay + 1.35}s ease both`,
+          animation: `hp-fadeup .4s ${delay + 0.15}s ease both`,
           zIndex: 3,
           pointerEvents: "none",
           textShadow: "0 2px 14px rgba(0,0,0,.55)",
@@ -974,7 +1060,7 @@ function StepBadge({
       <div style={STEP_BADGE_PILL}>
         <div style={STEP_BADGE_CIRCLE}>{n}</div>
         <span style={STEP_BADGE_META}>
-          шаг&nbsp;{n}/4
+          шаг&nbsp;{n}/5
         </span>
         <span style={STEP_BADGE_LABEL}>· {label}</span>
       </div>
@@ -1069,45 +1155,47 @@ const STEP_BADGE_SKIP: React.CSSProperties = {
   textShadow: "0 1px 6px rgba(0,0,0,.4)",
 };
 
-// Skip-tour pill снизу справа (выше .maplibregl-ctrl-bottom-right в
-// 12+38*N+gap, чтобы не залезать на zoom-кнопки). Помечен как
-// data-onboarding-control — не блокируется глобальным click-блокером.
+// Skip-tour pill снизу-по-центру — крупная, чтобы её было невозможно
+// пропустить во время первого визита. data-onboarding-control —
+// не блокируется глобальным click-блокером.
 const SKIP_TOUR_BTN_STYLE: React.CSSProperties = {
   position: "fixed",
-  right: 60,
-  bottom: 16,
+  left: "50%",
+  bottom: 24,
+  transform: "translateX(-50%)",
   zIndex: 5,
   pointerEvents: "auto",
-  padding: "9px 16px",
+  padding: "14px 28px",
   background: "var(--cream)",
-  color: "var(--ink-dim)",
+  color: "var(--ink)",
   border: 0,
   borderRadius: 999,
   fontFamily: "var(--font-body)",
-  fontSize: 13,
-  fontWeight: 500,
+  fontSize: 16,
+  fontWeight: 600,
   cursor: "pointer",
   boxShadow:
-    "0 6px 22px rgba(60,50,30,.18), 0 0 0 1px rgba(0,0,0,.06)",
+    "0 10px 30px rgba(60,50,30,.28), 0 0 0 1.5px rgba(0,0,0,.08)",
   animation: "hp-fadeup .5s ease both",
 };
 
 // «?» help-кнопка — независима от онбординга, рендерится MapHomePage'ом
-// всегда. Сбрасывает step на 1 + перезагружает страницу.
+// всегда. Снизу-СЛЕВА (юзер просил перенести из bottom-right). Сбрасывает
+// step на 1 + перезагружает страницу.
 const HELP_BTN_STYLE: React.CSSProperties = {
   position: "fixed",
-  right: 16,
-  bottom: 60,
+  left: 16,
+  bottom: 16,
   zIndex: 5,
   pointerEvents: "auto",
-  width: 36,
-  height: 36,
+  width: 42,
+  height: 42,
   background: "var(--cream)",
   color: "var(--ink-dim)",
   border: 0,
   borderRadius: "50%",
   fontFamily: "var(--font-display)",
-  fontSize: 18,
+  fontSize: 20,
   fontWeight: 600,
   cursor: "pointer",
   boxShadow:
@@ -1116,4 +1204,48 @@ const HELP_BTN_STYLE: React.CSSProperties = {
   alignItems: "center",
   justifyContent: "center",
   lineHeight: 1,
+};
+
+// V9 info-баннер по центру внизу — поясняет save-фичу без требования
+// её активировать.
+const V9_INFO_BANNER: React.CSSProperties = {
+  position: "fixed",
+  left: "50%",
+  bottom: 96,
+  transform: "translateX(-50%)",
+  zIndex: 4,
+  pointerEvents: "none",
+  padding: "18px 26px",
+  background: "var(--cream)",
+  borderRadius: 14,
+  boxShadow:
+    "0 14px 36px rgba(20,15,10,.32), 0 0 0 1px rgba(0,0,0,.06)",
+  textAlign: "center",
+  maxWidth: 480,
+  animation: "hp-fadeup .45s .05s ease both",
+};
+
+const V9_INFO_TITLE: React.CSSProperties = {
+  fontFamily: "var(--font-display)",
+  fontSize: 22,
+  fontWeight: 600,
+  letterSpacing: "-0.01em",
+  color: "var(--ink)",
+  marginBottom: 6,
+  lineHeight: 1.2,
+};
+
+const V9_INFO_SUB: React.CSSProperties = {
+  fontFamily: "var(--font-body)",
+  fontSize: 14,
+  color: "var(--ink-dim)",
+  lineHeight: 1.5,
+};
+
+const V9_INFO_DISMISS_HINT: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  letterSpacing: "0.04em",
+  color: "var(--ink-faint)",
+  textTransform: "lowercase",
 };

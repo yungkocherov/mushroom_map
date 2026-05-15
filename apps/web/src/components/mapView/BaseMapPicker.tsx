@@ -40,6 +40,7 @@ export function BaseMapPicker({ variant = "floating" }: Props = {}) {
             className={`${styles.pill}${baseMap === o.id ? ` ${styles.pillActive}` : ""}`}
             onClick={() => setBaseMap(o.id)}
             aria-pressed={baseMap === o.id}
+            data-onboarding={`basemap-${o.id}`}
           >
             {o.label}
           </button>

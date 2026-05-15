@@ -15,7 +15,7 @@ const STEP_KEY = "geobiom.onboarding.step";
 const LEGACY_KEY = "geobiom_onboarded"; // 2024-2026-04 — удалить через сезон
 const POST_AUTH_KEY = "geobiom_post_auth_redirect";
 
-export type OnboardingStep = 1 | 2 | 3 | 4 | "done";
+export type OnboardingStep = 1 | 2 | 3 | 4 | 5 | "done";
 
 export function getOnboardingStep(): OnboardingStep {
   try {
@@ -33,7 +33,7 @@ export function getOnboardingStep(): OnboardingStep {
     }
     if (raw === "done") return "done";
     const n = Number(raw);
-    if (n === 1 || n === 2 || n === 3 || n === 4) return n;
+    if (n === 1 || n === 2 || n === 3 || n === 4 || n === 5) return n;
     return 1;
   } catch {
     // SSR / private mode — treat as done (нет смысла гонять туры).
