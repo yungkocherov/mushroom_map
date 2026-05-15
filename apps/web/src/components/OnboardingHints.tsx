@@ -23,6 +23,7 @@ import {
   setOnboardingStep,
   type OnboardingStep,
 } from "../lib/onboardingStorage";
+import { useLayerVisibility } from "../store/useLayerVisibility";
 import { subscribeMap } from "../lib/mapInstance";
 
 interface DOMRectLite {
@@ -216,13 +217,18 @@ export function OnboardingHints() {
   const [step, setStepState] = useState<OnboardingStep>(() =>
     getOnboardingStep(),
   );
-  // Loading-overlay между шагами: после step 2 (Породы) ждём forest
-  // pmtiles + colors; после step 3 (Болота) — wetland. 2.5 сек хватает
-  // с запасом. localState, не персистим.
-  const [loadingPhase, setLoadingPhase] = useState<null | "after-species" | "after-wetland">(null);
+  // Loading-overlay между шагами: после step 1 (Гибрид) ждём пока
+  // переключится basemap; после step 2 (Породы) — forest pmtiles
+  // + colors; после step 3 (Болота) — wetland. 2.5 сек хватает с
+  // запасом. localState, не персистим.
+  type LoadingPhase = "after-hybrid" | "after-species" | "after-wetland";
+  const [loadingPhase, setLoadingPhase] = useState<null | LoadingPhase>(null);
 
   const advance = (next: OnboardingStep) => {
-    // Loading-фазы только после Породы (step 2 → 3) и Болота (3 → 4).
+    if (step === 1 && next === 2) {
+      setLoadingPhase("after-hybrid");
+      return;
+    }
     if (step === 2 && next === 3) {
       setLoadingPhase("after-species");
       return;
@@ -236,7 +242,11 @@ export function OnboardingHints() {
   };
 
   const finishLoading = () => {
-    if (loadingPhase === "after-species") {
+    if (loadingPhase === "after-hybrid") {
+      setLoadingPhase(null);
+      setOnboardingStep(2);
+      setStepState(2);
+    } else if (loadingPhase === "after-species") {
       setLoadingPhase(null);
       setOnboardingStep(3);
       setStepState(3);
@@ -275,7 +285,9 @@ export function OnboardingHints() {
       {loadingPhase !== null && (
         <LoadingHint
           message={
-            loadingPhase === "after-species"
+            loadingPhase === "after-hybrid"
+              ? "Переключаем подложку…"
+              : loadingPhase === "after-species"
               ? "Подгружаем породы леса…"
               : "Подгружаем болота…"
           }
@@ -405,7 +417,15 @@ const HINT_DELAY = 0.1;
 function HintV5Hybrid({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
   const rect = useTargetRect('[data-onboarding="basemap-hybrid"]');
   const panelRight = useNearbyPanelRight('[data-onboarding="basemap-hybrid"]');
-  useTargetClick('[data-onboarding="basemap-hybrid"]', onDismiss);
+  // Защитный вызов setBaseMap в onDismiss: если по какой-то причине
+  // React onClick на кнопке не успел отработать (порядок event handler'ов
+  // или batching), мы всё равно переключим подложку в hybrid из дисмисса.
+  const setBaseMap = useLayerVisibility((s) => s.setBaseMap);
+  const handleClick = () => {
+    setBaseMap("hybrid");
+    onDismiss();
+  };
+  useTargetClick('[data-onboarding="basemap-hybrid"]', handleClick);
 
   if (!rect) return null;
   return (
@@ -634,7 +654,8 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
       )}
 
       {/* Caption над пином — Caveat-handwriting, по центру.
-          Жирнее (fontWeight 700) + крупнее (80 / 38) — юзер просил. */}
+          Жирнее (fontWeight 700) + крупнее (80 / 38) — юзер просил.
+          textShadow — чёрная обводка для читаемости на спутнике. */}
       <div
         style={{
           position: "fixed",
@@ -648,7 +669,7 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
           lineHeight: 1.05,
           whiteSpace: "nowrap",
           animation: "hp-fadeup .45s .1s ease both",
-          textShadow: "0 2px 18px rgba(0,0,0,.5)",
+          textShadow: HAND_TEXT_OUTLINE,
           zIndex: 3,
           pointerEvents: "none",
         }}
@@ -668,7 +689,7 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
           lineHeight: 1,
           whiteSpace: "nowrap",
           animation: "hp-fadeup .45s .35s ease both",
-          textShadow: "0 2px 14px rgba(0,0,0,.6)",
+          textShadow: HAND_SUB_OUTLINE,
           zIndex: 3,
           pointerEvents: "none",
         }}
@@ -703,6 +724,7 @@ function HintV9Info({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () =
 
   if (!rect) return null;
   // Без dim, без TargetGlow вокруг save-кнопки. Только arrow + текст.
+  // Юзер убрал info-баннер — теперь только стрелка с надписью.
   return (
     <>
       <ArrowHint
@@ -711,23 +733,12 @@ function HintV9Info({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () =
         originX={popupRight != null ? popupRight + 24 : undefined}
         title={
           <>
-            сохрани <em style={EM}>место</em>
+            можешь <em style={EM}>сохранить</em> место
           </>
         }
         sub="нужен только аккаунт →"
         delay={HINT_DELAY}
       />
-      {/* Поясняющий банер по центру внизу */}
-      <div style={V9_INFO_BANNER}>
-        <div style={V9_INFO_TITLE}>
-          Можешь сохранять любимые места
-        </div>
-        <div style={V9_INFO_SUB}>
-          Для этого нужно войти в аккаунт.
-          <br />
-          <span style={V9_INFO_DISMISS_HINT}>клик где угодно — закроет подсказку</span>
-        </div>
-      </div>
       <StepBadge n={5} label="сохрани" onSkip={onSkip} />
     </>
   );
@@ -1003,7 +1014,8 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
         </g>
       </svg>
       {/* Текст появляется раньше: delay = stroke-draw start. Сам fade
-          0.4s — быстрее. Юзер просил «текст пораньше». */}
+          0.4s — быстрее. Юзер просил «текст пораньше».
+          textShadow — чёрная обводка для читаемости на любом basemap'е. */}
       <div
         style={{
           position: "fixed",
@@ -1018,7 +1030,7 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
           animation: `hp-fadeup .4s ${delay}s ease both`,
           zIndex: 3,
           pointerEvents: "none",
-          textShadow: "0 2px 14px rgba(0,0,0,.35)",
+          textShadow: HAND_TEXT_OUTLINE,
         }}
       >
         {title}
@@ -1030,14 +1042,14 @@ function ArrowHint({ rect, scale = 1, title, sub, delay = 0.5, originX }: ArrowH
           top: subY,
           fontFamily: "var(--font-hand)",
           fontSize: 18 * k,
-          color: "rgba(250,245,232,.85)",
+          color: "rgba(250,245,232,.95)",
           lineHeight: 1,
           transform: `rotate(${subRot}deg)`,
           whiteSpace: "nowrap",
           animation: `hp-fadeup .4s ${delay + 0.15}s ease both`,
           zIndex: 3,
           pointerEvents: "none",
-          textShadow: "0 2px 14px rgba(0,0,0,.55)",
+          textShadow: HAND_SUB_OUTLINE,
         }}
       >
         {sub}
@@ -1206,46 +1218,19 @@ const HELP_BTN_STYLE: React.CSSProperties = {
   lineHeight: 1,
 };
 
-// V9 info-баннер по центру внизу — поясняет save-фичу без требования
-// её активировать.
-const V9_INFO_BANNER: React.CSSProperties = {
-  position: "fixed",
-  left: "50%",
-  bottom: 96,
-  transform: "translateX(-50%)",
-  zIndex: 4,
-  pointerEvents: "none",
-  padding: "18px 26px",
-  background: "var(--cream)",
-  borderRadius: 14,
-  boxShadow:
-    "0 14px 36px rgba(20,15,10,.32), 0 0 0 1px rgba(0,0,0,.06)",
-  textAlign: "center",
-  maxWidth: 480,
-  animation: "hp-fadeup .45s .05s ease both",
-};
+// Чёрная обводка для рукописных подписей — улучшает читаемость на
+// любом фоне (спутник / лес / тёмные тайлы). 4×1px shadow вокруг +
+// глубокая soft-тень за компанию.
+const HAND_TEXT_OUTLINE =
+  "-1px -1px 0 rgba(0,0,0,.55)," +
+  " 1px -1px 0 rgba(0,0,0,.55)," +
+  " -1px 1px 0 rgba(0,0,0,.55)," +
+  " 1px 1px 0 rgba(0,0,0,.55)," +
+  " 0 2px 12px rgba(0,0,0,.45)";
 
-const V9_INFO_TITLE: React.CSSProperties = {
-  fontFamily: "var(--font-display)",
-  fontSize: 22,
-  fontWeight: 600,
-  letterSpacing: "-0.01em",
-  color: "var(--ink)",
-  marginBottom: 6,
-  lineHeight: 1.2,
-};
-
-const V9_INFO_SUB: React.CSSProperties = {
-  fontFamily: "var(--font-body)",
-  fontSize: 14,
-  color: "var(--ink-dim)",
-  lineHeight: 1.5,
-};
-
-const V9_INFO_DISMISS_HINT: React.CSSProperties = {
-  fontFamily: "var(--font-mono)",
-  fontSize: 11,
-  letterSpacing: "0.04em",
-  color: "var(--ink-faint)",
-  textTransform: "lowercase",
-};
+const HAND_SUB_OUTLINE =
+  "-1px -1px 0 rgba(0,0,0,.65)," +
+  " 1px -1px 0 rgba(0,0,0,.65)," +
+  " -1px 1px 0 rgba(0,0,0,.65)," +
+  " 1px 1px 0 rgba(0,0,0,.65)," +
+  " 0 2px 12px rgba(0,0,0,.55)";
