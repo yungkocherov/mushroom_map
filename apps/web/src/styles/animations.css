@@ -69,18 +69,25 @@
  * Используется ForestPopup + useMapPopup. Префикс psp = popup-spot.
  */
 
-/* Popup открывается из пина: scale .04 → 1.02 → 1 с overshoot. */
+/* Popup открывается из пина: scale .04 → 1.02 → 1 с overshoot.
+ * НА 100% — transform: none (а не scale(1)), иначе Chrome/Windows
+ * держит элемент в композитном GPU-слое с grayscale AA → блюрный
+ * текст в попапе. Отсутствие transform-свойства возвращает ClearType. */
 @keyframes psp-open {
   0%   { transform: scale(0.04); opacity: 0; }
   18%  { opacity: 1; }
   72%  { transform: scale(1.02); opacity: 1; }
-  100% { transform: scale(1); opacity: 1; }
+  99%  { transform: scale(1); opacity: 1; }
+  100% { transform: none; opacity: 1; }
 }
 
-/* Стаггер строк видов: 90 ms между строками, fade + slide-in. */
+/* Стаггер строк видов: 90 ms между строками, fade + slide-in.
+ * Та же причина для transform:none на 100% — иначе latin-name строчки
+ * (Gyromitra esculenta etc) выглядят размытыми после анимации. */
 @keyframes psp-row-in {
-  from { opacity: 0; transform: translateX(-6px); }
-  to   { opacity: 1; transform: translateX(0); }
+  0%   { opacity: 0; transform: translateX(-6px); }
+  99%  { opacity: 1; transform: translateX(0); }
+  100% { opacity: 1; transform: none; }
 }
 
 /* Save spinner — линейный rotate + дыхание dasharray. */

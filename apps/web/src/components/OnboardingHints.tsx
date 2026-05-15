@@ -273,6 +273,9 @@ export function OnboardingHints() {
   // Блок map-interactions (zoom/pan/double-click) во время онбординга.
   useBlockMapInteractions(step !== "done");
 
+  // Начальная центровка карты на Питере при старте онбординга.
+  useInitialOnboardingView(step !== "done");
+
   if (step === "done") return null;
 
   return (
@@ -297,6 +300,28 @@ export function OnboardingHints() {
       <SkipTourButton onClick={skipAll} />
     </div>
   );
+}
+
+/**
+ * При старте онбординга центрируем камеру на Питере / западной ЛО
+ * (центрально, чтобы юзер видел контекст: побережье Финского залива,
+ * Карельский перешеек). Зум 8.5 — хорошо видны крупные массивы леса и
+ * Кирпичное на западе для V8.
+ */
+function useInitialOnboardingView(enabled: boolean) {
+  const [map, setMap] = useState<MaplibreMap | null>(null);
+  const flownRef = useRef(false);
+  useEffect(() => subscribeMap(setMap), []);
+  useEffect(() => {
+    if (!map || !enabled || flownRef.current) return;
+    flownRef.current = true;
+    map.flyTo({
+      center: [30.3, 60.0],
+      zoom: 8.5,
+      speed: 1.4,
+      essential: true,
+    });
+  }, [map, enabled]);
 }
 
 /**
@@ -441,7 +466,7 @@ function HintV5Hybrid({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: ()
             включи <em style={EM}>гибрид</em>
           </>
         }
-        sub="спутник + надписи →"
+        sub="спутник + надписи"
         delay={HINT_DELAY}
       />
       <StepBadge n={1} label="гибрид" onSkip={onSkip} />
@@ -468,7 +493,7 @@ function HintV6({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
             начни <em style={EM}>отсюда</em>
           </>
         }
-        sub="покажу что растёт →"
+        sub="покажу что растёт"
         delay={HINT_DELAY}
       />
       <StepBadge n={2} label="породы" onSkip={onSkip} />
@@ -495,7 +520,7 @@ function HintV7({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
             теперь <em style={EM}>болота</em>
           </>
         }
-        sub="где грибы лезут после дождей →"
+        sub="полезно знать!"
         delay={HINT_DELAY}
       />
       <StepBadge n={3} label="болота" onSkip={onSkip} />
@@ -512,8 +537,8 @@ function HintV7({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
  * Конкретный выдел выбран автором руками — известно что в этой точке
  * сидит характерный сосновый бор с белыми/лисичками, прогноз ≥4.
  */
-const V8_FLY = { lat: 60.468, lon: 29.368, zoom: 13 };
 const V8_TARGET = { lat: 60.47479, lon: 29.32768 };
+const V8_FLY = { lat: V8_TARGET.lat, lon: V8_TARGET.lon, zoom: 13.5 };
 const V8_TARGET_TOLERANCE = 0.002; // ≈ 200m в широте; в долготе чуть уже
 
 function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
@@ -521,12 +546,15 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
   const [map, setMap] = useState<MaplibreMap | null>(null);
   useEffect(() => subscribeMap(setMap), []);
 
-  // flyTo на Кирпичное один раз на mount.
+  // flyTo на target-выдел один раз на mount. offset: [0, 160] сдвигает
+  // target на 160px НИЖЕ центра экрана — освобождает место сверху
+  // для попапа (он откроется выше пина) и для подписи «нажми сюда».
   useEffect(() => {
     if (!map) return;
     map.flyTo({
       center: [V8_FLY.lon, V8_FLY.lat],
       zoom: V8_FLY.zoom,
+      offset: [0, 160],
       speed: 1.6,
       essential: true,
     });
@@ -694,7 +722,7 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
           pointerEvents: "none",
         }}
       >
-        ↓ покажу, что там растёт
+↓ покажу, что там растёт
       </div>
 
       <StepBadge n={4} label="точка" onSkip={onSkip} />
@@ -736,7 +764,7 @@ function HintV9Info({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () =
             можешь <em style={EM}>сохранить</em> место
           </>
         }
-        sub="нужен только аккаунт →"
+        sub="нужен только аккаунт"
         delay={HINT_DELAY}
       />
       <StepBadge n={5} label="сохрани" onSkip={onSkip} />
