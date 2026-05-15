@@ -459,7 +459,7 @@ function HintV5Hybrid({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: ()
       <TargetGlow rect={rect} />
       <ArrowHint
         rect={rect}
-        scale={2.0}
+        scale={2.4}
         originX={panelRight != null ? panelRight + 24 : undefined}
         title={
           <>
@@ -486,7 +486,7 @@ function HintV6({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
       <TargetGlow rect={rect} />
       <ArrowHint
         rect={rect}
-        scale={2.2}
+        scale={2.6}
         originX={panelRight != null ? panelRight + 24 : undefined}
         title={
           <>
@@ -513,7 +513,7 @@ function HintV7({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
       <TargetGlow rect={rect} />
       <ArrowHint
         rect={rect}
-        scale={2.0}
+        scale={2.4}
         originX={panelRight != null ? panelRight + 24 : undefined}
         title={
           <>
@@ -681,8 +681,7 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
         </div>
       )}
 
-      {/* Caption над пином — Caveat-handwriting, по центру.
-          Жирнее (fontWeight 700) + крупнее (80 / 38) — юзер просил.
+      {/* Caption над пином. Уменьшен по фидбеку юзера: 80→60 / 38→26.
           textShadow — чёрная обводка для читаемости на спутнике. */}
       <div
         style={{
@@ -691,7 +690,7 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
           top: captionY,
           transform: "translate(-50%, 0) rotate(-3deg)",
           fontFamily: "var(--font-hand)",
-          fontSize: 80,
+          fontSize: 60,
           fontWeight: 700,
           color: "var(--chanterelle)",
           lineHeight: 1.05,
@@ -708,10 +707,10 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
         style={{
           position: "fixed",
           left: captionX,
-          top: captionY + 78,
+          top: captionY + 60,
           transform: "translate(-50%, 0) rotate(-2deg)",
           fontFamily: "var(--font-hand)",
-          fontSize: 38,
+          fontSize: 26,
           fontWeight: 600,
           color: "rgba(250,245,232,.95)",
           lineHeight: 1,
@@ -722,8 +721,34 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
           pointerEvents: "none",
         }}
       >
-↓ покажу, что там растёт
+        покажу, что там растёт
       </div>
+      {/* Большая ↓ ровно над пином — указывает в центр точки.
+          Раньше ↓ был внутри sub-текста и из-за translate(-50%) + rotate
+          смещался относительно центра пина. Теперь — отдельный элемент,
+          left/top напрямую = pin position, центр через translate. */}
+      {pinXY && (
+        <div
+          aria-hidden="true"
+          style={{
+            position: "fixed",
+            left: pinXY.x,
+            top: pinXY.y - 48,
+            transform: "translate(-50%, -50%)",
+            fontFamily: "var(--font-hand)",
+            fontSize: 44,
+            fontWeight: 700,
+            color: "var(--chanterelle)",
+            lineHeight: 1,
+            animation: "hp-fadeup .45s .55s ease both",
+            textShadow: HAND_TEXT_OUTLINE,
+            zIndex: 3,
+            pointerEvents: "none",
+          }}
+        >
+          ↓
+        </div>
+      )}
 
       <StepBadge n={4} label="точка" onSkip={onSkip} />
     </>
@@ -736,10 +761,13 @@ function HintV8({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => vo
  * без glow вокруг кнопки. Любой клик где-угодно → done.
  */
 function HintV9Info({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () => void }) {
-  const rect = useTargetRect("[data-popup-save]", true);
+  const saveRect = useTargetRect("[data-popup-save]", true);
   const popupRight = useNearbyPanelRight("[data-popup-save]", ".maplibregl-popup", true);
-  // Любой клик закрывает шаг — ставим listener на document'е в bubble-фазе
-  // (после blocker'а, чтобы блок-клик до нас всё равно дошёл).
+  // Второй target — Войти-кнопка (data-onboarding="login" в HeaderAuth).
+  // Если юзер уже залогинен — этой кнопки в DOM нет, ArrowHint не
+  // рендерится, остаётся только save-arrow.
+  const loginRect = useTargetRect('[data-onboarding="login"]');
+  // Любой клик закрывает шаг.
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
   useEffect(() => {
@@ -750,23 +778,37 @@ function HintV9Info({ onDismiss, onSkip }: { onDismiss: () => void; onSkip: () =
   // Закрытие попапа тоже advance'ит.
   useWindowEvent("mm:popup-closed", onDismiss);
 
-  if (!rect) return null;
-  // Без dim, без TargetGlow вокруг save-кнопки. Только arrow + текст.
-  // Юзер убрал info-баннер — теперь только стрелка с надписью.
+  if (!saveRect) return null;
+  // Два блока одновременно:
+  //  - стрелка к save-кнопке + только title «можешь сохранить место»
+  //  - стрелка к «Войти» + «сначала войди в аккаунт»
   return (
     <>
       <ArrowHint
-        rect={rect}
-        scale={1.8}
+        rect={saveRect}
+        scale={2.4}
         originX={popupRight != null ? popupRight + 24 : undefined}
         title={
           <>
             можешь <em style={EM}>сохранить</em> место
           </>
         }
-        sub="нужен только аккаунт"
+        sub=""
         delay={HINT_DELAY}
       />
+      {loginRect && (
+        <ArrowHint
+          rect={loginRect}
+          scale={1.8}
+          title={
+            <>
+              <em style={EM}>сначала</em> войди
+            </>
+          }
+          sub="в аккаунт"
+          delay={HINT_DELAY + 0.15}
+        />
+      )}
       <StepBadge n={5} label="сохрани" onSkip={onSkip} />
     </>
   );
@@ -1131,13 +1173,16 @@ const ROOT_STYLE: React.CSSProperties = {
 
 const EM: React.CSSProperties = { fontStyle: "italic" };
 
+// Step badge — bottom-left, выше help-кнопки (?) на 8px gap.
+// Перемещено из top-right по фидбеку юзера: top-right занят MapTopBar +
+// «Войти» + Spotlight-search, тесно. Bottom-left свободен.
 const STEP_BADGE_WRAP: React.CSSProperties = {
   position: "fixed",
-  top: 18,
-  right: 18,
+  bottom: 70, // 16 (help-bottom) + 42 (help-size) + 12 (gap)
+  left: 16,
   display: "flex",
   flexDirection: "column",
-  alignItems: "flex-end",
+  alignItems: "flex-start",
   gap: 6,
   zIndex: 4,
   pointerEvents: "auto",

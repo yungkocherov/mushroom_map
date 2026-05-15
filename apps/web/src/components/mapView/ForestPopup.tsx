@@ -189,7 +189,7 @@ export function ForestPopup({
   const forestName = f
     ? FOREST_NAMES[f.dominant_species] ?? f.dominant_species
     : "Вне выдела";
-  const areaStr = f?.area_m2 ? `${(f.area_m2 / 10_000).toFixed(1)} ГА` : null;
+  // Area (ГА) убран из header по фидбеку юзера — не несёт смысла для грибника.
   const ageStr = f?.age_group ?? null;
   const bonitetStr =
     f?.bonitet != null && f.bonitet >= 1 && f.bonitet <= 5
@@ -227,14 +227,6 @@ export function ForestPopup({
           <div style={TITLE_STYLE}>{forestName}</div>
 
           <div style={META_ROW_STYLE}>
-            {areaStr && (
-              <span style={{ color: "var(--ink)", fontWeight: 600 }}>
-                {areaStr}
-              </span>
-            )}
-            {(ageStr || bonitetStr) && areaStr && (
-              <span style={SEPARATOR_STYLE}>·</span>
-            )}
             {ageStr && <span>{ageStr}</span>}
             {bonitetStr && ageStr && <span style={SEPARATOR_STYLE}>·</span>}
             {bonitetStr && <span>{bonitetStr}</span>}

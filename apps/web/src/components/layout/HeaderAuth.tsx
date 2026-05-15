@@ -27,6 +27,7 @@ export function HeaderAuth() {
     return (
       <Link
         to="/auth"
+        data-onboarding="login"
         style={{
           color: "var(--ink-dim)",
           textDecoration: "none",
