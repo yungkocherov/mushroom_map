@@ -326,3 +326,78 @@ export async function fetchForestLegend(): Promise<ForestLegendResponse> {
   if (!res.ok) throw new Error(`forest/legend ${res.status}`);
   return res.json();
 }
+
+
+// ──────────────────────────────────────────────────────────────────────
+// Статистика (Phase 1) — раздел /stats. Все читают public.stats_*.
+// ──────────────────────────────────────────────────────────────────────
+
+export interface StatsMeta {
+  generated_at: string | null;
+  forest_source_version: string | null;
+  vk_prompt_version: string | null;
+}
+
+export type StatsForestDimension = "species" | "bonitet" | "age_group" | "source";
+
+export interface StatsForestItem {
+  key: string;
+  label: string;
+  area_km2: number;
+  polygon_count: number;
+  pct: number;
+}
+
+export interface StatsForestResponse {
+  dimension: StatsForestDimension;
+  items: StatsForestItem[];
+}
+
+export interface StatsTimelinePoint {
+  bucket: string | null;
+  group_key: string;
+  label: string;
+  post_count: number;
+  find_count: number;
+}
+
+export interface StatsTimelineResponse {
+  group: string;
+  items: StatsTimelinePoint[];
+}
+
+export interface StatsCorpusResponse {
+  metrics: Record<string, number | string | null>;
+  classification: Array<{ species_key: string; label: string; count: number }>;
+  sources: Record<string, number>;
+}
+
+export async function fetchStatsMeta(): Promise<StatsMeta> {
+  const res = await fetch(`${API_BASE}/api/stats/meta`);
+  if (!res.ok) throw new Error(`stats/meta ${res.status}`);
+  return res.json();
+}
+
+export async function fetchStatsForest(
+  dimension: StatsForestDimension = "species",
+): Promise<StatsForestResponse> {
+  const res = await fetch(`${API_BASE}/api/stats/forest?dimension=${dimension}`);
+  if (!res.ok) throw new Error(`stats/forest ${res.status}`);
+  return res.json();
+}
+
+export async function fetchStatsTimeline(
+  group = "all",
+  limit = 1500,
+): Promise<StatsTimelineResponse> {
+  const url = `${API_BASE}/api/stats/vk/timeline?group=${encodeURIComponent(group)}&limit=${limit}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`stats/timeline ${res.status}`);
+  return res.json();
+}
+
+export async function fetchStatsCorpus(): Promise<StatsCorpusResponse> {
+  const res = await fetch(`${API_BASE}/api/stats/corpus`);
+  if (!res.ok) throw new Error(`stats/corpus ${res.status}`);
+  return res.json();
+}
