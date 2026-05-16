@@ -327,6 +327,146 @@ _SEASON_SPECIES_SQL = """
     LEFT JOIN qual q ON q.species_key = t.species_key
 """
 
+_FOREST_QUANT_SQL = """
+    INSERT INTO stats_forest_quant
+      (group_kind, group_key, metric, n, p10, p25, p50, p75, p90)
+    WITH base AS (
+        SELECT dominant_species AS sp,
+               meta->>'bonitet'  AS bon,
+               area_m2 / 1e4      AS area_ha,
+               CASE WHEN (meta->>'timber_stock') ~ '^[0-9]+(\\.[0-9]+)?$'
+                    THEN (meta->>'timber_stock')::numeric END AS stock
+        FROM forest_polygon
+        WHERE source = 'rosleshoz'
+    ),
+    q AS (
+        SELECT 'species' AS gk, sp AS g, 'area_ha' AS m, area_ha AS v
+        FROM base WHERE sp IS NOT NULL
+        UNION ALL
+        SELECT 'species', sp, 'stock', stock
+        FROM base WHERE sp IS NOT NULL AND stock IS NOT NULL
+        UNION ALL
+        SELECT 'bonitet', bon, 'stock', stock
+        FROM base WHERE bon ~ '^[0-9]+$' AND stock IS NOT NULL
+    )
+    SELECT gk, g, m, count(*),
+           percentile_cont(0.10) WITHIN GROUP (ORDER BY v),
+           percentile_cont(0.25) WITHIN GROUP (ORDER BY v),
+           percentile_cont(0.50) WITHIN GROUP (ORDER BY v),
+           percentile_cont(0.75) WITHIN GROUP (ORDER BY v),
+           percentile_cont(0.90) WITHIN GROUP (ORDER BY v)
+    FROM q GROUP BY gk, g, m
+"""
+
+_FOREST_CROSS_SQL = """
+    INSERT INTO stats_forest_cross
+      (dim_a, key_a, dim_b, key_b, area_km2, polygon_count)
+    WITH base AS (
+        SELECT dominant_species AS sp,
+               NULLIF(meta->>'bonitet', '') AS bon,
+               CASE meta->>'age_group'
+                 WHEN 'молодняки' THEN 'молодняки'
+                 WHEN 'средневозрастные' THEN 'средневозрастные'
+                 WHEN 'приспевающие' THEN 'приспевающие'
+                 WHEN 'спелые' THEN 'спелые'
+                 WHEN 'перестойные' THEN 'перестойные'
+                 ELSE 'не определён' END AS age,
+               ST_Area(geometry::geography) / 1e6 AS km2,
+               ST_Centroid(geometry) AS c
+        FROM forest_polygon
+        WHERE source = 'rosleshoz'
+    ),
+    withd AS (
+        SELECT b.sp, b.bon, b.age, b.km2, aa.id AS did
+        FROM base b
+        LEFT JOIN admin_area aa
+          ON aa.level = 6
+         AND aa.geometry && b.c
+         AND ST_Contains(aa.geometry, b.c)
+    )
+    SELECT 'species', sp, 'bonitet', bon, SUM(km2), COUNT(*)
+    FROM withd WHERE sp IS NOT NULL AND bon IS NOT NULL GROUP BY sp, bon
+    UNION ALL
+    SELECT 'species', sp, 'age', age, SUM(km2), COUNT(*)
+    FROM withd WHERE sp IS NOT NULL GROUP BY sp, age
+    UNION ALL
+    SELECT 'age', age, 'bonitet', bon, SUM(km2), COUNT(*)
+    FROM withd WHERE bon IS NOT NULL GROUP BY age, bon
+    UNION ALL
+    SELECT 'district', did::text, 'species', sp, SUM(km2), COUNT(*)
+    FROM withd WHERE did IS NOT NULL AND sp IS NOT NULL GROUP BY did, sp
+    UNION ALL
+    SELECT 'district', did::text, 'age', age, SUM(km2), COUNT(*)
+    FROM withd WHERE did IS NOT NULL GROUP BY did, age
+"""
+
+_FOREST_HIST_SQL = """
+    INSERT INTO stats_forest_hist
+      (metric, bin_lo, bin_hi, area_km2, polygon_count)
+    WITH s AS (
+        SELECT CASE WHEN (meta->>'timber_stock') ~ '^[0-9]+(\\.[0-9]+)?$'
+                    THEN (meta->>'timber_stock')::numeric END AS stock,
+               ST_Area(geometry::geography) / 1e6 AS km2
+        FROM forest_polygon
+        WHERE source = 'rosleshoz'
+    ),
+    b AS (
+        SELECT LEAST(floor(stock / 20.0), 30) AS bk, km2
+        FROM s WHERE stock IS NOT NULL
+    )
+    SELECT 'stock', bk * 20.0, bk * 20.0 + 20.0, SUM(km2), COUNT(*)
+    FROM b GROUP BY bk ORDER BY bk
+"""
+
+_FOREST_DISTRICT_SQL = """
+    INSERT INTO stats_forest_district
+      (district_id, district_name, land_km2, forest_km2, forest_pct,
+       mean_bonitet, mean_stock, mature_host_pct)
+    WITH land AS (
+        SELECT id, name,
+               ST_Area(geometry::geography) / 1e6 AS land_km2
+        FROM admin_area WHERE level = 6
+    ),
+    fp AS (
+        SELECT aa.id AS did,
+               ST_Area(p.geometry::geography) / 1e6 AS km2,
+               CASE WHEN (p.meta->>'bonitet') ~ '^[0-9]+$'
+                    THEN (p.meta->>'bonitet')::numeric END AS bon,
+               CASE WHEN (p.meta->>'timber_stock') ~ '^[0-9]+(\\.[0-9]+)?$'
+                    THEN (p.meta->>'timber_stock')::numeric END AS stock,
+               p.meta->>'age_group' AS age,
+               p.dominant_species AS sp
+        FROM forest_polygon p
+        JOIN admin_area aa
+          ON aa.level = 6
+         AND aa.geometry && ST_Centroid(p.geometry)
+         AND ST_Contains(aa.geometry, ST_Centroid(p.geometry))
+        WHERE p.source = 'rosleshoz'
+    ),
+    agg AS (
+        SELECT did,
+               SUM(km2) AS forest_km2,
+               SUM(km2) FILTER (WHERE bon IS NOT NULL) AS km2_bon,
+               SUM(km2 * bon) FILTER (WHERE bon IS NOT NULL) AS bon_w,
+               SUM(km2) FILTER (WHERE stock IS NOT NULL) AS km2_stk,
+               SUM(km2 * stock) FILTER (WHERE stock IS NOT NULL) AS stk_w,
+               SUM(km2) FILTER (
+                 WHERE age IN ('спелые', 'перестойные')
+                   AND sp IN ('pine', 'spruce', 'birch')) AS mature_host
+        FROM fp GROUP BY did
+    )
+    SELECT l.id, l.name,
+           ROUND(l.land_km2::numeric, 1),
+           ROUND(COALESCE(a.forest_km2, 0)::numeric, 1),
+           ROUND((100 * COALESCE(a.forest_km2, 0)
+                  / NULLIF(l.land_km2, 0))::numeric, 1),
+           ROUND((a.bon_w / NULLIF(a.km2_bon, 0))::numeric, 2),
+           ROUND((a.stk_w / NULLIF(a.km2_stk, 0))::numeric, 1),
+           ROUND((100 * COALESCE(a.mature_host, 0)
+                  / NULLIF(a.forest_km2, 0))::numeric, 1)
+    FROM land l LEFT JOIN agg a ON a.did = l.id
+"""
+
 SNAPSHOT_STEPS: list[tuple[str, str]] = [
     ("stats_meta", _META_SQL),
     ("stats_forest", _FOREST_SQL),
@@ -336,6 +476,10 @@ SNAPSHOT_STEPS: list[tuple[str, str]] = [
     ("stats_season_week", _SEASON_WEEK_SQL),
     ("stats_season_norm", _SEASON_NORM_SQL),
     ("stats_season_species", _SEASON_SPECIES_SQL),
+    ("stats_forest_quant", _FOREST_QUANT_SQL),
+    ("stats_forest_cross", _FOREST_CROSS_SQL),
+    ("stats_forest_hist", _FOREST_HIST_SQL),
+    ("stats_forest_district", _FOREST_DISTRICT_SQL),
 ]
 
 # forecast.* — собственность сестринского репо, может отсутствовать в
