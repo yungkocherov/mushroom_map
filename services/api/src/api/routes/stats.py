@@ -273,3 +273,35 @@ def species_now(
         "total_posts_in_window": total_current,
         "items": items,
     }
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# Статистика (Phase 1) — читает только public.stats_* (snapshot).
+# Пайплайн pipelines/build_stats_snapshot.py наполняет таблицы.
+# ──────────────────────────────────────────────────────────────────────────
+_STATS_CACHE = "public, max-age=300, stale-while-revalidate=86400"
+
+
+@router.get("/meta")
+def stats_meta(response: Response) -> dict:
+    """Свежесть snapshot'а + версии источников. Пустой snapshot → null'ы
+    (фронт покажет «данные обновляются»), не 500."""
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT generated_at, forest_source_version, vk_prompt_version
+            FROM stats_meta WHERE key = 'snapshot'
+            """
+        ).fetchone()
+    response.headers["Cache-Control"] = _STATS_CACHE
+    if row is None:
+        return {
+            "generated_at": None,
+            "forest_source_version": None,
+            "vk_prompt_version": None,
+        }
+    return {
+        "generated_at": row[0].isoformat() if row[0] else None,
+        "forest_source_version": row[1],
+        "vk_prompt_version": row[2],
+    }
