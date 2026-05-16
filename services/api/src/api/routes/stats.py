@@ -421,7 +421,7 @@ def stats_weather(response: Response) -> dict:
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT year, month, temp_mean, precip_sum, soil_moist_mean
+            SELECT year, month, temp_mean, precip_mean, soil_moist_mean
             FROM stats_weather_monthly
             ORDER BY year, month
             """
@@ -433,7 +433,7 @@ def stats_weather(response: Response) -> dict:
             "year": int(year),
             "month": int(month),
             "temp_mean": round(float(t), 1) if t is not None else None,
-            "precip_sum": round(float(p), 1) if p is not None else None,
+            "precip_mean": round(float(p), 1) if p is not None else None,
             "soil_moist_mean": round(float(sm), 3) if sm is not None else None,
         }
         (climatology if int(year) == 0 else months).append(rec)

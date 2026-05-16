@@ -1,7 +1,7 @@
 """Offline unit tests for the stats-snapshot SQL step registry.
 
 No DB required: we only assert the static SQL registry is well-formed
-(psycopg3 `%`-safe, covers exactly the migration-042 tables).
+(psycopg3 `%`-safe, covers exactly the migration 042/043 tables).
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 mod = importlib.import_module("build_stats_snapshot")
 
 
-def test_steps_cover_exactly_phase1_tables() -> None:
+def test_steps_cover_exactly_snapshot_tables() -> None:
     tables = {table for table, _sql in mod.SNAPSHOT_STEPS}
     assert tables == {
         "stats_meta",

@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS stats_weather_monthly (
     year             INTEGER NOT NULL,   -- 0 = климатология (норма)
     month            SMALLINT NOT NULL CHECK (month BETWEEN 1 AND 12),
     temp_mean        DOUBLE PRECISION,
-    precip_sum       DOUBLE PRECISION,
+    precip_mean      DOUBLE PRECISION,
     soil_moist_mean  DOUBLE PRECISION,
     PRIMARY KEY (year, month)
 );

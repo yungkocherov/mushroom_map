@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS stats_weather_monthly (
     year             INTEGER NOT NULL,   -- 0 = климатология (норма)
     month            SMALLINT NOT NULL CHECK (month BETWEEN 1 AND 12),
     temp_mean        DOUBLE PRECISION,
-    precip_sum       DOUBLE PRECISION,
+    precip_mean      DOUBLE PRECISION,
     soil_moist_mean  DOUBLE PRECISION,
     PRIMARY KEY (year, month)
 );
@@ -139,7 +139,7 @@ In `pipelines/build_stats_snapshot.py`, add this constant after `_CORPUS_SQL` (i
 
 ```python
 _WEATHER_SQL = """
-    INSERT INTO stats_weather_monthly (year, month, temp_mean, precip_sum, soil_moist_mean)
+    INSERT INTO stats_weather_monthly (year, month, temp_mean, precip_mean, soil_moist_mean)
     WITH src AS (
         SELECT
             EXTRACT(YEAR  FROM date)::int AS y,
@@ -153,7 +153,7 @@ _WEATHER_SQL = """
     per_year AS (
         SELECT y, m,
                AVG(t)  AS temp_mean,
-               AVG(p)  AS precip_sum,
+               AVG(p)  AS precip_mean,
                AVG(sm) AS soil_moist_mean
         FROM src
         GROUP BY y, m
@@ -161,14 +161,14 @@ _WEATHER_SQL = """
     climatology AS (
         SELECT 0 AS y, m,
                AVG(temp_mean)       AS temp_mean,
-               AVG(precip_sum)      AS precip_sum,
+               AVG(precip_mean)     AS precip_mean,
                AVG(soil_moist_mean) AS soil_moist_mean
         FROM per_year
         GROUP BY m
     )
-    SELECT y, m, temp_mean, precip_sum, soil_moist_mean FROM per_year
+    SELECT y, m, temp_mean, precip_mean, soil_moist_mean FROM per_year
     UNION ALL
-    SELECT y, m, temp_mean, precip_sum, soil_moist_mean FROM climatology
+    SELECT y, m, temp_mean, precip_mean, soil_moist_mean FROM climatology
 """
 ```
 
@@ -322,7 +322,7 @@ def stats_weather(response: Response) -> dict:
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT year, month, temp_mean, precip_sum, soil_moist_mean
+            SELECT year, month, temp_mean, precip_mean, soil_moist_mean
             FROM stats_weather_monthly
             ORDER BY year, month
             """
@@ -334,7 +334,7 @@ def stats_weather(response: Response) -> dict:
             "year": int(year),
             "month": int(month),
             "temp_mean": round(float(t), 1) if t is not None else None,
-            "precip_sum": round(float(p), 1) if p is not None else None,
+            "precip_mean": round(float(p), 1) if p is not None else None,
             "soil_moist_mean": round(float(sm), 3) if sm is not None else None,
         }
         (climatology if int(year) == 0 else months).append(rec)
@@ -360,7 +360,7 @@ def test_smoke_weather_shape() -> None:
     body = r.json()
     assert set(body) == {"months", "climatology"}
     for rec in body["months"][:1] + body["climatology"][:1]:
-        assert {"year", "month", "temp_mean", "precip_sum", "soil_moist_mean"}.issubset(rec)
+        assert {"year", "month", "temp_mean", "precip_mean", "soil_moist_mean"}.issubset(rec)
 ```
 
 - [ ] **Step 6: Run full stats file**, expected `7 passed, 3 skipped` (or weather smoke passes if API live with data). Commit:
@@ -385,7 +385,7 @@ export interface StatsWeatherPoint {
   year: number;
   month: number;
   temp_mean: number | null;
-  precip_sum: number | null;
+  precip_mean: number | null;
   soil_moist_mean: number | null;
 }
 

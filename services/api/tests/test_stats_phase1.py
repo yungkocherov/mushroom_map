@@ -146,4 +146,4 @@ def test_smoke_weather_shape() -> None:
     body = r.json()
     assert set(body) == {"months", "climatology"}
     for rec in body["months"][:1] + body["climatology"][:1]:
-        assert {"year", "month", "temp_mean", "precip_sum", "soil_moist_mean"}.issubset(rec)
+        assert {"year", "month", "temp_mean", "precip_mean", "soil_moist_mean"}.issubset(rec)

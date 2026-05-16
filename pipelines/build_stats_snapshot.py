@@ -181,7 +181,7 @@ _CORPUS_SQL = """
 """
 
 _WEATHER_SQL = """
-    INSERT INTO stats_weather_monthly (year, month, temp_mean, precip_sum, soil_moist_mean)
+    INSERT INTO stats_weather_monthly (year, month, temp_mean, precip_mean, soil_moist_mean)
     WITH src AS (
         SELECT
             EXTRACT(YEAR  FROM date)::int AS y,
@@ -195,7 +195,7 @@ _WEATHER_SQL = """
     per_year AS (
         SELECT y, m,
                AVG(t)  AS temp_mean,
-               AVG(p)  AS precip_sum,
+               AVG(p)  AS precip_mean,
                AVG(sm) AS soil_moist_mean
         FROM src
         GROUP BY y, m
@@ -203,14 +203,14 @@ _WEATHER_SQL = """
     climatology AS (
         SELECT 0 AS y, m,
                AVG(temp_mean)       AS temp_mean,
-               AVG(precip_sum)      AS precip_sum,
+               AVG(precip_mean)     AS precip_mean,
                AVG(soil_moist_mean) AS soil_moist_mean
         FROM per_year
         GROUP BY m
     )
-    SELECT y, m, temp_mean, precip_sum, soil_moist_mean FROM per_year
+    SELECT y, m, temp_mean, precip_mean, soil_moist_mean FROM per_year
     UNION ALL
-    SELECT y, m, temp_mean, precip_sum, soil_moist_mean FROM climatology
+    SELECT y, m, temp_mean, precip_mean, soil_moist_mean FROM climatology
 """
 
 SNAPSHOT_STEPS: list[tuple[str, str]] = [
