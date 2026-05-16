@@ -472,7 +472,7 @@ describe("compositionByWeek", () => {
     expect(row.shares["porcini"]).toBeCloseTo(0.5, 9);
     expect(row.shares["other"]).toBeCloseTo(0.5, 9);
   });
-  it("empty week does not divide by zero (all shares 0)", () => {
+  it("no weeks at all -> empty result", () => {
     const c: SeasonCurvesResponse = { species: "all", weeks: [], norm: [] };
     expect(compositionByWeek(c)).toEqual([]);
   });
@@ -494,16 +494,42 @@ describe("compositionByWeek", () => {
       expect(Math.abs(total - 1)).toBeLessThan(1e-9);
     }
   });
-  it("all-zero week stays all-zero after renormalization", () => {
+  it("zero-volume week is dropped (area chart: drop, not zero)", () => {
     const c: SeasonCurvesResponse = {
       species: "all",
       weeks: [{ species_key: "porcini", year: 2022, week: 30, posts: 0, finds: 0 }],
       norm: [],
     };
+    // total=0 for the only week -> dropped (would draw a false gap if zeroed)
+    expect(compositionByWeek(c)).toEqual([]);
+  });
+  it("drops low-volume weeks (< 2% of max weekly total)", () => {
+    const c: SeasonCurvesResponse = {
+      species: "all",
+      weeks: [
+        // winter noise: 1 find each (biologically meaningless 100% shares)
+        { species_key: "porcini",     year: 2022, week: 1,  posts: 1, finds: 1 },
+        { species_key: "chanterelle", year: 2022, week: 2,  posts: 1, finds: 1 },
+        // in-season: thousands of finds
+        { species_key: "porcini",     year: 2022, week: 30, posts: 500, finds: 3000 },
+        { species_key: "chanterelle", year: 2022, week: 30, posts: 300, finds: 2000 },
+        { species_key: "porcini",     year: 2022, week: 35, posts: 400, finds: 2500 },
+        { species_key: "chanterelle", year: 2022, week: 35, posts: 200, finds: 1500 },
+      ],
+      norm: [],
+    };
     const result = compositionByWeek(c);
-    // finds=0 for all -> total=0 -> all shares=0
-    const total = Object.values(result[0].shares).reduce((s, v) => s + v, 0);
-    expect(total).toBe(0);
+    const weeks = result.map(r => r.week).sort((a, b) => a - b);
+    // max weekly total = 5000 (week 30), threshold = 100; weeks 1 & 2
+    // (total 1 each) are below it -> dropped; 30 & 35 kept
+    expect(weeks).toEqual([30, 35]);
+    expect(weeks).not.toContain(1);
+    expect(weeks).not.toContain(2);
+    // surviving weeks still renormalize to exactly 1
+    for (const row of result) {
+      const total = Object.values(row.shares).reduce((s, v) => s + v, 0);
+      expect(Math.abs(total - 1)).toBeLessThan(1e-9);
+    }
   });
 });
 

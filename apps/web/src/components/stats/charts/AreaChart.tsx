@@ -31,9 +31,15 @@ export interface AreaChartProps {
    * Pass [0, 1] for a true 100%-stack chart to clamp the axis.
    */
   yDomain?: [number, number];
+  /**
+   * Optional Y-tick formatting. "percent" renders ticks as 0%..100%
+   * (for a 100%-composition chart — bulletproof against float drift
+   * like 1.0000002). Omit for raw numeric ticks (default, unchanged).
+   */
+  yTickFormat?: "percent";
 }
 
-export function AreaChart({ data, xKey, series, height = 300, yDomain }: AreaChartProps) {
+export function AreaChart({ data, xKey, series, height = 300, yDomain, yTickFormat }: AreaChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RAreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
@@ -43,6 +49,15 @@ export function AreaChart({ data, xKey, series, height = 300, yDomain }: AreaCha
           stroke="var(--ink-faint)"
           fontSize="var(--fs-xs)"
           domain={yDomain}
+          // When a fixed yDomain is given, treat it as a HARD clamp:
+          // without this Recharts expands the axis to data overflow
+          // (rounded shares can sum to 1.01 -> garbled "1.0000002" tick).
+          allowDataOverflow={yDomain !== undefined}
+          tickFormatter={
+            yTickFormat === "percent"
+              ? (v) => `${Math.round(Number(v) * 100)}%`
+              : undefined
+          }
         />
         <Tooltip
           contentStyle={{

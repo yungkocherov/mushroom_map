@@ -556,6 +556,7 @@ function SeasonalityTabInner({
                     series={compositionSeries}
                     height={300}
                     yDomain={[0, 1]}
+                    yTickFormat="percent"
                   />
                 )}
               </div>

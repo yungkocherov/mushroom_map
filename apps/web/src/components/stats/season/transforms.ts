@@ -280,7 +280,17 @@ export function cumulativeShare(
 /**
  * Per ISO-week composition by group (SEASON_GROUP_KEYS + 'other').
  * Sums finds over all years, then normalizes to shares.
- * Empty week -> all zeros (no division by zero).
+ *
+ * Low-volume guard (mirrors the D6 pattern in monthSpeciesShare):
+ * winter weeks have only 1-5 total finds across all years, so their
+ * 100%-composition is pure noise (e.g. "100% porcini" in January).
+ * Weeks with total === 0 || total < 2% of the max weekly total are
+ * dropped. DROPPED, not zeroed: monthSpeciesShare zeroes near-empty
+ * months because its consumer is a heatmap (a zero cell renders as a
+ * muted empty cell). Card 5 is a stacked AREA chart — zeroing a week
+ * would collapse the stacked area to 0 then jump back up, drawing a
+ * false "gap". Filtering the week out instead trims the x-axis to the
+ * real foraging season and removes the noise cleanly.
  */
 export function compositionByWeek(
   c: SeasonCurvesResponse,
@@ -304,25 +314,37 @@ export function compositionByWeek(
 
   const sortedWeeks = [...weekGroupTotals.keys()].sort((a, b) => a - b);
 
-  return sortedWeeks.map(week => {
+  // Per-week totals + max for near-empty detection (same shape as
+  // monthSpeciesShare: total === 0 || total < maxTotal * 0.02)
+  const weekTotals = new Map<number, number>();
+  for (const week of sortedWeeks) {
     const gMap = weekGroupTotals.get(week)!;
-    const rawValues = allGroupKeys.map(k => gMap.get(k) ?? 0);
-    const total = rawValues.reduce((s, v) => s + v, 0);
+    let total = 0;
+    for (const k of allGroupKeys) total += gMap.get(k) ?? 0;
+    weekTotals.set(week, total);
+  }
+  const maxWeekTotal = Math.max(...weekTotals.values(), 0);
+  const emptyThreshold = maxWeekTotal * 0.02;
 
-    const shares: Record<string, number> = {};
-    if (total === 0) {
-      for (const key of allGroupKeys) shares[key] = 0;
+  return sortedWeeks
+    .filter(week => {
+      const total = weekTotals.get(week)!;
+      return !(total === 0 || total < emptyThreshold);
+    })
+    .map(week => {
+      const gMap = weekGroupTotals.get(week)!;
+      const rawValues = allGroupKeys.map(k => gMap.get(k) ?? 0);
+      const total = weekTotals.get(week)!;
+
+      // Compute raw shares, then renormalize so they sum to EXACTLY 1
+      const shares: Record<string, number> = {};
+      const rawShares = rawValues.map(v => v / total);
+      const shareSum = rawShares.reduce((s, v) => s + v, 0);
+      for (let i = 0; i < allGroupKeys.length; i++) {
+        shares[allGroupKeys[i]] = shareSum > 0 ? rawShares[i] / shareSum : 0;
+      }
       return { week, shares };
-    }
-
-    // Compute raw shares, then renormalize so they sum to EXACTLY 1
-    const rawShares = rawValues.map(v => v / total);
-    const shareSum = rawShares.reduce((s, v) => s + v, 0);
-    for (let i = 0; i < allGroupKeys.length; i++) {
-      shares[allGroupKeys[i]] = shareSum > 0 ? rawShares[i] / shareSum : 0;
-    }
-    return { week, shares };
-  });
+    });
 }
 
 // ─── peakBoxData ──────────────────────────────────────────────────────────
