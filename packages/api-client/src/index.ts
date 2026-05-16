@@ -421,3 +421,28 @@ export async function fetchStatsWeather(): Promise<StatsWeatherResponse> {
   if (!res.ok) throw new Error(`stats/weather ${res.status}`);
   return res.json();
 }
+
+
+export interface SeasonWeekPoint { species_key: string; year: number; week: number; posts: number; finds: number; }
+export interface SeasonNormPoint { species_key: string; week: number; finds_mean: number; finds_p25: number; finds_p75: number; }
+export interface SeasonCurvesResponse { species: string; weeks: SeasonWeekPoint[]; norm: SeasonNormPoint[]; }
+export interface SeasonSpeciesItem {
+  species_key: string; label: string; total_posts: number;
+  n_years: number; n_years_qual: number;
+  peak_week_median: number | null; peak_week_iqr: number | null;
+  peak_trend_slope: number | null; season_len_median: number | null;
+  qualifies: boolean;
+}
+export interface SeasonSpeciesResponse { items: SeasonSpeciesItem[]; }
+
+export async function fetchSeasonCurves(species = "all", year = "all"): Promise<SeasonCurvesResponse> {
+  const u = `${API_BASE}/api/stats/season/curves?species=${encodeURIComponent(species)}&year=${encodeURIComponent(year)}`;
+  const res = await fetch(u);
+  if (!res.ok) throw new Error(`stats/season/curves ${res.status}`);
+  return res.json();
+}
+export async function fetchSeasonSpecies(): Promise<SeasonSpeciesResponse> {
+  const res = await fetch(`${API_BASE}/api/stats/season/species`);
+  if (!res.ok) throw new Error(`stats/season/species ${res.status}`);
+  return res.json();
+}
