@@ -51,6 +51,7 @@ export function useMapPopup(
     popup: maplibregl.Popup;
     root: Root;
     marker: maplibregl.Marker;
+    reanchor: (() => void) | null;
   } | null>(null);
 
   useEffect(() => {
@@ -60,6 +61,10 @@ export function useMapPopup(
     const teardown = () => {
       const cur = activeRef.current;
       if (!cur) return;
+      if (cur.reanchor) {
+        m.off("move", cur.reanchor);
+        m.off("zoom", cur.reanchor);
+      }
       // Defer unmount — иначе React предупреждает «unmount inside event».
       const root = cur.root;
       setTimeout(() => root.unmount(), 0);
@@ -87,16 +92,52 @@ export function useMapPopup(
       const container = document.createElement("div");
       container.style.pointerEvents = "auto";
 
+      // ── Расчёт anchor СИНХРОННО из точки клика ──────────────────
+      // MapLibre auto-anchor (когда options.anchor пуст) считается в
+      // первом _update — синхронно внутри `.addTo(m)`, когда React-
+      // контейнер ещё ПУСТ (render async) → offsetHeight≈0 → дефолт
+      // 'bottom'. Реальный ~580px-попап у верха экрана вылезает за
+      // кадр, а пересчёта на async-render MapLibre не делает.
+      //
+      // Поэтому считаем anchor САМИ из e.point (есть синхронно) +
+      // оценочного размера попапа и передаём в options.anchor — тогда
+      // MapLibre берёт его напрямую (минует свой broken auto-путь).
+      // Точность по высоте не критична: решение top/bottom устойчиво
+      // к ±100px. computeAnchor переиспользуется на map move/zoom для
+      // переворота при pan'е к краю.
+      const POPUP_W = 340;
+      const POPUP_H_EST = 580;
+      const computeAnchor = (
+        px: number,
+        py: number,
+      ): maplibregl.PositionAnchor => {
+        const cv = m.getCanvas();
+        const mapW = cv.clientWidth;
+        const mapH = cv.clientHeight;
+        const PAD = 24;
+        // anchor 'bottom' = попап НАД точкой (нужно POPUP_H места
+        // сверху). 'top' = попап ПОД точкой.
+        let v: "top" | "bottom";
+        if (py >= POPUP_H_EST + PAD) v = "bottom";
+        else if (mapH - py >= POPUP_H_EST + PAD) v = "top";
+        else v = py > mapH - py ? "bottom" : "top";
+        let h = "";
+        if (px < POPUP_W / 2 + 12) h = "-left";
+        else if (px > mapW - POPUP_W / 2 - 12) h = "-right";
+        return `${v}${h}` as maplibregl.PositionAnchor;
+      };
+      const initialAnchor = computeAnchor(e.point.x, e.point.y);
+
       const popup = new maplibregl.Popup({
         closeButton: false,
         closeOnClick: false,
         maxWidth: popupMaxWidth,
-        // НЕ фиксируем anchor — MapLibre сам выберет сторону так чтобы
-        // попап не вылезал за край контейнера, и перевернёт его при
-        // pan'е карты (точка у верхнего края → попап снизу, и т.д.).
-        // Жёсткий anchor:"bottom" этот auto-flip ломал — попап улетал
-        // за верх экрана. offset как число = радиальный отступ во все
-        // стороны (18px на любом anchor'е, место под якорный пин).
+        // Явный anchor из точки клика — корректная сторона СРАЗУ при
+        // открытии (не дефолтный 'bottom' от пустого контейнера).
+        // На pan'е пересчитывается в reanchor.
+        anchor: initialAnchor,
+        // offset число = радиальный отступ во все стороны (18px на
+        // любом anchor'е, место под якорный пин).
         offset: 18,
         // CSS .popup-forest сбрасывает обёртку maplibregl-popup-content
         // (cream-bg/padding/shadow), потому что ForestPopup сам рисует
@@ -117,18 +158,31 @@ export function useMapPopup(
         .setLngLat([lng, lat])
         .addTo(m);
 
-      // Loading state — простой placeholder без анимации (фетч обычно < 200ms).
+      // Loading placeholder. ВАЖНО: размер ≈ реальному ForestPopup
+      // (320×~560). MapLibre считает auto-anchor (сторона показа, чтобы
+      // не вылезти за контейнер) в ПЕРВОМ _update — по текущему размеру
+      // контента — и кэширует `_anchor`, больше не пересчитывает на
+      // setLngLat. Если placeholder крошечный, anchor лочится по нему
+      // (дефолт 'bottom') и реальный 580px-попап у верхнего края
+      // вылезает за экран. Placeholder реального размера → MapLibre
+      // сразу выбирает корректную сторону, и она остаётся валидной
+      // когда контент подменяется.
       const root = createRoot(container);
       root.render(
         <div
           style={{
-            padding: "16px 20px",
+            width: 320,
+            minHeight: 560,
+            boxSizing: "border-box",
+            padding: "20px",
             background: "var(--cream)",
             borderRadius: 14,
             fontFamily: "var(--font-body)",
             color: "var(--ink-dim)",
             fontSize: 13,
-            minWidth: 200,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
             boxShadow: "0 22px 60px rgba(40,30,15,.28), 0 0 0 1px rgba(0,0,0,.06)",
           }}
         >
@@ -136,8 +190,28 @@ export function useMapPopup(
         </div>,
       );
 
+      // ── Reanchor на pan/zoom ────────────────────────────────────
+      // Открытие уже корректно (anchor из e.point в конструкторе).
+      // На каждом map move/zoom пересчитываем сторону по ТЕКУЩЕЙ
+      // проекции точки → попап «переворачивается» при подходе к краю
+      // экрана. options.anchor выставлен явно, MapLibre берёт его в
+      // _update напрямую (минует broken auto-путь).
+      const reanchor = () => {
+        if (activeRef.current?.popup !== popup) return;
+        const ll = popup.getLngLat();
+        if (!ll) return;
+        const pt = m.project([ll.lng, ll.lat]);
+        const anchor = computeAnchor(pt.x, pt.y);
+        if (popup.options.anchor !== anchor) {
+          popup.options.anchor = anchor;
+          popup.setLngLat([ll.lng, ll.lat]);
+        }
+      };
+      m.on("move", reanchor);
+      m.on("zoom", reanchor);
+
       // Регистрируем активный
-      activeRef.current = { popup, root, marker };
+      activeRef.current = { popup, root, marker, reanchor };
 
       // Кнопка-крестик в попапе вызывает popup.remove(); listen-on-close ниже
       // подберёт teardown.
@@ -174,6 +248,15 @@ export function useMapPopup(
             initiallySaved={initiallySaved}
             onClose={() => popup.remove()}
           />,
+        );
+        // Контент полноразмерный → пересчитать anchor. ResizeObserver
+        // может промахнуться по timing'у (callback до layout commit'а),
+        // поэтому двойной rAF — гарантированно после того как браузер
+        // отрисовал ForestPopup и offsetHeight реальный.
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => {
+            if (activeRef.current?.popup === popup) reanchor();
+          }),
         );
       } catch {
         if (activeRef.current?.popup !== popup) return;
