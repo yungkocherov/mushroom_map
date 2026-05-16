@@ -1,0 +1,9 @@
+.box { border: 1px solid var(--rule); border-radius: var(--radius-md); background: var(--paper-rise); padding: var(--space-4); }
+.row { display: flex; align-items: baseline; gap: var(--space-3); padding: var(--space-2) 0; border-bottom: 1px solid var(--rule); }
+.row:last-child { border-bottom: none; }
+.name { flex: 1; color: var(--ink); }
+.count { font-family: var(--font-mono); color: var(--ink-dim); }
+.up { color: var(--forest); }
+.down { color: var(--danger); }
+.flat { color: var(--ink-faint); }
+.empty { color: var(--ink-dim); }
