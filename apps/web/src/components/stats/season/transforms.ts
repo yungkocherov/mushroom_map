@@ -34,6 +34,21 @@ export const SEASON_GROUP_KEYS = [
   "honey_fungus",
 ] as const;
 
+/**
+ * Russian display labels for species group keys used in composition charts.
+ * Matches the GROUP_TO_SLUGS vocabulary in CLAUDE.md.
+ */
+export const GROUP_LABELS_RU: Record<string, string> = {
+  porcini: "Белые",
+  aspen_bolete: "Подосиновики",
+  pine_bolete: "Колосовики",
+  chanterelle: "Лисички",
+  fly_agaric: "Мухоморы",
+  spring_mushroom: "Сморчки и строчки",
+  honey_fungus: "Опята",
+  other: "Прочие",
+};
+
 type GroupKey = (typeof SEASON_GROUP_KEYS)[number] | "other";
 
 // ─── weekToMonthIdx ───────────────────────────────────────────────────────
@@ -45,6 +60,33 @@ type GroupKey = (typeof SEASON_GROUP_KEYS)[number] | "other";
 export function weekToMonthIdx(week: number): number {
   const idx = Math.floor((week - 1) / 4.345);
   return Math.max(0, Math.min(11, idx));
+}
+
+// ─── latestCompleteYear ───────────────────────────────────────────────────
+
+/**
+ * Returns the most recent year whose max(week) >= 40 in the data
+ * (i.e. a year that covers the full LO mushroom season through autumn).
+ * Falls back to the overall max year when no year qualifies.
+ * A partial trailing year (e.g. 2026 data only to week 20) is excluded,
+ * preventing broken/empty charts that expect a full season.
+ */
+export function latestCompleteYear(c: SeasonCurvesResponse): number {
+  // Build max-week per year
+  const maxWeekByYear = new Map<number, number>();
+  for (const p of c.weeks) {
+    const prev = maxWeekByYear.get(p.year) ?? 0;
+    if (p.week > prev) maxWeekByYear.set(p.year, p.week);
+  }
+
+  if (maxWeekByYear.size === 0) return new Date().getFullYear();
+
+  const allYears = [...maxWeekByYear.keys()].sort((a, b) => a - b);
+  const completeYears = allYears.filter(y => (maxWeekByYear.get(y) ?? 0) >= 40);
+
+  return completeYears.length > 0
+    ? completeYears[completeYears.length - 1]
+    : allYears[allYears.length - 1];
 }
 
 // ─── smooth7 ─────────────────────────────────────────────────────────────
@@ -264,12 +306,20 @@ export function compositionByWeek(
 
   return sortedWeeks.map(week => {
     const gMap = weekGroupTotals.get(week)!;
-    const total = [...gMap.values()].reduce((s, v) => s + v, 0);
+    const rawValues = allGroupKeys.map(k => gMap.get(k) ?? 0);
+    const total = rawValues.reduce((s, v) => s + v, 0);
 
     const shares: Record<string, number> = {};
-    for (const key of allGroupKeys) {
-      const v = gMap.get(key) ?? 0;
-      shares[key] = total > 0 ? v / total : 0;
+    if (total === 0) {
+      for (const key of allGroupKeys) shares[key] = 0;
+      return { week, shares };
+    }
+
+    // Compute raw shares, then renormalize so they sum to EXACTLY 1
+    const rawShares = rawValues.map(v => v / total);
+    const shareSum = rawShares.reduce((s, v) => s + v, 0);
+    for (let i = 0; i < allGroupKeys.length; i++) {
+      shares[allGroupKeys[i]] = shareSum > 0 ? rawShares[i] / shareSum : 0;
     }
     return { week, shares };
   });
@@ -408,6 +458,8 @@ export function ridgeDensity(
 /**
  * Per year, sum(week * smoothedFinds) / sum(smoothedFinds) weighted mean week.
  * Plus total smoothed finds. Sorted by year ascending.
+ * Partial trailing years (max week < 40) are excluded so an incomplete
+ * current year does not appear as an artifactual early/light year.
  */
 export function yearRanking(
   c: SeasonCurvesResponse,
@@ -416,7 +468,19 @@ export function yearRanking(
 
   if (years.length === 0) return [];
 
-  return years.map(year => {
+  // Build max-week per year to filter out partial years
+  const maxWeekByYear = new Map<number, number>();
+  for (const [key] of byYearWeek) {
+    const [kyStr, kwStr] = key.split(":");
+    const yr = Number(kyStr);
+    const wk = Number(kwStr);
+    const prev = maxWeekByYear.get(yr) ?? 0;
+    if (wk > prev) maxWeekByYear.set(yr, wk);
+  }
+
+  const completeYears = years.filter(y => (maxWeekByYear.get(y) ?? 0) >= 40);
+
+  return completeYears.map(year => {
     const weeksForYear: number[] = [];
     for (const [key] of byYearWeek) {
       const [kyStr, kwStr] = key.split(":");
@@ -589,10 +653,16 @@ export function monthSpeciesShare(c: SeasonCurvesResponse): {
     monthGroupTotals[monthIdx][groupIdx] += p.finds;
   }
 
-  // Normalize each month to shares
-  const values: number[][] = monthGroupTotals.map(row => {
-    const total = row.reduce((s, v) => s + v, 0);
-    if (total === 0) return row.map(() => 0);
+  // Find max monthly total for near-empty detection
+  const monthTotals = monthGroupTotals.map(row => row.reduce((s, v) => s + v, 0));
+  const maxMonthTotal = Math.max(...monthTotals, 0);
+
+  // Normalize each month to shares; treat near-empty months as all-zero
+  // (threshold: < 2% of max monthly total -> renders as muted empty color)
+  const emptyThreshold = maxMonthTotal * 0.02;
+  const values: number[][] = monthGroupTotals.map((row, mi) => {
+    const total = monthTotals[mi];
+    if (total === 0 || total < emptyThreshold) return row.map(() => 0);
     return row.map(v => v / total);
   });
 

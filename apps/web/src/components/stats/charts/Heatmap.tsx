@@ -11,7 +11,14 @@ export interface HeatmapProps {
 export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps) {
   const flat = values.flat().filter((v): v is number => v != null);
   const max = (vmax ?? (flat.length ? Math.max(...flat) : 1)) || 1;
-  const W = 900, padL = 110, padB = 28, padT = 8, padR = 8;
+
+  // Detect whether column labels are long (need rotation to avoid overlap)
+  const maxColLabelLen = Math.max(...cols.map((c) => String(c).length), 0);
+  const rotateCols = maxColLabelLen > 4;
+
+  // Extra bottom padding when labels are rotated so they aren't clipped
+  const padB = rotateCols ? 72 : 28;
+  const W = 900, padL = 110, padT = 8, padR = 8;
   const gw = (W - padL - padR) / Math.max(cols.length, 1);
   const gh = (height - padT - padB) / Math.max(rows.length, 1);
   const bucket = (v: number) => Math.min(4, Math.max(0, Math.floor((v / max) * 5)));
@@ -35,12 +42,32 @@ export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps
               textAnchor="end" dominantBaseline="middle"
               fill="var(--ink-dim)">{r}</text>
       ))}
-      {cols.map((c, ci) =>
-        ci % Math.ceil(cols.length / 14 || 1) === 0 ? (
-          <text key={`c${ci}`} x={padL + ci * gw + gw / 2} y={height - 8}
+      {cols.map((c, ci) => {
+        // Always render all labels when rotated; when horizontal thin out if too many
+        if (!rotateCols && ci % Math.ceil(cols.length / 14 || 1) !== 0) return null;
+
+        const cx = padL + ci * gw + gw / 2;
+        if (rotateCols) {
+          // Rotated -35° anchored at column center near the bottom of the grid
+          const labelY = padT + rows.length * gh + 6;
+          return (
+            <text
+              key={`c${ci}`}
+              x={cx}
+              y={labelY}
+              textAnchor="end"
+              fill="var(--ink-faint)"
+              transform={`rotate(-35, ${cx}, ${labelY})`}
+            >
+              {String(c)}
+            </text>
+          );
+        }
+        return (
+          <text key={`c${ci}`} x={cx} y={height - 8}
                 textAnchor="middle" fill="var(--ink-faint)">{String(c)}</text>
-        ) : null,
-      )}
+        );
+      })}
     </svg>
   );
 }

@@ -19,6 +19,7 @@ import { MultiLineChart } from "../../components/stats/charts/MultiLineChart";
 import {
   MONTHS_RU,
   SEASON_GROUP_KEYS,
+  GROUP_LABELS_RU,
   yearCurves,
   weekYearMatrix,
   cumulativeShare,
@@ -31,24 +32,31 @@ import {
   weeklyAnomaly,
   overlapMatrix,
   monthSpeciesShare,
+  latestCompleteYear,
 } from "../../components/stats/season/transforms";
 import css from "../../components/stats/season/SeasonCharts.module.css";
 
 // ─── color helpers ────────────────────────────────────────────────────
 
-const YEAR_COLORS = [
-  "var(--idx-4)",
-  "var(--idx-3)",
-  "var(--idx-2)",
-  "var(--idx-1)",
+/**
+ * Fixed palette for year-series: each year gets a DISTINCT color so
+ * multi-year line charts and their legends are readable.
+ */
+const YEAR_PALETTE = [
+  "var(--forest)",
+  "var(--chanterelle)",
+  "var(--moss)",
   "var(--idx-0)",
+  "var(--idx-2)",
+  "var(--idx-4)",
+  "var(--bark)",
+  "var(--ink-faint)",
+  "var(--danger)",
+  "var(--caution)",
 ];
 
-function yearColor(yearIndex: number, totalYears: number): string {
-  // Most recent year = darkest (idx-4), oldest = faintest
-  const rank = totalYears - 1 - yearIndex; // 0 = most recent
-  const bucket = Math.min(4, Math.floor((rank / Math.max(totalYears - 1, 1)) * 4));
-  return YEAR_COLORS[bucket] ?? "var(--idx-0)";
+function yearColor(yearIndex: number, _totalYears: number): string {
+  return YEAR_PALETTE[yearIndex % YEAR_PALETTE.length] ?? "var(--forest)";
 }
 
 const COMPOSITION_COLORS: string[] = [
@@ -170,11 +178,19 @@ function SeasonalityTabInner({
   const allYears = [...new Set(curves.weeks.map((w) => w.year))].sort(
     (a, b) => b - a,
   );
-  const maxYear = allYears[0] ?? new Date().getFullYear();
   const yearOptions = allYears.slice(0, 10);
 
+  // Build max-week per year to identify partial years for pill labels
+  const maxWeekByYear = new Map<number, number>();
+  for (const w of curves.weeks) {
+    const prev = maxWeekByYear.get(w.year) ?? 0;
+    if (w.week > prev) maxWeekByYear.set(w.year, w.week);
+  }
+
+  const completeSeason = latestCompleteYear(curves);
+
   const [selSpecies, setSelSpecies] = useState<string>(defaultSpecies);
-  const [selYear, setSelYear] = useState<number>(maxYear);
+  const [selYear, setSelYear] = useState<number>(completeSeason);
 
   const speciesPillOpts = qualifyingItems.map((i) => ({
     value: i.species_key,
@@ -184,10 +200,14 @@ function SeasonalityTabInner({
     { value: "all" as string, label: "Все" },
     ...speciesPillOpts,
   ];
-  const yearPillOpts = yearOptions.map((y) => ({
-    value: String(y),
-    label: y === maxYear && maxYear === new Date().getFullYear() ? `${y} (неполн.)` : String(y),
-  }));
+  const yearPillOpts = yearOptions.map((y) => {
+    const maxWk = maxWeekByYear.get(y) ?? 0;
+    const isPartial = maxWk < 40;
+    return {
+      value: String(y),
+      label: isPartial ? `${y} (неполн.)` : String(y),
+    };
+  });
 
   const isQualifying = qualifyingItems.some((i) => i.species_key === selSpecies);
   const notQualifyingNote = (
@@ -251,13 +271,25 @@ function SeasonalityTabInner({
     label: m,
   }));
 
-  // 5. cumulativeShare
-  const cumData = isQualifying
-    ? cumulativeShare(curves, selSpecies, selYear).map((p) => ({
-        week: p.week,
-        share: Math.round(p.share * 100) / 100,
-      }))
+  // 5. cumulativeShare — build over full week range 1..52, gaps -> 0
+  const cumRaw = isQualifying ? cumulativeShare(curves, selSpecies, selYear) : [];
+  const cumByWeek = new Map(cumRaw.map((p) => [p.week, p.share]));
+  const cumData: { week: number; share: number }[] = isQualifying
+    ? Array.from({ length: 52 }, (_, i) => {
+        const w = i + 1;
+        return { week: w, share: Math.round((cumByWeek.get(w) ?? (w > 1 ? (cumByWeek.get(w - 1) ?? 0) : 0)) * 100) / 100 };
+      })
     : [];
+  // Carry forward last cumulative value for gap weeks so S-curve is smooth
+  {
+    let lastShare = 0;
+    for (const pt of cumData) {
+      if (cumByWeek.has(pt.week)) {
+        lastShare = cumByWeek.get(pt.week)!;
+      }
+      pt.share = Math.round(lastShare * 100) / 100;
+    }
+  }
 
   // 6. compositionByWeek (stacked area 100%)
   const compositionData = compositionByWeek(curves);
@@ -271,7 +303,7 @@ function SeasonalityTabInner({
   });
   const compositionSeries = groupKeys.map((k, i) => ({
     key: k,
-    label: k === "other" ? "прочие" : k,
+    label: GROUP_LABELS_RU[k] ?? k,
     color: COMPOSITION_COLORS[i % COMPOSITION_COLORS.length],
   }));
 
@@ -306,7 +338,7 @@ function SeasonalityTabInner({
     monthShare.months.map((_, mi) => monthShare.values[mi][gi]),
   );
   const monthShareRowLabels = monthShare.species.map((k) =>
-    k === "other" ? "прочие" : k,
+    GROUP_LABELS_RU[k] ?? k,
   );
 
   // 12. ridgeDensity
@@ -326,17 +358,24 @@ function SeasonalityTabInner({
     share: Math.round((r.total / maxTotal) * 100) / 100,
   }));
 
-  // 15. currentVsNorm
+  // 15. currentVsNorm — build over full week range 1..52 for uniform axis
   const vsNormRaw = isQualifying
     ? currentVsNorm(curves, selSpecies, selYear)
     : [];
-  const vsNormData = vsNormRaw.map((p) => ({
-    week: p.week,
-    value: Math.round(p.value * 10) / 10,
-    mean: Math.round(p.mean * 10) / 10,
-    p25: Math.round(p.p25 * 10) / 10,
-    p75: Math.round(p.p75 * 10) / 10,
-  }));
+  const vsNormByWeek = new Map(vsNormRaw.map((p) => [p.week, p]));
+  const vsNormData = vsNormRaw.length > 0
+    ? Array.from({ length: 52 }, (_, i) => {
+        const w = i + 1;
+        const p = vsNormByWeek.get(w);
+        return {
+          week: w,
+          value: p ? Math.round(p.value * 10) / 10 : null,
+          mean: p ? Math.round(p.mean * 10) / 10 : null,
+          p25: p ? Math.round(p.p25 * 10) / 10 : null,
+          p75: p ? Math.round(p.p75 * 10) / 10 : null,
+        };
+      })
+    : [];
 
   // 16. weeklyAnomaly
   const anomalyRaw = isQualifying
@@ -490,7 +529,15 @@ function SeasonalityTabInner({
                 ) : cumData.length === 0 ? (
                   <p className={css.empty}>Нет данных за выбранный год.</p>
                 ) : (
-                  <LineChart data={cumData} xKey="week" yKey="share" height={240} />
+                  <LineChart
+                    data={cumData}
+                    xKey="week"
+                    yKey="share"
+                    height={240}
+                    xType="number"
+                    xDomain={[1, 52]}
+                    xTicks={[1, 9, 17, 25, 33, 41, 49]}
+                  />
                 )}
               </div>
 
@@ -508,6 +555,7 @@ function SeasonalityTabInner({
                     xKey="week"
                     series={compositionSeries}
                     height={300}
+                    yDomain={[0, 1]}
                   />
                 )}
               </div>
@@ -739,10 +787,13 @@ function SeasonalityTabInner({
                     ]}
                     band={{ lowerKey: "p25", upperKey: "p75", color: "var(--chanterelle)" }}
                     height={260}
+                    xType="number"
+                    xDomain={[1, 52]}
+                    xTicks={[1, 9, 17, 25, 33, 41, 49]}
                   />
                 )}
-                {selYear === maxYear && maxYear === new Date().getFullYear() && (
-                  <p className={css.note}>{maxYear} — неполный год.</p>
+                {(maxWeekByYear.get(selYear) ?? 0) < 40 && (
+                  <p className={css.note}>{selYear} — неполный год.</p>
                 )}
               </div>
 

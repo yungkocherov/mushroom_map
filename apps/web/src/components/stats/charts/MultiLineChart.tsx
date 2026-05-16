@@ -12,6 +12,7 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Legend,
 } from "recharts";
 
 export interface MultiLineSeries {
@@ -33,6 +34,15 @@ export interface MultiLineChartProps {
   series: MultiLineSeries[];
   band?: MultiLineBand;
   height?: number;
+  /**
+   * Recharts XAxis type. Pass "number" for numeric week axes so ticks are
+   * evenly spaced regardless of gaps in the data.
+   */
+  xType?: "number" | "category";
+  /** When xType="number": the [min, max] domain. */
+  xDomain?: [number, number];
+  /** When xType="number": explicit tick positions. */
+  xTicks?: number[];
 }
 
 export function MultiLineChart({
@@ -41,12 +51,23 @@ export function MultiLineChart({
   series,
   band,
   height = 260,
+  xType,
+  xDomain,
+  xTicks,
 }: MultiLineChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
         <CartesianGrid stroke="var(--rule)" strokeDasharray="3 3" />
-        <XAxis dataKey={xKey} stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
+        <XAxis
+          dataKey={xKey}
+          stroke="var(--ink-faint)"
+          fontSize="var(--fs-xs)"
+          type={xType ?? "category"}
+          domain={xType === "number" ? xDomain : undefined}
+          ticks={xType === "number" ? xTicks : undefined}
+          allowDecimals={false}
+        />
         <YAxis stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
         <Tooltip
           contentStyle={{
@@ -56,6 +77,7 @@ export function MultiLineChart({
             fontSize: "var(--fs-xs)",
           }}
         />
+        <Legend wrapperStyle={{ fontSize: "var(--fs-xs)" }} />
         {band && (
           <Area
             type="monotone"

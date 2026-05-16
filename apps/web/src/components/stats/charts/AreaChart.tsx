@@ -26,15 +26,24 @@ export interface AreaChartProps {
   xKey: string;
   series: AreaSeries[];
   height?: number;
+  /**
+   * Optional fixed [min, max] for the Y axis.
+   * Pass [0, 1] for a true 100%-stack chart to clamp the axis.
+   */
+  yDomain?: [number, number];
 }
 
-export function AreaChart({ data, xKey, series, height = 300 }: AreaChartProps) {
+export function AreaChart({ data, xKey, series, height = 300, yDomain }: AreaChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RAreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
         <CartesianGrid stroke="var(--rule)" strokeDasharray="3 3" />
         <XAxis dataKey={xKey} stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
-        <YAxis stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
+        <YAxis
+          stroke="var(--ink-faint)"
+          fontSize="var(--fs-xs)"
+          domain={yDomain}
+        />
         <Tooltip
           contentStyle={{
             background: "var(--paper-rise)",
