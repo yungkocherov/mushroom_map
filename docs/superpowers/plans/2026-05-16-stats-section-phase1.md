@@ -354,8 +354,8 @@ _CORPUS_SQL = """
            NULL, '{}'::jsonb
     UNION ALL
     SELECT 'forest_area_km2',
-           (SELECT COALESCE(SUM(area_m2), 0) / 1e6
-              FROM forest_polygon WHERE area_m2 IS NOT NULL),
+           (SELECT COALESCE(SUM(ST_Area(geometry::geography)), 0) / 1e6
+              FROM forest_unified),
            NULL, '{}'::jsonb
     UNION ALL
     SELECT 'forest_sources',
