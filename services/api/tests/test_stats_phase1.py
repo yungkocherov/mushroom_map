@@ -128,3 +128,22 @@ def test_smoke_forest_species_nonempty() -> None:
         pytest.skip("snapshot not built in this DB")
     first = body["items"][0]
     assert {"key", "label", "area_km2", "polygon_count", "pct"}.issubset(first)
+
+
+def test_weather_empty_shape(offline_client: TestClient) -> None:
+    r = offline_client.get("/api/stats/weather")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"months", "climatology"}
+    assert body["months"] == []
+    assert body["climatology"] == []
+
+
+@smoke
+def test_smoke_weather_shape() -> None:
+    r = _SMOKE.get("/api/stats/weather")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"months", "climatology"}
+    for rec in body["months"][:1] + body["climatology"][:1]:
+        assert {"year", "month", "temp_mean", "precip_sum", "soil_moist_mean"}.issubset(rec)

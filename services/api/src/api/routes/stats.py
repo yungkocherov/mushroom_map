@@ -411,3 +411,30 @@ def stats_corpus(response: Response) -> dict:
                 value_num if value_num is not None else value_text
             )
     return {"metrics": metrics, "classification": classification, "sources": sources}
+
+
+@router.get("/weather")
+def stats_weather(response: Response) -> dict:
+    """Помесячная погода ЛО (агрегат) + климатнорма. Из snapshot.
+    year=0 в stats_weather_monthly — норма. Пусто → пустые массивы
+    (forecast.* отсутствует / снапшот не собран)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT year, month, temp_mean, precip_sum, soil_moist_mean
+            FROM stats_weather_monthly
+            ORDER BY year, month
+            """
+        ).fetchall()
+    response.headers["Cache-Control"] = _STATS_CACHE
+    months, climatology = [], []
+    for year, month, t, p, sm in rows or []:
+        rec = {
+            "year": int(year),
+            "month": int(month),
+            "temp_mean": round(float(t), 1) if t is not None else None,
+            "precip_sum": round(float(p), 1) if p is not None else None,
+            "soil_moist_mean": round(float(sm), 3) if sm is not None else None,
+        }
+        (climatology if int(year) == 0 else months).append(rec)
+    return {"months": months, "climatology": climatology}
