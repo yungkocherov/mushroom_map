@@ -1,0 +1,46 @@
+/** Heatmap — токен-цветная сетка. value->bucket по 5 ступеням
+ *  (--idx-0..--idx-4). Recharts тут не нужен. */
+export interface HeatmapProps {
+  rows: string[];
+  cols: (string | number)[];
+  values: (number | null)[][]; // [row][col]
+  height?: number;
+  /** optional fixed max for color scaling; default = data max */
+  vmax?: number;
+}
+export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps) {
+  const flat = values.flat().filter((v): v is number => v != null);
+  const max = (vmax ?? (flat.length ? Math.max(...flat) : 1)) || 1;
+  const W = 900, padL = 110, padB = 28, padT = 8, padR = 8;
+  const gw = (W - padL - padR) / Math.max(cols.length, 1);
+  const gh = (height - padT - padB) / Math.max(rows.length, 1);
+  const bucket = (v: number) => Math.min(4, Math.max(0, Math.floor((v / max) * 5)));
+  return (
+    <svg viewBox={`0 0 ${W} ${height}`} width="100%" role="img"
+         style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
+      {rows.map((r, ri) =>
+        cols.map((_, ci) => {
+          const v = values[ri]?.[ci];
+          const fill = v == null ? "var(--paper-rise)" : `var(--idx-${bucket(v)})`;
+          return (
+            <rect key={`${ri}-${ci}`} x={padL + ci * gw} y={padT + ri * gh}
+                  width={gw - 1} height={gh - 1} fill={fill} rx={1}>
+              <title>{`${r} / ${cols[ci]}: ${v ?? "—"}`}</title>
+            </rect>
+          );
+        }),
+      )}
+      {rows.map((r, ri) => (
+        <text key={`r${ri}`} x={padL - 6} y={padT + ri * gh + gh / 2}
+              textAnchor="end" dominantBaseline="middle"
+              fill="var(--ink-dim)">{r}</text>
+      ))}
+      {cols.map((c, ci) =>
+        ci % Math.ceil(cols.length / 14 || 1) === 0 ? (
+          <text key={`c${ci}`} x={padL + ci * gw + gw / 2} y={height - 8}
+                textAnchor="middle" fill="var(--ink-faint)">{String(c)}</text>
+        ) : null,
+      )}
+    </svg>
+  );
+}
