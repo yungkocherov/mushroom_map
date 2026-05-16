@@ -670,7 +670,7 @@ Run:
 /c/Users/ikoch/mushroom-map/.venv/Scripts/python.exe -m pytest services/api/tests/test_stats_phase1.py -q
 ```
 
-Expected: PASS (4 passed).
+Expected: PASS (3 passed).
 
 - [ ] **Step 5: Commit**
 
@@ -775,7 +775,7 @@ Run:
 /c/Users/ikoch/mushroom-map/.venv/Scripts/python.exe -m pytest services/api/tests/test_stats_phase1.py -q
 ```
 
-Expected: PASS (6 passed).
+Expected: PASS (5 passed).
 
 - [ ] **Step 5: Commit**
 
@@ -864,7 +864,7 @@ Run:
 /c/Users/ikoch/mushroom-map/.venv/Scripts/python.exe -m pytest services/api/tests/test_stats_phase1.py -q
 ```
 
-Expected: PASS (7 passed).
+Expected: PASS (6 passed).
 
 - [ ] **Step 5: Add live smoke tests**
 
@@ -882,8 +882,8 @@ _SMOKE = httpx.Client(base_url=API_BASE, timeout=10.0)
 
 def _api_up() -> bool:
     try:
-        _SMOKE.get("/api/regions/", timeout=2.0)
-        return True
+        r = _SMOKE.get("/api/stats/meta", timeout=2.0)
+        return r.status_code != 404
     except Exception:
         return False
 
@@ -918,7 +918,7 @@ Run:
 /c/Users/ikoch/mushroom-map/.venv/Scripts/python.exe -m pytest services/api/tests/test_stats_phase1.py -q
 ```
 
-Expected: 7 passed; 2 smoke either passed (if API up after Task 8) or skipped. Either is acceptable here.
+Expected: 6 passed; 2 smoke either passed (if API up after Task 8) or skipped. Either is acceptable here.
 
 - [ ] **Step 7: Commit**
 
@@ -1283,7 +1283,7 @@ Run:
 /c/Users/ikoch/mushroom-map/.venv/Scripts/python.exe -m pytest -q
 ```
 
-Expected: all prior tests still pass; new `test_build_stats_snapshot.py` (3) and `test_stats_phase1.py` (7 + smoke) green or smoke-skipped. No failures, no errors.
+Expected: all prior tests still pass; new `test_build_stats_snapshot.py` (3) and `test_stats_phase1.py` (6 + smoke) green or smoke-skipped. No failures, no errors.
 
 - [ ] **Step 2: Confirm endpoints serve real snapshot data**
 
