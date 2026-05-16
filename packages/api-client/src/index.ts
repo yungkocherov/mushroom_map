@@ -401,3 +401,23 @@ export async function fetchStatsCorpus(): Promise<StatsCorpusResponse> {
   if (!res.ok) throw new Error(`stats/corpus ${res.status}`);
   return res.json();
 }
+
+
+export interface StatsWeatherPoint {
+  year: number;
+  month: number;
+  temp_mean: number | null;
+  precip_mean: number | null;
+  soil_moist_mean: number | null;
+}
+
+export interface StatsWeatherResponse {
+  months: StatsWeatherPoint[];
+  climatology: StatsWeatherPoint[];
+}
+
+export async function fetchStatsWeather(): Promise<StatsWeatherResponse> {
+  const res = await fetch(`${API_BASE}/api/stats/weather`);
+  if (!res.ok) throw new Error(`stats/weather ${res.status}`);
+  return res.json();
+}
