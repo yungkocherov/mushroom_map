@@ -181,3 +181,11 @@ def test_smoke_season_species_first_qualifies() -> None:
     if not items:
         pytest.skip("snapshot not built in this DB")
     assert items[0]["qualifies"] is True
+
+
+def test_season_curves_bad_species_ok(offline_client: TestClient) -> None:
+    r = offline_client.get("/api/stats/season/curves", params={"species": "nope_xyz"})
+    assert r.status_code == 200
+    b = r.json()
+    assert b["species"] == "nope_xyz"
+    assert b["weeks"] == [] and b["norm"] == []

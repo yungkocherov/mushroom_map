@@ -13,6 +13,8 @@ CREATE TABLE IF NOT EXISTS stats_season_week (
 );
 CREATE INDEX IF NOT EXISTS idx_season_week_yr ON stats_season_week (year, week);
 
+-- Климат-норма по неделе (среднее по годам на 3-нед сглаженной серии)
+-- + IQR-полоса. Только полные годы 2018..2025 (2026 неполный).
 CREATE TABLE IF NOT EXISTS stats_season_norm (
     species_key  TEXT     NOT NULL,
     week         SMALLINT NOT NULL CHECK (week BETWEEN 1 AND 53),
@@ -22,6 +24,10 @@ CREATE TABLE IF NOT EXISTS stats_season_norm (
     PRIMARY KEY (species_key, week)
 );
 
+-- Gated per-species сводка (пик/стабильность/тренд/длина). qualifies
+-- кодирует data-feasibility gate (см. docs/superpowers/notes/
+-- 2026-05-16-seasonality-data-audit.md): total_posts>=300 И
+-- n_years_qual>=6. peak_trend_slope NULL если n_years_qual<6.
 CREATE TABLE IF NOT EXISTS stats_season_species (
     species_key        TEXT PRIMARY KEY,
     total_posts        INTEGER NOT NULL DEFAULT 0,

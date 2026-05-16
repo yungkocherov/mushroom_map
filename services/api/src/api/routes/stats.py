@@ -446,9 +446,7 @@ def stats_season_curves(
     species: str = Query("all", description="species_key или 'all'"),
     year: str = Query("all", description="'all' (зарезервировано)"),
 ) -> dict:
-    """Недельные серии (spine stats_season_week) + норма
-    (stats_season_norm). Фронт считает из этого все кривые/heatmap/
-    состав/аномалии. Из snapshot."""
+    """Недельные серии (spine stats_season_week) + норма (stats_season_norm). Фронт считает из этого все кривые/heatmap/состав/аномалии. Параметр year зарезервирован (сейчас только 'all'). Из snapshot."""
     with get_conn() as conn:
         if species == "all":
             rows = conn.execute(

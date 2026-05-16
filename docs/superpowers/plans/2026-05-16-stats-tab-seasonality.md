@@ -189,6 +189,7 @@ _SEASON_NORM_SQL = """
                  ORDER BY week ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING
                ) AS f7
         FROM stats_season_week
+        WHERE year BETWEEN 2018 AND 2025
     )
     SELECT species_key, week,
            AVG(f7),
