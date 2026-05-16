@@ -438,3 +438,82 @@ def stats_weather(response: Response) -> dict:
         }
         (climatology if int(year) == 0 else months).append(rec)
     return {"months": months, "climatology": climatology}
+
+
+@router.get("/season/curves")
+def stats_season_curves(
+    response: Response,
+    species: str = Query("all", description="species_key или 'all'"),
+    year: str = Query("all", description="'all' (зарезервировано)"),
+) -> dict:
+    """Недельные серии (spine stats_season_week) + норма
+    (stats_season_norm). Фронт считает из этого все кривые/heatmap/
+    состав/аномалии. Из snapshot."""
+    with get_conn() as conn:
+        if species == "all":
+            rows = conn.execute(
+                "SELECT species_key, year, week, posts, finds "
+                "FROM stats_season_week ORDER BY year, week, species_key"
+            ).fetchall()
+            norm = conn.execute(
+                "SELECT species_key, week, finds_mean, finds_p25, finds_p75 "
+                "FROM stats_season_norm"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT species_key, year, week, posts, finds "
+                "FROM stats_season_week WHERE species_key = %s "
+                "ORDER BY year, week",
+                (species,),
+            ).fetchall()
+            norm = conn.execute(
+                "SELECT species_key, week, finds_mean, finds_p25, finds_p75 "
+                "FROM stats_season_norm WHERE species_key = %s",
+                (species,),
+            ).fetchall()
+    response.headers["Cache-Control"] = _STATS_CACHE
+    return {
+        "species": species,
+        "weeks": [
+            {"species_key": r[0], "year": int(r[1]), "week": int(r[2]),
+             "posts": int(r[3]), "finds": int(r[4])}
+            for r in rows or []
+        ],
+        "norm": [
+            {"species_key": n[0], "week": int(n[1]),
+             "finds_mean": round(float(n[2]), 2),
+             "finds_p25": round(float(n[3]), 2),
+             "finds_p75": round(float(n[4]), 2)}
+            for n in norm or []
+        ],
+    }
+
+
+@router.get("/season/species")
+def stats_season_species(response: Response) -> dict:
+    """Gated per-species сводка (пик/стабильность/тренд/длина). Из snapshot."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT species_key, total_posts, n_years, n_years_qual, "
+            "peak_week_median, peak_week_iqr, peak_trend_slope, "
+            "season_len_median, qualifies "
+            "FROM stats_season_species ORDER BY total_posts DESC"
+        ).fetchall()
+    response.headers["Cache-Control"] = _STATS_CACHE
+    return {
+        "items": [
+            {
+                "species_key": r[0],
+                "label": SPECIES_LABELS.get(r[0], r[0]),
+                "total_posts": int(r[1]),
+                "n_years": int(r[2]),
+                "n_years_qual": int(r[3]),
+                "peak_week_median": None if r[4] is None else round(float(r[4]), 1),
+                "peak_week_iqr": None if r[5] is None else round(float(r[5]), 1),
+                "peak_trend_slope": None if r[6] is None else round(float(r[6]), 3),
+                "season_len_median": None if r[7] is None else round(float(r[7]), 1),
+                "qualifies": bool(r[8]),
+            }
+            for r in rows or []
+        ]
+    }

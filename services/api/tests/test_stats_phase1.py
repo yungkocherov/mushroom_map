@@ -147,3 +147,37 @@ def test_smoke_weather_shape() -> None:
     assert set(body) == {"months", "climatology"}
     for rec in body["months"][:1] + body["climatology"][:1]:
         assert {"year", "month", "temp_mean", "precip_mean", "soil_moist_mean"}.issubset(rec)
+
+
+def test_season_curves_empty_shape(offline_client: TestClient) -> None:
+    r = offline_client.get("/api/stats/season/curves")
+    assert r.status_code == 200
+    b = r.json()
+    assert set(b) == {"species", "weeks", "norm"}
+    assert b["weeks"] == [] and b["norm"] == []
+
+
+def test_season_species_empty_shape(offline_client: TestClient) -> None:
+    r = offline_client.get("/api/stats/season/species")
+    assert r.status_code == 200
+    assert r.json() == {"items": []}
+
+
+@smoke
+def test_smoke_season_curves_shape() -> None:
+    r = _SMOKE.get("/api/stats/season/curves")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"species", "weeks", "norm"}
+    assert isinstance(body["weeks"], list)
+    assert isinstance(body["norm"], list)
+
+
+@smoke
+def test_smoke_season_species_first_qualifies() -> None:
+    r = _SMOKE.get("/api/stats/season/species")
+    assert r.status_code == 200
+    items = r.json()["items"]
+    if not items:
+        pytest.skip("snapshot not built in this DB")
+    assert items[0]["qualifies"] is True
