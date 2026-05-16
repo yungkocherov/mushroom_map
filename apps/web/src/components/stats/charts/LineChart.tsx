@@ -26,14 +26,14 @@ export function LineChart({ data, xKey, yKey, height = 240 }: LineChartProps) {
     <ResponsiveContainer width="100%" height={height}>
       <RLineChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: 0 }}>
         <CartesianGrid stroke="var(--rule)" strokeDasharray="3 3" />
-        <XAxis dataKey={xKey} stroke="var(--ink-faint)" fontSize={11} />
-        <YAxis stroke="var(--ink-faint)" fontSize={11} />
+        <XAxis dataKey={xKey} stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
+        <YAxis stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
         <Tooltip
           contentStyle={{
             background: "var(--paper-rise)",
             border: "1px solid var(--rule)",
-            borderRadius: 8,
-            fontSize: 12,
+            borderRadius: "var(--radius-md)",
+            fontSize: "var(--fs-xs)",
           }}
         />
         <Line
