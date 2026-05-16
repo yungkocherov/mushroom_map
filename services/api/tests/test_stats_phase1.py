@@ -69,3 +69,15 @@ def test_forest_default_dimension_empty_shape(offline_client: TestClient) -> Non
 def test_forest_bad_dimension_rejected(offline_client: TestClient) -> None:
     r = offline_client.get("/api/stats/forest", params={"dimension": "banana"})
     assert r.status_code == 422
+
+
+def test_timeline_empty_shape(offline_client: TestClient) -> None:
+    r = offline_client.get("/api/stats/vk/timeline")
+    assert r.status_code == 200
+    body = r.json()
+    assert body == {"group": "all", "items": []}
+
+
+def test_timeline_limit_validation(offline_client: TestClient) -> None:
+    r = offline_client.get("/api/stats/vk/timeline", params={"limit": 0})
+    assert r.status_code == 422

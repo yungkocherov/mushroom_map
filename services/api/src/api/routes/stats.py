@@ -336,3 +336,47 @@ def stats_forest(
         for r in rows
     ]
     return {"dimension": dimension, "items": items}
+
+
+@router.get("/vk/timeline")
+def stats_vk_timeline(
+    response: Response,
+    group: str = Query("all", description="group_key из photo_species или 'all'"),
+    limit: int = Query(1500, ge=1, le=5000),
+) -> dict:
+    """Недельная активность ВК по группам видов. Из snapshot.
+    group='all' — все группы; иначе фильтр по одному group_key."""
+    with get_conn() as conn:
+        if group == "all":
+            rows = conn.execute(
+                """
+                SELECT bucket, group_key, post_count, find_count
+                FROM stats_vk_timeline
+                ORDER BY bucket ASC, group_key ASC
+                LIMIT %s
+                """,
+                (limit,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT bucket, group_key, post_count, find_count
+                FROM stats_vk_timeline
+                WHERE group_key = %s
+                ORDER BY bucket ASC
+                LIMIT %s
+                """,
+                (group, limit),
+            ).fetchall()
+    response.headers["Cache-Control"] = _STATS_CACHE
+    items = [
+        {
+            "bucket": r[0].isoformat() if r[0] else None,
+            "group_key": r[1],
+            "label": SPECIES_LABELS.get(r[1], r[1]),
+            "post_count": int(r[2] or 0),
+            "find_count": int(r[3] or 0),
+        }
+        for r in rows
+    ]
+    return {"group": group, "items": items}
