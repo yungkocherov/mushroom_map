@@ -57,3 +57,15 @@ def test_meta_empty_returns_200_shape(offline_client: TestClient) -> None:
     body = r.json()
     assert set(body) == {"generated_at", "forest_source_version", "vk_prompt_version"}
     assert body["generated_at"] is None
+
+
+def test_forest_default_dimension_empty_shape(offline_client: TestClient) -> None:
+    r = offline_client.get("/api/stats/forest")
+    assert r.status_code == 200
+    body = r.json()
+    assert body == {"dimension": "species", "items": []}
+
+
+def test_forest_bad_dimension_rejected(offline_client: TestClient) -> None:
+    r = offline_client.get("/api/stats/forest", params={"dimension": "banana"})
+    assert r.status_code == 422

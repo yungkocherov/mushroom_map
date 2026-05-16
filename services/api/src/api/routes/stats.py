@@ -26,7 +26,7 @@ import logging
 import threading
 import time
 from datetime import timedelta
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Query, Response
 
@@ -305,3 +305,34 @@ def stats_meta(response: Response) -> dict:
         "forest_source_version": row[1],
         "vk_prompt_version": row[2],
     }
+
+
+@router.get("/forest")
+def stats_forest(
+    response: Response,
+    dimension: Literal["species", "bonitet", "age_group", "source"] = Query("species"),
+) -> dict:
+    """Состав леса ЛО по выбранному измерению. Из snapshot — дёшево."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT bucket_key, label, area_km2, polygon_count
+            FROM stats_forest
+            WHERE dimension = %s
+            ORDER BY area_km2 DESC
+            """,
+            (dimension,),
+        ).fetchall()
+    response.headers["Cache-Control"] = _STATS_CACHE
+    total = sum(float(r[2] or 0) for r in rows) or 1.0
+    items = [
+        {
+            "key": r[0],
+            "label": r[1],
+            "area_km2": round(float(r[2] or 0), 1),
+            "polygon_count": int(r[3] or 0),
+            "pct": round(100.0 * float(r[2] or 0) / total, 1),
+        }
+        for r in rows
+    ]
+    return {"dimension": dimension, "items": items}
