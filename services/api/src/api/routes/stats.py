@@ -380,3 +380,33 @@ def stats_vk_timeline(
         for r in rows
     ]
     return {"group": group, "items": items}
+
+
+@router.get("/corpus")
+def stats_corpus(response: Response) -> dict:
+    """Здоровье корпуса/пайплайна + распределение AI-классификации.
+    Из snapshot (stats_corpus key/value). Пустой → пустые контейнеры."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT metric, value_num, value_text, detail FROM stats_corpus"
+        ).fetchall()
+    response.headers["Cache-Control"] = _STATS_CACHE
+    metrics: dict[str, object] = {}
+    classification: list = []
+    sources: dict = {}
+    for metric, value_num, value_text, detail in rows or []:
+        if metric == "classification_distribution":
+            raw = detail or []
+            for d in raw:
+                classification.append({
+                    "species_key": d.get("species_key"),
+                    "label": SPECIES_LABELS.get(d.get("species_key"), d.get("species_key")),
+                    "count": int(d.get("count") or 0),
+                })
+        elif metric == "forest_sources":
+            sources = detail or {}
+        else:
+            metrics[metric] = (
+                value_num if value_num is not None else value_text
+            )
+    return {"metrics": metrics, "classification": classification, "sources": sources}

@@ -81,3 +81,50 @@ def test_timeline_empty_shape(offline_client: TestClient) -> None:
 def test_timeline_limit_validation(offline_client: TestClient) -> None:
     r = offline_client.get("/api/stats/vk/timeline", params={"limit": 0})
     assert r.status_code == 422
+
+
+def test_corpus_empty_shape(offline_client: TestClient) -> None:
+    r = offline_client.get("/api/stats/corpus")
+    assert r.status_code == 200
+    body = r.json()
+    assert set(body) == {"metrics", "classification", "sources"}
+    assert body["metrics"] == {}
+    assert body["classification"] == []
+    assert body["sources"] == {}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Live smoke (требует поднятого API + наполненного snapshot)
+# ──────────────────────────────────────────────────────────────────────
+API_BASE = os.environ.get("API_BASE", "http://localhost:8000")
+_SMOKE = httpx.Client(base_url=API_BASE, timeout=10.0)
+
+
+def _api_up() -> bool:
+    try:
+        r = _SMOKE.get("/api/stats/meta", timeout=2.0)
+        return r.status_code != 404
+    except Exception:
+        return False
+
+
+smoke = pytest.mark.skipif(not _api_up(), reason=f"API at {API_BASE} down")
+
+
+@smoke
+def test_smoke_meta_has_generated_at() -> None:
+    r = _SMOKE.get("/api/stats/meta")
+    assert r.status_code == 200
+    assert "generated_at" in r.json()
+
+
+@smoke
+def test_smoke_forest_species_nonempty() -> None:
+    r = _SMOKE.get("/api/stats/forest", params={"dimension": "species"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["dimension"] == "species"
+    if not body["items"]:
+        pytest.skip("snapshot not built in this DB")
+    first = body["items"][0]
+    assert {"key", "label", "area_km2", "polygon_count", "pct"}.issubset(first)
