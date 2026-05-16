@@ -144,6 +144,14 @@ _CORPUS_SQL = """
               FROM forest_unified),
            NULL, '{}'::jsonb
     UNION ALL
+    SELECT 'species_count',
+           (SELECT COUNT(*) FROM species),
+           NULL, '{}'::jsonb
+    UNION ALL
+    SELECT 'district_count',
+           (SELECT COUNT(*) FROM admin_area WHERE level = 6),
+           NULL, '{}'::jsonb
+    UNION ALL
     SELECT 'forest_sources',
            NULL, NULL,
            COALESCE((
@@ -172,16 +180,62 @@ _CORPUS_SQL = """
            ), '[]'::jsonb)
 """
 
+_WEATHER_SQL = """
+    INSERT INTO stats_weather_monthly (year, month, temp_mean, precip_sum, soil_moist_mean)
+    WITH src AS (
+        SELECT
+            EXTRACT(YEAR  FROM date)::int AS y,
+            EXTRACT(MONTH FROM date)::int AS m,
+            temperature_2m_mean      AS t,
+            precipitation_sum        AS p,
+            soil_moisture_1_to_3cm   AS sm
+        FROM forecast.weather_daily
+        WHERE to_regclass('forecast.weather_daily') IS NOT NULL
+    ),
+    per_year AS (
+        SELECT y, m,
+               AVG(t)  AS temp_mean,
+               AVG(p)  AS precip_sum,
+               AVG(sm) AS soil_moist_mean
+        FROM src
+        GROUP BY y, m
+    ),
+    climatology AS (
+        SELECT 0 AS y, m,
+               AVG(temp_mean)       AS temp_mean,
+               AVG(precip_sum)      AS precip_sum,
+               AVG(soil_moist_mean) AS soil_moist_mean
+        FROM per_year
+        GROUP BY m
+    )
+    SELECT y, m, temp_mean, precip_sum, soil_moist_mean FROM per_year
+    UNION ALL
+    SELECT y, m, temp_mean, precip_sum, soil_moist_mean FROM climatology
+"""
+
 SNAPSHOT_STEPS: list[tuple[str, str]] = [
     ("stats_meta", _META_SQL),
     ("stats_forest", _FOREST_SQL),
     ("stats_vk_timeline", _VK_TIMELINE_SQL),
     ("stats_corpus", _CORPUS_SQL),
+    ("stats_weather_monthly", _WEATHER_SQL),
 ]
+
+# forecast.* — собственность сестринского репо, может отсутствовать в
+# CI/dev. Шаги, читающие forecast.*, пропускаем если схемы нет.
+_FORECAST_GUARDED = {"stats_weather_monthly": "forecast.weather_daily"}
 
 
 def run(conn: psycopg.Connection) -> None:
     for table, sql in SNAPSHOT_STEPS:
+        guard = _FORECAST_GUARDED.get(table)
+        if guard is not None:
+            with conn.cursor() as cur:
+                cur.execute("SELECT to_regclass(%s)", (guard,))
+                if cur.fetchone()[0] is None:
+                    print(f"  -> {table}: SKIP ({guard} absent — sister-repo schema)", flush=True)
+                    conn.rollback()
+                    continue
         t0 = time.monotonic()
         with conn.transaction():
             with conn.cursor() as cur:

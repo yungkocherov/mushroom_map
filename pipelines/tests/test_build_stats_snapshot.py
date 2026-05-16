@@ -26,6 +26,7 @@ def test_steps_cover_exactly_phase1_tables() -> None:
         "stats_forest",
         "stats_vk_timeline",
         "stats_corpus",
+        "stats_weather_monthly",
     }
 
 
