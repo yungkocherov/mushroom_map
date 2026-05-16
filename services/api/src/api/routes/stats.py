@@ -396,11 +396,12 @@ def stats_corpus(response: Response) -> dict:
     sources: dict = {}
     for metric, value_num, value_text, detail in rows or []:
         if metric == "classification_distribution":
-            raw = detail or []
+            raw = detail if isinstance(detail, list) else []
             for d in raw:
+                sk = d.get("species_key") or "unknown"
                 classification.append({
-                    "species_key": d.get("species_key"),
-                    "label": SPECIES_LABELS.get(d.get("species_key"), d.get("species_key")),
+                    "species_key": sk,
+                    "label": SPECIES_LABELS.get(sk, sk),
                     "count": int(d.get("count") or 0),
                 })
         elif metric == "forest_sources":
