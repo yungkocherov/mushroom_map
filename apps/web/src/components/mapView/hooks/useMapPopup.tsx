@@ -91,8 +91,13 @@ export function useMapPopup(
         closeButton: false,
         closeOnClick: false,
         maxWidth: popupMaxWidth,
-        anchor: "bottom",
-        offset: 18, // место для якорного пина под попапом
+        // НЕ фиксируем anchor — MapLibre сам выберет сторону так чтобы
+        // попап не вылезал за край контейнера, и перевернёт его при
+        // pan'е карты (точка у верхнего края → попап снизу, и т.д.).
+        // Жёсткий anchor:"bottom" этот auto-flip ломал — попап улетал
+        // за верх экрана. offset как число = радиальный отступ во все
+        // стороны (18px на любом anchor'е, место под якорный пин).
+        offset: 18,
         // CSS .popup-forest сбрасывает обёртку maplibregl-popup-content
         // (cream-bg/padding/shadow), потому что ForestPopup сам рисует
         // cream-карточку. Без этого видна padding-рамка вокруг карточки.
