@@ -48,6 +48,10 @@ const MapPage = lazy(() =>
   import("./routes/MapPage").then((m) => ({ default: m.MapPage })),
 );
 
+const StatsHubPage = lazy(() =>
+  import("./routes/stats/StatsHubPage").then((m) => ({ default: m.StatsHubPage })),
+);
+
 function MapPageLoader() {
   return (
     <div
@@ -105,6 +109,14 @@ export const router = createBrowserRouter([
       { path: "home-legacy", element: <Navigate to="/map" replace /> },
       { path: "species",        element: <SpeciesListPage /> },
       { path: "species/:slug",  element: <SpeciesDetailPage /> },
+      {
+        path: "stats",
+        element: (
+          <Suspense fallback={<MapPageLoader />}>
+            <StatsHubPage />
+          </Suspense>
+        ),
+      },
       { path: "methodology",         element: <MethodologyPage /> },
       // Phase W6 unlock — статьи методологии теперь рендерятся
       // (как минимум /methodology/brand). MethodologyArticlePage сам

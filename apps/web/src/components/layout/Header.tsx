@@ -16,6 +16,7 @@ const NAV_ITEMS: Array<{ to: string; label: string; primary?: boolean }> = [
   { to: "/spots",       label: "Мои места" },
   { to: "/calendar",    label: "Календарь" },
   { to: "/methodology", label: "Методология" },
+  { to: "/stats",       label: "Статистика" },
 ];
 
 export function Header() {
