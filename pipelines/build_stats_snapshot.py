@@ -213,12 +213,128 @@ _WEATHER_SQL = """
     SELECT y, m, temp_mean, precip_mean, soil_moist_mean FROM climatology
 """
 
+_SEASON_WEEK_SQL = """
+    INSERT INTO stats_season_week (species_key, year, week, posts, finds)
+    WITH e AS (
+        SELECT (s->>'species')::text AS sk,
+               COALESCE(v.foray_date,
+                 (v.date_ts AT TIME ZONE 'Europe/Moscow')::date) AS d,
+               v.id AS pid,
+               COALESCE((s->>'count')::int, 0) AS cnt
+        FROM vk_post v, LATERAL jsonb_array_elements(v.photo_species) s
+        WHERE v.photo_species IS NOT NULL
+          AND s->>'species' IS NOT NULL AND s->>'species' <> 'other'
+    )
+    SELECT sk,
+           EXTRACT(YEAR FROM d)::smallint,
+           EXTRACT(WEEK FROM d)::smallint,
+           count(DISTINCT pid)::int,
+           sum(cnt)::int
+    FROM e
+    WHERE d IS NOT NULL AND EXTRACT(YEAR FROM d) >= 2018
+    GROUP BY 1, 2, 3
+"""
+
+_SEASON_NORM_SQL = """
+    INSERT INTO stats_season_norm (species_key, week, finds_mean, finds_p25, finds_p75)
+    WITH sm AS (
+        SELECT species_key, year, week,
+               AVG(finds) OVER (
+                 PARTITION BY species_key, year
+                 ORDER BY week ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING
+               ) AS f7
+        FROM stats_season_week
+    )
+    SELECT species_key, week,
+           AVG(f7),
+           percentile_cont(0.25) WITHIN GROUP (ORDER BY f7),
+           percentile_cont(0.75) WITHIN GROUP (ORDER BY f7)
+    FROM sm
+    GROUP BY species_key, week
+"""
+
+_SEASON_SPECIES_SQL = """
+    INSERT INTO stats_season_species
+      (species_key, total_posts, n_years, n_years_qual,
+       peak_week_median, peak_week_iqr, peak_trend_slope,
+       season_len_median, qualifies)
+    WITH base AS (
+        SELECT species_key, year, week, posts, finds
+        FROM stats_season_week
+        WHERE year BETWEEN 2018 AND 2025
+    ),
+    sm AS (
+        SELECT species_key, year, week, posts, finds,
+               AVG(finds) OVER (
+                 PARTITION BY species_key, year
+                 ORDER BY week ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS f7,
+               SUM(posts) OVER (PARTITION BY species_key, year) AS yr_posts,
+               SUM(finds) OVER (PARTITION BY species_key, year) AS yr_finds,
+               SUM(finds) OVER (PARTITION BY species_key, year
+                                ORDER BY week) AS cum_finds
+        FROM base
+    ),
+    ranked AS (
+        SELECT species_key, year, week, f7, cum_finds, yr_posts, yr_finds,
+               ROW_NUMBER() OVER (PARTITION BY species_key, year
+                                  ORDER BY f7 DESC, week) AS rnk
+        FROM sm
+    ),
+    peak AS (
+        SELECT species_key, year,
+               MIN(yr_posts) AS yr_posts,
+               MAX(week) FILTER (WHERE rnk = 1) AS peak_week
+        FROM ranked GROUP BY species_key, year
+    ),
+    bounds AS (
+        SELECT species_key, year,
+               MIN(week) FILTER (WHERE yr_finds > 0
+                                 AND cum_finds >= 0.10 * yr_finds) AS w10,
+               MIN(week) FILTER (WHERE yr_finds > 0
+                                 AND cum_finds >= 0.90 * yr_finds) AS w90
+        FROM sm GROUP BY species_key, year
+    ),
+    per_year AS (
+        SELECT p.species_key, p.year, p.yr_posts, p.peak_week,
+               (b.w90 - b.w10) AS season_len
+        FROM peak p JOIN bounds b USING (species_key, year)
+    ),
+    qual AS (
+        SELECT species_key,
+               count(*) AS n_years_qual,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY peak_week) AS pk_med,
+               percentile_cont(0.75) WITHIN GROUP (ORDER BY peak_week)
+                 - percentile_cont(0.25) WITHIN GROUP (ORDER BY peak_week) AS pk_iqr,
+               regr_slope(peak_week, year) AS slope,
+               percentile_cont(0.5) WITHIN GROUP (ORDER BY season_len) AS len_med
+        FROM per_year WHERE yr_posts >= 20
+        GROUP BY species_key
+    ),
+    tot AS (
+        SELECT species_key, SUM(posts)::int AS total_posts,
+               count(DISTINCT year) AS n_years
+        FROM stats_season_week WHERE year BETWEEN 2018 AND 2025
+        GROUP BY species_key
+    )
+    SELECT t.species_key, t.total_posts, t.n_years,
+           COALESCE(q.n_years_qual, 0),
+           q.pk_med, q.pk_iqr,
+           CASE WHEN COALESCE(q.n_years_qual, 0) >= 6 THEN q.slope END,
+           q.len_med,
+           (t.total_posts >= 300 AND COALESCE(q.n_years_qual, 0) >= 6)
+    FROM tot t
+    LEFT JOIN qual q ON q.species_key = t.species_key
+"""
+
 SNAPSHOT_STEPS: list[tuple[str, str]] = [
     ("stats_meta", _META_SQL),
     ("stats_forest", _FOREST_SQL),
     ("stats_vk_timeline", _VK_TIMELINE_SQL),
     ("stats_corpus", _CORPUS_SQL),
     ("stats_weather_monthly", _WEATHER_SQL),
+    ("stats_season_week", _SEASON_WEEK_SQL),
+    ("stats_season_norm", _SEASON_NORM_SQL),
+    ("stats_season_species", _SEASON_SPECIES_SQL),
 ]
 
 # forecast.* — собственность сестринского репо, может отсутствовать в

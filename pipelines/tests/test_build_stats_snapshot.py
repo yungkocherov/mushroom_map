@@ -27,6 +27,9 @@ def test_steps_cover_exactly_snapshot_tables() -> None:
         "stats_vk_timeline",
         "stats_corpus",
         "stats_weather_monthly",
+        "stats_season_week",
+        "stats_season_norm",
+        "stats_season_species",
     }
 
 
