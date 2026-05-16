@@ -29,9 +29,12 @@ fungi из species registry. Home (`/`) = карта c collapsible sidebar.
 
 **Sibling repo `mushroom-forecast`** в `C:\Users\ikoch\mushroom-forecast`
 (GitHub: yungkocherov/mushroom-forecast, private). Владеет схемой
-`forecast.*` в этой же Postgres-базе. mushroom-map **только читает**
-`forecast.prediction` (будущий `/api/forecast/at`). В `public.*` из
-forecast-репо не пишем — двусторонний контракт.
+`forecast.*` в этой же Postgres-базе. mushroom-map читает `forecast.*`
+только read-only (`forecast.prediction`, `forecast.weather_daily`,
+`forecast.district_features`, `forecast.group` — для `/api/forecast/*` и
+snapshot раздела «Статистика»; всегда под `to_regclass`-guard, схема
+сестринская, может отсутствовать в CI). В `forecast.*` и в `public.*`
+сестринского репо НЕ пишем — двусторонний контракт.
 
 **Mobile app `apps/mobile`** — React Native + Expo bare +
 maplibre-react-native, Android only (RuStore + APK direct), iOS
@@ -54,6 +57,7 @@ download manager. Dev-setup: JDK 17 + Android SDK через cmdline-tools
 /about                   → 301 → /methodology/about
 /legal/{privacy,terms}   → live
 /auth/*                  → Yandex OAuth
+/stats                   → overview-хаб «Статистика» (KPI, сезонный пульс, состав леса, тренды, погода). Snapshot public.stats_* ← pipelines/build_stats_snapshot.py (forecast.weather_daily read-only, guarded). Профили района/вида — Phase 3.
 ```
 
 `grid-column:2` на MapPane задаётся **явно** — иначе при `display:none`
