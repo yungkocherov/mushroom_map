@@ -423,7 +423,7 @@ _FOREST_DISTRICT_SQL = """
       (district_id, district_name, land_km2, forest_km2, forest_pct,
        mean_bonitet, mean_stock, mature_host_pct)
     WITH land AS (
-        SELECT id, name,
+        SELECT id, name_ru AS name,
                ST_Area(geometry::geography) / 1e6 AS land_km2
         FROM admin_area WHERE level = 6
     ),
