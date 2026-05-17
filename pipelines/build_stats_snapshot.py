@@ -305,6 +305,94 @@ _WEATHER_PRECIP_HIST_SQL = """
     ORDER BY 1
 """
 
+# stats_weather_year: 2018-2026; строка 2026 имеет is_partial=true
+# (частичный год до 11 мая — фронт убирает из баров). Аномалии — vs
+# среднее 2018-2025 (CTE `base`). Frost DOY: последний весенний
+# заморозок = max день-года в янв-июн с t_min < 0; первый осенний =
+# min день-года в июл-дек с t_min < 0. mushroom_days (per district) =
+# число дней авг-сен с soil_moisture_1_to_3cm > 0.30 И
+# soil_temperature_6cm в [8,18], усреднённое по годам (полные годы).
+_WEATHER_YEAR_SQL = """
+    INSERT INTO stats_weather_year
+        (year, is_partial, t_mean, t_anom, precip_total, precip_anom,
+         warm_days, warm_soil_moist, rainy_days_warm, snow_days,
+         last_spring_frost_doy, first_autumn_frost_doy)
+    WITH day AS (
+        SELECT date,
+               EXTRACT(YEAR FROM date)::int        AS y,
+               EXTRACT(DOY  FROM date)::int        AS doy,
+               EXTRACT(MONTH FROM date)::int       AS m,
+               AVG(temperature_2m_mean)            AS t_mean,
+               AVG(temperature_2m_min)             AS t_min,
+               AVG(precipitation_sum)              AS precip,
+               AVG(soil_moisture_1_to_3cm)         AS sm,
+               AVG(snow_depth)                     AS snow
+        FROM forecast.weather_daily
+        GROUP BY date
+    ),
+    per_year AS (
+        SELECT y,
+               (y = 2026)                                  AS is_partial,
+               AVG(t_mean)                                 AS t_mean,
+               SUM(precip)                                 AS precip_total,
+               COUNT(*) FILTER (WHERE t_mean >= 10)         AS warm_days,
+               AVG(sm) FILTER (WHERE m BETWEEN 6 AND 9)     AS warm_sm,
+               COUNT(*) FILTER (WHERE m BETWEEN 6 AND 9
+                                  AND precip >= 1.0)        AS rainy_warm,
+               COUNT(*) FILTER (WHERE snow > 0)             AS snow_days,
+               MAX(doy) FILTER (WHERE m <= 6 AND t_min < 0) AS last_spring,
+               MIN(doy) FILTER (WHERE m >= 7 AND t_min < 0) AS first_autumn
+        FROM day GROUP BY y
+    ),
+    base AS (
+        SELECT AVG(t_mean) AS t_base, AVG(precip_total) AS p_base
+        FROM per_year WHERE y BETWEEN 2018 AND 2025
+    )
+    SELECT p.y, p.is_partial, p.t_mean, p.t_mean - b.t_base,
+           p.precip_total, p.precip_total - b.p_base,
+           p.warm_days, p.warm_sm, p.rainy_warm, p.snow_days,
+           p.last_spring, p.first_autumn
+    FROM per_year p CROSS JOIN base b
+    ORDER BY p.y
+"""
+
+_WEATHER_DISTRICT_SQL = """
+    INSERT INTO stats_weather_district
+        (district_id, warm_precip, warm_soil_moist, mushroom_days)
+    WITH per_year AS (
+        SELECT district_id,
+               EXTRACT(YEAR FROM date)::int AS y,
+               SUM(precipitation_sum) FILTER (
+                   WHERE EXTRACT(MONTH FROM date) BETWEEN 6 AND 9) AS warm_p,
+               AVG(soil_moisture_1_to_3cm) FILTER (
+                   WHERE EXTRACT(MONTH FROM date) BETWEEN 6 AND 9) AS warm_sm,
+               COUNT(*) FILTER (
+                   WHERE EXTRACT(MONTH FROM date) BETWEEN 8 AND 9
+                     AND soil_moisture_1_to_3cm > 0.30
+                     AND soil_temperature_6cm BETWEEN 8 AND 18) AS mush
+        FROM forecast.weather_daily
+        WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
+        GROUP BY district_id, y
+    )
+    SELECT district_id, AVG(warm_p), AVG(warm_sm), AVG(mush)
+    FROM per_year
+    GROUP BY district_id
+    ORDER BY district_id
+"""
+
+_WEATHER_DISTRICT_MONTH_SQL = """
+    INSERT INTO stats_weather_district_month
+        (district_id, month, soil_moist, soil_temp)
+    SELECT district_id,
+           EXTRACT(MONTH FROM date)::int,
+           AVG(soil_moisture_1_to_3cm),
+           AVG(soil_temperature_6cm)
+    FROM forecast.weather_daily
+    WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
+    GROUP BY district_id, EXTRACT(MONTH FROM date)
+    ORDER BY district_id, 2
+"""
+
 _SEASON_WEEK_SQL = """
     INSERT INTO stats_season_week (species_key, year, week, posts, finds)
     WITH e AS (
@@ -574,6 +662,9 @@ SNAPSHOT_STEPS: list[tuple[str, str]] = [
     ("stats_weather_ym", _WEATHER_YM_SQL),
     ("stats_weather_gdd", _WEATHER_GDD_SQL),
     ("stats_weather_precip_hist", _WEATHER_PRECIP_HIST_SQL),
+    ("stats_weather_year", _WEATHER_YEAR_SQL),
+    ("stats_weather_district", _WEATHER_DISTRICT_SQL),
+    ("stats_weather_district_month", _WEATHER_DISTRICT_MONTH_SQL),
     ("stats_season_week", _SEASON_WEEK_SQL),
     ("stats_season_norm", _SEASON_NORM_SQL),
     ("stats_season_species", _SEASON_SPECIES_SQL),
@@ -591,6 +682,9 @@ _FORECAST_GUARDED = {
     "stats_weather_ym": "forecast.weather_daily",
     "stats_weather_gdd": "forecast.weather_daily",
     "stats_weather_precip_hist": "forecast.weather_daily",
+    "stats_weather_year": "forecast.weather_daily",
+    "stats_weather_district": "forecast.weather_daily",
+    "stats_weather_district_month": "forecast.weather_daily",
 }
 
 
