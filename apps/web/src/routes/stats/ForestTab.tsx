@@ -42,6 +42,16 @@ const PALETTE: string[] = [
   "var(--moss)",
 ];
 
+// ─── rounding helpers ─────────────────────────────────────────────────
+// Raw transform floats (km², %, ha, m³/ha) carry full f64 precision;
+// Recharts tooltips/labels would render e.g. 14947.221200891 km². Round
+// at the compose site, precision per magnitude — same discipline as the
+// sibling SeasonalityTab (Math.round(x*N)/N).
+
+const r1 = (x: number) => Math.round(x * 10) / 10; // 1 dp: km², %, big ha
+const r2 = (x: number) => Math.round(x * 100) / 100; // 2 dp: stand size ha
+const r0 = (x: number) => Math.round(x); // 0 dp: stock m³/ha
+
 // ─── helpers ──────────────────────────────────────────────────────────
 
 type RangeItem = { label: string; start: number; end: number; mark: number };
@@ -61,6 +71,12 @@ function rangeAxis(items: RangeItem[]): {
   const min = Math.floor(Math.min(...items.map((i) => i.start)));
   const max = Math.ceil(Math.max(...items.map((i) => i.end)));
   const span = max - min;
+  // Degenerate slice (single row / all-equal values) -> span 0 would make
+  // all 4 evenly-spaced ticks share the same `at`, and RangeBars keys ticks
+  // by `at` (duplicate-key warning + 4 overdrawn lines). Emit one tick.
+  if (span === 0) {
+    return { min, max, ticks: [{ at: min, label: String(min) }] };
+  }
   const ticks = [0, 1, 2, 3].map((k) => {
     const at = Math.round(min + (span * k) / 3);
     return { at, label: String(at) };
@@ -121,10 +137,13 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
   // ─── Section 1 — Состав леса ────────────────────────────────────
 
   // 1. Породный состав ЛО
-  const c1 = speciesAreaRanking(resp.dim);
+  const c1 = speciesAreaRanking(resp.dim).map((d) => ({
+    ...d,
+    area_km2: r1(d.area_km2),
+  }));
 
   // 2. Средний размер выдела
-  const c2 = meanStandSize(resp.dim);
+  const c2 = meanStandSize(resp.dim).map((d) => ({ ...d, ha: r2(d.ha) }));
 
   // 3. Размер выдела по породам — main species only
   const c3Items = quantToRangeItems(
@@ -134,16 +153,27 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
     "species",
     "area_ha",
     (k) => SPECIES_LABELS_RU[k] ?? k,
-  );
+  ).map((it) => ({
+    ...it,
+    start: r2(it.start),
+    end: r2(it.end),
+    mark: r2(it.mark),
+  }));
   const c3Axis = rangeAxis(c3Items);
 
   // ─── Section 2 — Качество и продуктивность ──────────────────────
 
   // 4. Распределение по бонитету
-  const c4 = bonitetRanking(resp.dim);
+  const c4 = bonitetRanking(resp.dim).map((d) => ({
+    ...d,
+    area_km2: r1(d.area_km2),
+  }));
 
   // 5. Запас древесины (м³/га)
-  const c5 = histBars(resp.hist, "stock");
+  const c5 = histBars(resp.hist, "stock").map((b) => ({
+    ...b,
+    area_km2: r1(b.area_km2),
+  }));
 
   // 6. Бонитет × порода
   const m6 = crossMatrix(
@@ -154,6 +184,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
     ["1", "2", "3", "4", "5"],
   );
   const m6Rows = m6.rows.map((k) => SPECIES_LABELS_RU[k] ?? k);
+  const m6Values = m6.values.map((row) => row.map(r1));
 
   // 7. Запас по породам — main species only
   const c7Items = quantToRangeItems(
@@ -163,7 +194,12 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
     "species",
     "stock",
     (k) => SPECIES_LABELS_RU[k] ?? k,
-  );
+  ).map((it) => ({
+    ...it,
+    start: r0(it.start),
+    end: r0(it.end),
+    mark: r0(it.mark),
+  }));
   const c7Axis = rangeAxis(c7Items);
 
   // 8. Бонитет → запас (rows pre-sorted by bonitet key ascending so the
@@ -177,11 +213,19 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
     "bonitet",
     "stock",
     (k) => `Бонитет ${k}`,
-  );
+  ).map((it) => ({
+    ...it,
+    start: r0(it.start),
+    end: r0(it.end),
+    mark: r0(it.mark),
+  }));
   const c8Axis = rangeAxis(c8Items);
 
   // 9. Возрастная структура ЛО
-  const c9 = ageStructure(resp.dim);
+  const c9 = ageStructure(resp.dim).map((d) => ({
+    ...d,
+    area_km2: r1(d.area_km2),
+  }));
 
   // ─── Section 3 — Возрастная структура ───────────────────────────
 
@@ -204,9 +248,9 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
   }));
 
   // 11. Доля спелых и перестойных — main species only
-  const c11 = matureSharePerSpecies(resp.cross).filter((x) =>
-    speciesMain.includes(x.key),
-  );
+  const c11 = matureSharePerSpecies(resp.cross)
+    .filter((x) => speciesMain.includes(x.key))
+    .map((x) => ({ ...x, pct: r1(x.pct) }));
 
   // 12. Возраст × бонитет
   const m12 = crossMatrix(
@@ -216,6 +260,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
     ageOrder,
     ["1", "2", "3", "4", "5"],
   );
+  const m12Values = m12.values.map((row) => row.map(r1));
 
   // ─── Section 4 — География ──────────────────────────────────────
 
@@ -236,13 +281,22 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
   }));
 
   // 14. Лесистость районов
-  const c14 = districtRanking(resp.district, "forest_pct");
+  const c14 = districtRanking(resp.district, "forest_pct").map((d) => ({
+    ...d,
+    value: r1(d.value),
+  }));
 
   // 15. Запас по районам
-  const c15 = districtRanking(resp.district, "mean_stock");
+  const c15 = districtRanking(resp.district, "mean_stock").map((d) => ({
+    ...d,
+    value: r1(d.value),
+  }));
 
   // 16. «Грибной» профиль района
-  const c16 = districtRanking(resp.district, "mature_host_pct");
+  const c16 = districtRanking(resp.district, "mature_host_pct").map((d) => ({
+    ...d,
+    value: r1(d.value),
+  }));
 
   // 17. Возрастная структура по районам (100% stacked)
   const s17 = crossStacked100(
@@ -351,7 +405,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
               Площадь (км²) по породе и классу бонитета — где сосредоточен
               продуктивный лес.
             </p>
-            <Heatmap rows={m6Rows} cols={m6.cols} values={m6.values} />
+            <Heatmap rows={m6Rows} cols={m6.cols} values={m6Values} />
           </div>
 
           {/* 7 */}
@@ -439,7 +493,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
             <p className={css.ci}>
               Площадь (км²) по группе возраста и классу бонитета.
             </p>
-            <Heatmap rows={m12.rows} cols={m12.cols} values={m12.values} />
+            <Heatmap rows={m12.rows} cols={m12.cols} values={m12Values} />
           </div>
 
         </div>
