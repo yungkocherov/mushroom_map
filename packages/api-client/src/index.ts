@@ -446,3 +446,20 @@ export async function fetchSeasonSpecies(): Promise<SeasonSpeciesResponse> {
   if (!res.ok) throw new Error(`stats/season/species ${res.status}`);
   return res.json();
 }
+
+
+export interface ForestDimRow { dimension: string; key: string; label: string; area_km2: number | null; polygon_count: number; }
+export interface ForestQuantRow { group_kind: string; group_key: string; metric: string; n: number; p10: number | null; p25: number | null; p50: number | null; p75: number | null; p90: number | null; }
+export interface ForestCrossRow { dim_a: string; key_a: string; dim_b: string; key_b: string; area_km2: number | null; polygon_count: number; }
+export interface ForestHistRow { metric: string; bin_lo: number | null; bin_hi: number | null; area_km2: number | null; polygon_count: number; }
+export interface ForestDistrictRow { district_id: number; district_name: string; land_km2: number | null; forest_km2: number | null; forest_pct: number | null; mean_bonitet: number | null; mean_stock: number | null; mature_host_pct: number | null; }
+export interface ForestExploreResponse {
+  dim: ForestDimRow[]; quant: ForestQuantRow[]; cross: ForestCrossRow[];
+  hist: ForestHistRow[]; district: ForestDistrictRow[];
+}
+
+export async function fetchForestExplore(): Promise<ForestExploreResponse> {
+  const res = await fetch(`${API_BASE}/api/stats/forest/explore`);
+  if (!res.ok) throw new Error(`stats/forest/explore ${res.status}`);
+  return res.json();
+}
