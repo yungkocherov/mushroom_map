@@ -47,14 +47,21 @@ export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps
                     width={gw - 1} height={gh - 1} fill={fill} rx={1}>
                 <title>{`${r} / ${cols[ci]}: ${v ?? "—"}`}</title>
               </rect>
-              {v != null && (
-                <text x={padL + ci * gw + gw / 2} y={padT + ri * gh + gh / 2}
-                      textAnchor="middle" dominantBaseline="middle"
-                      fill="var(--ink-dim)"
-                      style={{ fontFamily: "var(--font-mono)", fontSize: 10 }}>
-                  {v}
-                </text>
-              )}
+              {v != null && (() => {
+                // Contrast-aware cell-value text. Dark buckets (deep-green
+                // --idx-0/1) need a light fill; pale-green --idx-2/3 and the
+                // terracotta --idx-4 read fine with the dark ink token.
+                const b = bucket(v);
+                const txt = b <= 1 ? "var(--paper)" : "var(--ink)";
+                return (
+                  <text x={padL + ci * gw + gw / 2} y={padT + ri * gh + gh / 2}
+                        textAnchor="middle" dominantBaseline="middle"
+                        fill={txt}
+                        style={{ fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                    {v}
+                  </text>
+                );
+              })()}
             </g>
           );
         }),
