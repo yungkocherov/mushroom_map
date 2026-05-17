@@ -53,7 +53,12 @@ export function StackedBarChart({ data, categoryKey, series, height = 360 }: Sta
           }}
           formatter={(v, n) => [`${Math.round(Number(v) * 100)}%`, n]}
         />
-        <Legend wrapperStyle={{ fontSize: "var(--fs-xs)" }} />
+        {/* itemSorter={null}: Recharts 3 defaults to itemSorter "value"
+            (alphabetical) which scrambles the semantic series order
+            (age young→overmature, SPECIES_MAIN). null disables the
+            sort so the legend + stack follow Bar registration order,
+            which is the `series` prop order below. */}
+        <Legend wrapperStyle={{ fontSize: "var(--fs-xs)" }} itemSorter={null} />
         {series.map((s) => (
           <Bar key={s.key} dataKey={s.key} name={s.label} stackId="1" fill={s.color} />
         ))}

@@ -31,7 +31,8 @@ export function BarChart({ data, categoryKey, valueKey, height = 280 }: BarChart
           dataKey={categoryKey}
           stroke="var(--ink-faint)"
           fontSize="var(--fs-xs)"
-          width={110}
+          width={150}
+          interval={0}
         />
         <Tooltip
           contentStyle={{

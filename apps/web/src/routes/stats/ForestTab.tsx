@@ -31,15 +31,24 @@ import css from "../../components/stats/forest/ForestCharts.module.css";
 
 // ─── color palette (token-based, no hex) ──────────────────────────────
 
-const PALETTE: string[] = [
-  "var(--idx-0)",
-  "var(--idx-1)",
-  "var(--idx-2)",
-  "var(--idx-3)",
-  "var(--idx-4)",
-  "var(--forest)",
-  "var(--chanterelle)",
-  "var(--moss)",
+// Categorical-distinct palette for STACKED series (species/age). The
+// sequential idx-0..idx-4 ramp makes adjacent categories near-identical
+// (idx-0 vs idx-1 are both dark green); a stacked composition needs
+// maximally separated *adjacent* hues. Tokens interleaved by hue/
+// lightness so every consecutive pair contrasts (orange↔dark-green↔
+// pale↔olive↔light-green↔very-dark). Tokens only — Claude Design pass
+// re-skins them. Token hues (from packages/tokens): idx-4/chanterelle
+// terracotta, idx-0/idx-1 dark green, idx-2 light green, idx-3 pale
+// yellow-green, forest very-dark olive, moss dark olive.
+const STACK_PALETTE: string[] = [
+  "var(--idx-4)",     // terracotta
+  "var(--idx-0)",     // dark green
+  "var(--idx-3)",     // pale yellow-green
+  "var(--moss)",      // dark olive
+  "var(--idx-2)",     // light green
+  "var(--forest)",    // very-dark olive
+  "var(--chanterelle)", // terracotta (far from idx-4 position)
+  "var(--idx-1)",     // medium green
 ];
 
 // ─── rounding helpers ─────────────────────────────────────────────────
@@ -53,6 +62,17 @@ const r2 = (x: number) => Math.round(x * 100) / 100; // 2 dp: stand size ha
 const r0 = (x: number) => Math.round(x); // 0 dp: stock m³/ha
 
 // ─── helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Shortens a district name so it fits a single chart-axis line. Strips
+ * trailing « район»; special-cases the two non-«район» units. Plain
+ * presentation helper (not a transform — stays out of transforms.ts).
+ */
+function shortDistrict(name: string): string {
+  if (name === "Гатчинский муниципальный округ") return "Гатчинский";
+  if (name === "Сосновоборский городской округ") return "Сосновоборск";
+  return name.replace(/ район$/, "");
+}
 
 type RangeItem = { label: string; start: number; end: number; mark: number };
 
@@ -128,7 +148,7 @@ export function ForestTab() {
 
 function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
   const districtName: Record<string, string> = Object.fromEntries(
-    resp.district.map((d) => [String(d.district_id), d.district_name]),
+    resp.district.map((d) => [String(d.district_id), shortDistrict(d.district_name)]),
   );
 
   const speciesMain = [...SPECIES_MAIN] as string[];
@@ -244,7 +264,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
   const s10Series = s10.series.map((k, i) => ({
     key: k,
     label: k,
-    color: PALETTE[i % PALETTE.length],
+    color: STACK_PALETTE[i % STACK_PALETTE.length],
   }));
 
   // 11. Доля спелых и перестойных — main species only
@@ -277,24 +297,27 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
   const s13Series = s13.series.map((k, i) => ({
     key: k,
     label: SPECIES_LABELS_RU[k] ?? k,
-    color: PALETTE[i % PALETTE.length],
+    color: STACK_PALETTE[i % STACK_PALETTE.length],
   }));
 
   // 14. Лесистость районов
   const c14 = districtRanking(resp.district, "forest_pct").map((d) => ({
     ...d,
+    name: shortDistrict(d.name),
     value: r1(d.value),
   }));
 
   // 15. Запас по районам
   const c15 = districtRanking(resp.district, "mean_stock").map((d) => ({
     ...d,
+    name: shortDistrict(d.name),
     value: r1(d.value),
   }));
 
   // 16. «Грибной» профиль района
   const c16 = districtRanking(resp.district, "mature_host_pct").map((d) => ({
     ...d,
+    name: shortDistrict(d.name),
     value: r1(d.value),
   }));
 
@@ -311,7 +334,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
   const s17Series = s17.series.map((k, i) => ({
     key: k,
     label: k,
-    color: PALETTE[i % PALETTE.length],
+    color: STACK_PALETTE[i % STACK_PALETTE.length],
   }));
 
   return (
@@ -347,7 +370,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
           <div className={css.card}>
             <h3 className={css.ct}>Средний размер выдела</h3>
             <p className={css.ci}>
-              Сосняки крупными массивами, осинники — мелкой мозаикой.
+              Средняя площадь выдела по господствующей породе (га).
             </p>
             <BarChart data={c2} categoryKey="label" valueKey="ha" />
           </div>
@@ -528,7 +551,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
             <p className={css.ci}>
               Доля площади района под лесом (ФГИСЛК), %.
             </p>
-            <BarChart data={c14} categoryKey="name" valueKey="value" />
+            <BarChart data={c14} categoryKey="name" valueKey="value" height={520} />
           </div>
 
           {/* 15 */}
@@ -537,7 +560,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
             <p className={css.ci}>
               Средневзвешенный запас древесины (м³/га) по районам.
             </p>
-            <BarChart data={c15} categoryKey="name" valueKey="value" />
+            <BarChart data={c15} categoryKey="name" valueKey="value" height={520} />
           </div>
 
           {/* 16 */}
@@ -547,7 +570,7 @@ function ForestTabInner({ resp }: { resp: ForestExploreResponse }) {
               Доля спелых/перестойных сосны+ели+берёзы — структурный
               прокси потенциала, не наблюдённый сбор.
             </p>
-            <BarChart data={c16} categoryKey="name" valueKey="value" />
+            <BarChart data={c16} categoryKey="name" valueKey="value" height={520} />
           </div>
 
           {/* 17 */}

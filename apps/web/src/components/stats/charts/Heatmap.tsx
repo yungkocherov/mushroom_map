@@ -1,5 +1,7 @@
 /** Heatmap — токен-цветная сетка. value->bucket по 5 ступеням
- *  (--idx-0..--idx-4). Recharts тут не нужен. */
+ *  (--idx-0..--idx-4) — RANK/quantile, не linear: одна доминирующая
+ *  ячейка иначе схлопывает всю шкалу в один оттенок. Recharts тут не
+ *  нужен. */
 export interface HeatmapProps {
   rows: string[];
   cols: (string | number)[];
@@ -10,7 +12,14 @@ export interface HeatmapProps {
 }
 export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps) {
   const flat = values.flat().filter((v): v is number => v != null);
-  const max = (vmax ?? (flat.length ? Math.max(...flat) : 1)) || 1;
+  void vmax; // kept for call-site compat; rank-bucketing ignores fixed max
+
+  // Rank/quantile bucket: one dominant cell would compress a linear
+  // floor(v/max*5) so 23/25 cells collapse to one shade. Map each value
+  // to a 0..4 bucket by its rank among distinct non-null values, so all
+  // 5 color steps are populated and differences stay visible.
+  const distinct = [...new Set(flat)].sort((a, b) => a - b);
+  const rankOf = new Map<number, number>(distinct.map((v, i) => [v, i]));
 
   // Detect whether column labels are long (need rotation to avoid overlap)
   const maxColLabelLen = Math.max(...cols.map((c) => String(c).length), 0);
@@ -21,7 +30,10 @@ export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps
   const W = 900, padL = 110, padT = 8, padR = 8;
   const gw = (W - padL - padR) / Math.max(cols.length, 1);
   const gh = (height - padT - padB) / Math.max(rows.length, 1);
-  const bucket = (v: number) => Math.min(4, Math.max(0, Math.floor((v / max) * 5)));
+  const bucket = (v: number) =>
+    distinct.length > 0
+      ? Math.min(4, Math.floor(((rankOf.get(v) ?? 0) / distinct.length) * 5))
+      : 0;
   return (
     <svg viewBox={`0 0 ${W} ${height}`} width="100%" role="img"
          style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
@@ -30,10 +42,20 @@ export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps
           const v = values[ri]?.[ci];
           const fill = v == null ? "var(--paper-rise)" : `var(--idx-${bucket(v)})`;
           return (
-            <rect key={`${ri}-${ci}`} x={padL + ci * gw} y={padT + ri * gh}
-                  width={gw - 1} height={gh - 1} fill={fill} rx={1}>
-              <title>{`${r} / ${cols[ci]}: ${v ?? "—"}`}</title>
-            </rect>
+            <g key={`${ri}-${ci}`}>
+              <rect x={padL + ci * gw} y={padT + ri * gh}
+                    width={gw - 1} height={gh - 1} fill={fill} rx={1}>
+                <title>{`${r} / ${cols[ci]}: ${v ?? "—"}`}</title>
+              </rect>
+              {v != null && (
+                <text x={padL + ci * gw + gw / 2} y={padT + ri * gh + gh / 2}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fill="var(--ink-dim)"
+                      style={{ fontFamily: "var(--font-mono)", fontSize: 10 }}>
+                  {v}
+                </text>
+              )}
+            </g>
           );
         }),
       )}
