@@ -463,3 +463,52 @@ export async function fetchForestExplore(): Promise<ForestExploreResponse> {
   if (!res.ok) throw new Error(`stats/forest/explore ${res.status}`);
   return res.json();
 }
+
+
+export interface WeatherClimRow {
+  month: number;
+  t_mean: number | null; t_min: number | null; t_max: number | null;
+  precip: number | null; soil_moist: number | null;
+  p_minus_et0: number | null;
+}
+export interface WeatherYearRow {
+  year: number; is_partial: boolean;
+  t_mean: number | null; t_anom: number | null;
+  precip_total: number | null; precip_anom: number | null;
+  warm_days: number | null; warm_soil_moist: number | null;
+  rainy_days_warm: number | null; snow_days: number | null;
+  last_spring_frost_doy: number | null;
+  first_autumn_frost_doy: number | null;
+}
+export interface WeatherYmRow {
+  year: number; month: number;
+  t_mean: number | null; precip_total: number | null;
+}
+export interface WeatherGddRow {
+  year: number; month: number; gdd5_cum: number | null;
+}
+export interface WeatherPrecipHistRow { bin_lo: number; days: number; }
+export interface WeatherDistrictRow {
+  district_id: number; district_name: string;
+  warm_precip: number | null; warm_soil_moist: number | null;
+  mushroom_days: number | null;
+}
+export interface WeatherDistrictMonthRow {
+  district_id: number; month: number;
+  soil_moist: number | null; soil_temp: number | null;
+}
+export interface WeatherExploreResponse {
+  clim: WeatherClimRow[];
+  year: WeatherYearRow[];
+  ym: WeatherYmRow[];
+  gdd: WeatherGddRow[];
+  precip_hist: WeatherPrecipHistRow[];
+  district: WeatherDistrictRow[];
+  district_month: WeatherDistrictMonthRow[];
+}
+
+export async function fetchWeatherExplore(): Promise<WeatherExploreResponse> {
+  const res = await fetch(`${API_BASE}/api/stats/weather/explore`);
+  if (!res.ok) throw new Error(`stats/weather/explore ${res.status}`);
+  return res.json();
+}
