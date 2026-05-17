@@ -515,3 +515,69 @@ def stats_season_species(response: Response) -> dict:
             for r in rows or []
         ]
     }
+
+
+@router.get("/forest/explore")
+def stats_forest_explore(response: Response) -> dict:
+    """Весь forest-snapshot одним ответом (~250 строк): dim (reuse
+    stats_forest) + quant + cross + hist + district. Фронт нарезает.
+    Из snapshot (миграция 045 + pipelines/build_stats_snapshot.py)."""
+    with get_conn() as conn:
+        dim = conn.execute(
+            "SELECT dimension, bucket_key, label, area_km2, polygon_count "
+            "FROM stats_forest "
+            "WHERE dimension IN ('species','bonitet','age_group') "
+            "ORDER BY dimension, area_km2 DESC"
+        ).fetchall()
+        quant = conn.execute(
+            "SELECT group_kind, group_key, metric, n, p10, p25, p50, p75, p90 "
+            "FROM stats_forest_quant"
+        ).fetchall()
+        cross = conn.execute(
+            "SELECT dim_a, key_a, dim_b, key_b, area_km2, polygon_count "
+            "FROM stats_forest_cross"
+        ).fetchall()
+        hist = conn.execute(
+            "SELECT metric, bin_lo, bin_hi, area_km2, polygon_count "
+            "FROM stats_forest_hist ORDER BY metric, bin_lo"
+        ).fetchall()
+        dist = conn.execute(
+            "SELECT district_id, district_name, land_km2, forest_km2, "
+            "forest_pct, mean_bonitet, mean_stock, mature_host_pct "
+            "FROM stats_forest_district ORDER BY forest_km2 DESC"
+        ).fetchall()
+    response.headers["Cache-Control"] = _STATS_CACHE
+
+    def f(x):
+        return None if x is None else float(x)
+
+    return {
+        "dim": [
+            {"dimension": d[0], "key": d[1], "label": d[2],
+             "area_km2": f(d[3]), "polygon_count": int(d[4])}
+            for d in dim or []
+        ],
+        "quant": [
+            {"group_kind": q[0], "group_key": q[1], "metric": q[2],
+             "n": int(q[3]), "p10": f(q[4]), "p25": f(q[5]),
+             "p50": f(q[6]), "p75": f(q[7]), "p90": f(q[8])}
+            for q in quant or []
+        ],
+        "cross": [
+            {"dim_a": x[0], "key_a": x[1], "dim_b": x[2], "key_b": x[3],
+             "area_km2": f(x[4]), "polygon_count": int(x[5])}
+            for x in cross or []
+        ],
+        "hist": [
+            {"metric": h[0], "bin_lo": f(h[1]), "bin_hi": f(h[2]),
+             "area_km2": f(h[3]), "polygon_count": int(h[4])}
+            for h in hist or []
+        ],
+        "district": [
+            {"district_id": int(r[0]), "district_name": r[1],
+             "land_km2": f(r[2]), "forest_km2": f(r[3]),
+             "forest_pct": f(r[4]), "mean_bonitet": f(r[5]),
+             "mean_stock": f(r[6]), "mature_host_pct": f(r[7])}
+            for r in dist or []
+        ],
+    }
