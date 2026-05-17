@@ -213,6 +213,98 @@ _WEATHER_SQL = """
     SELECT y, m, temp_mean, precip_mean, soil_moist_mean FROM climatology
 """
 
+# «Погода» explore snapshot (миграция 046). Все четыре читают только
+# forecast.weather_daily (сестринский репо, read-only; skip-if-absent
+# через _FORECAST_GUARDED). Сначала усредняем 18 районов по date (CTE
+# `day`) — LO-агрегат это истинное среднее по площади, — затем
+# агрегируем за период. Только полные годы 2018-2025.
+# psycopg3-trap: эти константы исполняются через cur.execute(sql) без
+# параметров — НИ ОДНОГО символа `%` (no LIKE, no `%`-casts).
+
+# precip * 30.4 переводит среднесуточные осадки в репрезентативную
+# месячную сумму (≈ среднее число дней в месяце); p_minus_et0 — так же.
+_WEATHER_CLIM_SQL = """
+    INSERT INTO stats_weather_clim
+        (month, t_mean, t_min, t_max, precip, soil_moist, p_minus_et0)
+    WITH day AS (
+        SELECT date,
+               AVG(temperature_2m_mean)    AS t_mean,
+               AVG(temperature_2m_min)     AS t_min,
+               AVG(temperature_2m_max)     AS t_max,
+               AVG(precipitation_sum)      AS precip,
+               AVG(soil_moisture_1_to_3cm) AS soil_moist,
+               AVG(precipitation_sum) - AVG(et0_fao_evapotranspiration)
+                                           AS p_minus_et0
+        FROM forecast.weather_daily
+        WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
+        GROUP BY date
+    )
+    SELECT EXTRACT(MONTH FROM date)::int AS month,
+           AVG(t_mean), AVG(t_min), AVG(t_max),
+           AVG(precip) * 30.4, AVG(soil_moist), AVG(p_minus_et0) * 30.4
+    FROM day
+    GROUP BY 1
+    ORDER BY 1
+"""
+
+_WEATHER_YM_SQL = """
+    INSERT INTO stats_weather_ym (year, month, t_mean, precip_total)
+    WITH day AS (
+        SELECT date,
+               AVG(temperature_2m_mean) AS t_mean,
+               AVG(precipitation_sum)   AS precip
+        FROM forecast.weather_daily
+        WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
+        GROUP BY date
+    )
+    SELECT EXTRACT(YEAR FROM date)::int,
+           EXTRACT(MONTH FROM date)::int,
+           AVG(t_mean), SUM(precip)
+    FROM day
+    GROUP BY 1, 2
+    ORDER BY 1, 2
+"""
+
+_WEATHER_GDD_SQL = """
+    INSERT INTO stats_weather_gdd (year, month, gdd5_cum)
+    WITH day AS (
+        SELECT date,
+               GREATEST(AVG(temperature_2m_mean) - 5.0, 0.0) AS gdd
+        FROM forecast.weather_daily
+        WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
+        GROUP BY date
+    ),
+    monthly AS (
+        SELECT EXTRACT(YEAR FROM date)::int  AS y,
+               EXTRACT(MONTH FROM date)::int AS m,
+               SUM(gdd)                      AS gdd_m
+        FROM day GROUP BY 1, 2
+    )
+    SELECT y, m,
+           SUM(gdd_m) OVER (PARTITION BY y ORDER BY m
+                            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+    FROM monthly
+    ORDER BY y, m
+"""
+
+# Открытый верхний бин: LEAST(..., 30) сворачивает все дни >=30 мм/сут
+# в один бакет bin_lo=30 (фронт подписывает как «30+»).
+_WEATHER_PRECIP_HIST_SQL = """
+    INSERT INTO stats_weather_precip_hist (bin_lo, days)
+    WITH day AS (
+        SELECT date, AVG(precipitation_sum) AS precip
+        FROM forecast.weather_daily
+        WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
+          AND EXTRACT(MONTH FROM date) BETWEEN 6 AND 9
+        GROUP BY date
+    )
+    SELECT LEAST(FLOOR(precip / 2.0)::int * 2, 30) AS bin_lo,
+           COUNT(*)::int
+    FROM day
+    GROUP BY 1
+    ORDER BY 1
+"""
+
 _SEASON_WEEK_SQL = """
     INSERT INTO stats_season_week (species_key, year, week, posts, finds)
     WITH e AS (
@@ -478,6 +570,10 @@ SNAPSHOT_STEPS: list[tuple[str, str]] = [
     ("stats_vk_timeline", _VK_TIMELINE_SQL),
     ("stats_corpus", _CORPUS_SQL),
     ("stats_weather_monthly", _WEATHER_SQL),
+    ("stats_weather_clim", _WEATHER_CLIM_SQL),
+    ("stats_weather_ym", _WEATHER_YM_SQL),
+    ("stats_weather_gdd", _WEATHER_GDD_SQL),
+    ("stats_weather_precip_hist", _WEATHER_PRECIP_HIST_SQL),
     ("stats_season_week", _SEASON_WEEK_SQL),
     ("stats_season_norm", _SEASON_NORM_SQL),
     ("stats_season_species", _SEASON_SPECIES_SQL),
@@ -489,7 +585,13 @@ SNAPSHOT_STEPS: list[tuple[str, str]] = [
 
 # forecast.* — собственность сестринского репо, может отсутствовать в
 # CI/dev. Шаги, читающие forecast.*, пропускаем если схемы нет.
-_FORECAST_GUARDED = {"stats_weather_monthly": "forecast.weather_daily"}
+_FORECAST_GUARDED = {
+    "stats_weather_monthly": "forecast.weather_daily",
+    "stats_weather_clim": "forecast.weather_daily",
+    "stats_weather_ym": "forecast.weather_daily",
+    "stats_weather_gdd": "forecast.weather_daily",
+    "stats_weather_precip_hist": "forecast.weather_daily",
+}
 
 
 def run(conn: psycopg.Connection) -> None:
