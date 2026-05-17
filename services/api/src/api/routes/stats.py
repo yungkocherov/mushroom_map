@@ -440,6 +440,95 @@ def stats_weather(response: Response) -> dict:
     return {"months": months, "climatology": climatology}
 
 
+@router.get("/weather/explore")
+def stats_weather_explore(response: Response) -> dict:
+    """Погода-explore: климат-цикл, межгодовая изменчивость, сезон/
+    тренды, распределение, география. Из snapshot (stats_weather_*).
+    Пусто → пустые массивы (forecast.* отсутствует / снапшот не собран)."""
+    with get_conn() as conn:
+        clim = conn.execute(
+            "SELECT month, t_mean, t_min, t_max, precip, soil_moist, "
+            "p_minus_et0 FROM stats_weather_clim ORDER BY month"
+        ).fetchall()
+        year = conn.execute(
+            "SELECT year, is_partial, t_mean, t_anom, precip_total, "
+            "precip_anom, warm_days, warm_soil_moist, rainy_days_warm, "
+            "snow_days, last_spring_frost_doy, first_autumn_frost_doy "
+            "FROM stats_weather_year ORDER BY year"
+        ).fetchall()
+        ym = conn.execute(
+            "SELECT year, month, t_mean, precip_total "
+            "FROM stats_weather_ym ORDER BY year, month"
+        ).fetchall()
+        gdd = conn.execute(
+            "SELECT year, month, gdd5_cum "
+            "FROM stats_weather_gdd ORDER BY year, month"
+        ).fetchall()
+        ph = conn.execute(
+            "SELECT bin_lo, days FROM stats_weather_precip_hist "
+            "ORDER BY bin_lo"
+        ).fetchall()
+        dist = conn.execute(
+            "SELECT d.district_id, a.name_ru, d.warm_precip, "
+            "d.warm_soil_moist, d.mushroom_days "
+            "FROM stats_weather_district d "
+            "JOIN admin_area a ON a.id = d.district_id "
+            "ORDER BY d.district_id"
+        ).fetchall()
+        dm = conn.execute(
+            "SELECT district_id, month, soil_moist, soil_temp "
+            "FROM stats_weather_district_month "
+            "ORDER BY district_id, month"
+        ).fetchall()
+
+    response.headers["Cache-Control"] = _STATS_CACHE
+
+    def f(x: float | None) -> float | None:
+        return None if x is None else float(x)
+
+    return {
+        "clim": [
+            {"month": int(m), "t_mean": f(a), "t_min": f(b), "t_max": f(c),
+             "precip": f(p), "soil_moist": f(s), "p_minus_et0": f(e)}
+            for m, a, b, c, p, s, e in clim or []
+        ],
+        "year": [
+            {"year": int(y), "is_partial": bool(ip), "t_mean": f(tm),
+             "t_anom": f(ta), "precip_total": f(pt), "precip_anom": f(pa),
+             "warm_days": int(wd) if wd is not None else None,
+             "warm_soil_moist": f(wsm),
+             "rainy_days_warm": int(rd) if rd is not None else None,
+             "snow_days": int(sd) if sd is not None else None,
+             "last_spring_frost_doy": int(ls) if ls is not None else None,
+             "first_autumn_frost_doy": int(fa) if fa is not None else None}
+            for (y, ip, tm, ta, pt, pa, wd, wsm, rd, sd, ls, fa)
+            in year or []
+        ],
+        "ym": [
+            {"year": int(y), "month": int(m), "t_mean": f(t),
+             "precip_total": f(p)} for y, m, t, p in ym or []
+        ],
+        "gdd": [
+            {"year": int(y), "month": int(m), "gdd5_cum": f(g)}
+            for y, m, g in gdd or []
+        ],
+        "precip_hist": [
+            {"bin_lo": int(b), "days": int(d)} for b, d in ph or []
+        ],
+        "district": [
+            {"district_id": int(i), "district_name": n,
+             "warm_precip": f(wp), "warm_soil_moist": f(wsm),
+             "mushroom_days": f(md)}
+            for i, n, wp, wsm, md in dist or []
+        ],
+        "district_month": [
+            {"district_id": int(i), "month": int(m),
+             "soil_moist": f(s), "soil_temp": f(t)}
+            for i, m, s, t in dm or []
+        ],
+    }
+
+
 @router.get("/season/curves")
 def stats_season_curves(
     response: Response,
