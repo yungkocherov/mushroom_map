@@ -2,6 +2,7 @@
  *  пустой (собирается из остальных вкладок позже — по решению юзера). */
 import { useSearchParams } from "react-router-dom";
 import { SeasonalityTab } from "./SeasonalityTab";
+import { ForestTab } from "./ForestTab";
 import styles from "./StatsTabs.module.css";
 
 const TABS = [
@@ -35,6 +36,8 @@ export function StatsTabs() {
       </div>
       {active === "seasonality" ? (
         <SeasonalityTab />
+      ) : active === "forest" ? (
+        <ForestTab />
       ) : active === "obzor" ? (
         <p className={styles.placeholder}>
           Обзор соберём из ключевых графиков остальных вкладок — появится последним.
