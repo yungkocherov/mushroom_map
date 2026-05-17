@@ -541,14 +541,14 @@ def stats_forest_explore(response: Response) -> dict:
             "SELECT metric, bin_lo, bin_hi, area_km2, polygon_count "
             "FROM stats_forest_hist ORDER BY metric, bin_lo"
         ).fetchall()
-        dist = conn.execute(
+        district = conn.execute(
             "SELECT district_id, district_name, land_km2, forest_km2, "
             "forest_pct, mean_bonitet, mean_stock, mature_host_pct "
             "FROM stats_forest_district ORDER BY forest_km2 DESC"
         ).fetchall()
     response.headers["Cache-Control"] = _STATS_CACHE
 
-    def f(x):
+    def f(x: float | None) -> float | None:
         return None if x is None else float(x)
 
     return {
@@ -578,6 +578,6 @@ def stats_forest_explore(response: Response) -> dict:
              "land_km2": f(r[2]), "forest_km2": f(r[3]),
              "forest_pct": f(r[4]), "mean_bonitet": f(r[5]),
              "mean_stock": f(r[6]), "mature_host_pct": f(r[7])}
-            for r in dist or []
+            for r in district or []
         ],
     }
