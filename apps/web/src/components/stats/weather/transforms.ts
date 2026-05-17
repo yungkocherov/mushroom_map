@@ -198,10 +198,17 @@ export function districtRankWeather(
 // ─── districtMonthMatrix ──────────────────────────────────────────────────
 
 /**
- * Cards 19, 20: district × month matrix (Heatmap, 18×12). rows =
- * district names (by district_id ascending, shortened), cols = 1..12.
+ * Cards 19, 20: district × month matrix (Heatmap). rows = district
+ * names (by district_id ascending, shortened), cols = 1..12.
  * values[r][c] = the chosen field for (district, month), zero-filled
- * where absent / null. `districtName` maps String(district_id) -> name.
+ * where absent / null. A district whose *every* month cell for the
+ * chosen field is null/absent is omitted entirely (the snapshot emits
+ * NULL for soil series degraded by the upstream model — rendering them
+ * as a solid all-zero row would misrepresent absent data as a real
+ * measurement). A district with only *some* missing months is kept
+ * with those months zero-filled. The guard is per-field: a district
+ * all-null for soil_moist but with real soil_temp stays in the
+ * soil_temp matrix. `districtName` maps String(district_id) -> name.
  * Input not mutated.
  */
 export function districtMonthMatrix(
@@ -212,13 +219,18 @@ export function districtMonthMatrix(
   const cols = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
   const idsSet = new Set<number>();
+  const hasReal = new Set<number>();
   const cell = new Map<string, number>();
   for (const r of dm) {
     idsSet.add(r.district_id);
-    cell.set(`${r.district_id} ${r.month}`, r[field] ?? 0);
+    const v = r[field];
+    if (v !== null && v !== undefined) hasReal.add(r.district_id);
+    cell.set(`${r.district_id} ${r.month}`, v ?? 0);
   }
 
-  const ids = [...idsSet].sort((a, b) => a - b);
+  const ids = [...idsSet]
+    .filter((id) => hasReal.has(id))
+    .sort((a, b) => a - b);
   const rows = ids.map((id) => districtName[String(id)] ?? String(id));
   const values = ids.map((id) =>
     cols.map((m) => cell.get(`${id} ${m}`) ?? 0),

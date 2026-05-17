@@ -359,7 +359,15 @@ _WEATHER_YEAR_SQL = """
 _WEATHER_DISTRICT_SQL = """
     INSERT INTO stats_weather_district
         (district_id, warm_precip, warm_soil_moist, mushroom_days)
-    WITH per_year AS (
+    WITH quality AS (
+        SELECT district_id,
+               COUNT(soil_moisture_1_to_3cm)  AS sm_n,
+               STDDEV_POP(soil_moisture_1_to_3cm) AS sm_sd
+        FROM forecast.weather_daily
+        WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
+        GROUP BY district_id
+    ),
+    per_year AS (
         SELECT district_id,
                EXTRACT(YEAR FROM date)::int AS y,
                SUM(precipitation_sum) FILTER (
@@ -374,23 +382,48 @@ _WEATHER_DISTRICT_SQL = """
         WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
         GROUP BY district_id, y
     )
-    SELECT district_id, AVG(warm_p), AVG(warm_sm), AVG(mush)
-    FROM per_year
-    GROUP BY district_id
-    ORDER BY district_id
+    SELECT p.district_id,
+           AVG(p.warm_p),
+           CASE WHEN q.sm_n = 0 OR q.sm_sd < 0.005
+                THEN NULL ELSE AVG(p.warm_sm) END,
+           CASE WHEN q.sm_n = 0 OR q.sm_sd < 0.005
+                THEN NULL ELSE AVG(p.mush) END
+    FROM per_year p
+    JOIN quality q ON q.district_id = p.district_id
+    GROUP BY p.district_id, q.sm_n, q.sm_sd
+    ORDER BY p.district_id
 """
 
 _WEATHER_DISTRICT_MONTH_SQL = """
     INSERT INTO stats_weather_district_month
         (district_id, month, soil_moist, soil_temp)
-    SELECT district_id,
-           EXTRACT(MONTH FROM date)::int,
-           AVG(soil_moisture_1_to_3cm),
-           AVG(soil_temperature_6cm)
-    FROM forecast.weather_daily
-    WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
-    GROUP BY district_id, EXTRACT(MONTH FROM date)
-    ORDER BY district_id, 2
+    WITH quality AS (
+        SELECT district_id,
+               COUNT(soil_moisture_1_to_3cm)  AS sm_n,
+               STDDEV_POP(soil_moisture_1_to_3cm) AS sm_sd,
+               COUNT(soil_temperature_6cm)    AS st_n,
+               STDDEV_POP(soil_temperature_6cm) AS st_sd
+        FROM forecast.weather_daily
+        WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
+        GROUP BY district_id
+    ),
+    per_month AS (
+        SELECT district_id,
+               EXTRACT(MONTH FROM date)::int AS m,
+               AVG(soil_moisture_1_to_3cm) AS sm,
+               AVG(soil_temperature_6cm)   AS st
+        FROM forecast.weather_daily
+        WHERE date >= DATE '2018-01-01' AND date < DATE '2026-01-01'
+        GROUP BY district_id, EXTRACT(MONTH FROM date)
+    )
+    SELECT pm.district_id, pm.m,
+           CASE WHEN q.sm_n = 0 OR q.sm_sd < 0.005
+                THEN NULL ELSE pm.sm END,
+           CASE WHEN q.st_n = 0 OR q.st_sd < 0.05
+                THEN NULL ELSE pm.st END
+    FROM per_month pm
+    JOIN quality q ON q.district_id = pm.district_id
+    ORDER BY pm.district_id, pm.m
 """
 
 _SEASON_WEEK_SQL = """

@@ -145,6 +145,46 @@ describe("districtMonthMatrix", () => {
     expect(m.values[1][0]).toBe(0.3);
     expect(m.values[1][5]).toBe(0); // absent -> 0
   });
+
+  it("excludes a district whose entire 12-month series is all-null", () => {
+    const dm: WeatherDistrictMonthRow[] = [];
+    for (let mo = 1; mo <= 12; mo++) {
+      dm.push({ district_id: 1, month: mo, soil_moist: 0.3, soil_temp: 5 });
+      dm.push({ district_id: 2, month: mo, soil_moist: null, soil_temp: 5 });
+    }
+    const m = districtMonthMatrix(dm, "soil_moist", { "1": "Здоровый", "2": "Деградированный" });
+    expect(m.rows).toEqual(["Здоровый"]);
+    expect(m.values.length).toBe(1);
+    expect(m.values[0][0]).toBe(0.3);
+  });
+
+  it("retains a district with at least one real month, zero-filling the null months", () => {
+    const dm: WeatherDistrictMonthRow[] = [];
+    for (let mo = 1; mo <= 12; mo++) {
+      dm.push({ district_id: 1, month: mo, soil_moist: null, soil_temp: 5 });
+    }
+    dm.push({ district_id: 1, month: 6, soil_moist: 0.42, soil_temp: 5 });
+    const m = districtMonthMatrix(dm, "soil_moist", { "1": "Частичный" });
+    expect(m.rows).toEqual(["Частичный"]);
+    expect(m.values.length).toBe(1);
+    expect(m.values[0][5]).toBe(0.42); // month 6 real value
+    expect(m.values[0][0]).toBe(0); // null month -> zero-fill (existing behavior)
+  });
+
+  it("guards each field independently: all-null soil_moist district kept in soil_temp matrix", () => {
+    const dm: WeatherDistrictMonthRow[] = [];
+    for (let mo = 1; mo <= 12; mo++) {
+      // district 1 healthy in both
+      dm.push({ district_id: 1, month: mo, soil_moist: 0.3, soil_temp: 7 });
+      // district 2 mirrors Кировский: no soil_moist, real soil_temp
+      dm.push({ district_id: 2, month: mo, soil_moist: null, soil_temp: 9 });
+    }
+    const mm = districtMonthMatrix(dm, "soil_moist", { "1": "A", "2": "B" });
+    expect(mm.rows).toEqual(["A"]); // B dropped (all-null moisture)
+    const mt = districtMonthMatrix(dm, "soil_temp", { "1": "A", "2": "B" });
+    expect(mt.rows).toEqual(["A", "B"]); // B kept (real temp)
+    expect(mt.values[1][0]).toBe(9);
+  });
 });
 
 describe("shortDistrict", () => {
