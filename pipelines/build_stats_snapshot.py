@@ -333,6 +333,7 @@ _FOREST_QUANT_SQL = """
     WITH base AS (
         SELECT dominant_species AS sp,
                meta->>'bonitet'  AS bon,
+               -- area_m2 = stored geodesic m^2 (миграция 033); /1e4 -> га
                area_m2 / 1e4      AS area_ha,
                CASE WHEN (meta->>'timber_stock') ~ '^[0-9]+(\\.[0-9]+)?$'
                     THEN (meta->>'timber_stock')::numeric END AS stock
@@ -411,6 +412,7 @@ _FOREST_HIST_SQL = """
         WHERE source = 'rosleshoz'
     ),
     b AS (
+        -- последний бин bk=30 открытый: поглощает весь stock >= 600
         SELECT LEAST(floor(stock / 20.0), 30) AS bk, km2
         FROM s WHERE stock IS NOT NULL
     )
@@ -450,6 +452,9 @@ _FOREST_DISTRICT_SQL = """
                SUM(km2 * bon) FILTER (WHERE bon IS NOT NULL) AS bon_w,
                SUM(km2) FILTER (WHERE stock IS NOT NULL) AS km2_stk,
                SUM(km2 * stock) FILTER (WHERE stock IS NOT NULL) AS stk_w,
+               -- raw age литералы должны совпадать с age CASE в
+               -- _FOREST_CROSS_SQL: fold не трогает mature-бакет, но
+               -- синоним/trim там молча разойдётся с этим FILTER
                SUM(km2) FILTER (
                  WHERE age IN ('спелые', 'перестойные')
                    AND sp IN ('pine', 'spruce', 'birch')) AS mature_host
