@@ -32,7 +32,7 @@ export function SpeciesList({ species }: { species: SpeciesRef[] }) {
                     <Text
                       style={m === month ? styles.monthCur : styles.month}
                     >
-                      {MONTH_SHORT[m]}
+                      {MONTH_SHORT[m] ?? ""}
                     </Text>
                   </Fragment>
                 ))}
