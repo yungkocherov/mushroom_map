@@ -5,11 +5,12 @@ export interface RidgeLinesProps {
   series: RidgeSeries[];
   xLabels: string[];
   height?: number;
+  colors?: string[];
 }
-export function RidgeLines({ series, xLabels, height }: RidgeLinesProps) {
+export function RidgeLines({ series, xLabels, height, colors }: RidgeLinesProps) {
   const W = 900, padL = 130, padR = 16, padT = 10, padB = 24;
   const rowH = 46;
-  const overlap = 22;
+  const overlap = 14;
   const H = height ?? padT + padB + series.length * rowH;
   const n = Math.max(series[0]?.values.length ?? xLabels.length, 1);
   const xx = (i: number) => padL + (i / Math.max(n - 1, 1)) * (W - padL - padR);
@@ -18,6 +19,7 @@ export function RidgeLines({ series, xLabels, height }: RidgeLinesProps) {
          style={{ fontFamily: "var(--font-mono)", fontSize: 11 }}>
       {series.map((s, si) => {
         const baseY = padT + si * rowH + rowH;
+        const col = colors?.[si] ?? "var(--forest)";
         const mx = Math.max(...s.values, 1);
         const pts = s.values
           .map((v, i) => `${xx(i)},${baseY - (v / mx) * (rowH + overlap)}`)
@@ -25,8 +27,8 @@ export function RidgeLines({ series, xLabels, height }: RidgeLinesProps) {
         const area = `${padL},${baseY} ${pts} ${xx(n - 1)},${baseY}`;
         return (
           <g key={s.label}>
-            <polygon points={area} fill="var(--forest)" opacity={0.32} />
-            <polyline points={pts} fill="none" stroke="var(--forest)"
+            <polygon points={area} fill={col} opacity={0.32} />
+            <polyline points={pts} fill="none" stroke={col}
                       strokeWidth={1.5} />
             <text x={padL - 8} y={baseY - 6} textAnchor="end"
                   fill="var(--ink-dim)">{s.label}</text>

@@ -9,8 +9,9 @@ export interface HeatmapProps {
   height?: number;
   /** optional fixed max for color scaling; default = data max */
   vmax?: number;
+  valueDecimals?: number;
 }
-export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps) {
+export function Heatmap({ rows, cols, values, height = 320, vmax, valueDecimals }: HeatmapProps) {
   const flat = values.flat().filter((v): v is number => v != null);
   void vmax; // kept for call-site compat; rank-bucketing ignores fixed max
 
@@ -30,6 +31,12 @@ export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps
   const W = 900, padL = 110, padT = 8, padR = 8;
   const gw = (W - padL - padR) / Math.max(cols.length, 1);
   const gh = (height - padT - padB) / Math.max(rows.length, 1);
+  const fmt = (v: number) =>
+    valueDecimals != null
+      ? v.toFixed(valueDecimals)
+      : Number.isInteger(v) ? String(v) : v.toFixed(1);
+  // ~6px per mono digit at fontSize 10; hide text if it cannot fit.
+  const showCellText = gw >= 26 && gh >= 16;
   const bucket = (v: number) =>
     distinct.length > 0
       ? Math.min(4, Math.floor(((rankOf.get(v) ?? 0) / distinct.length) * 5))
@@ -45,9 +52,9 @@ export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps
             <g key={`${ri}-${ci}`}>
               <rect x={padL + ci * gw} y={padT + ri * gh}
                     width={gw - 1} height={gh - 1} fill={fill} rx={1}>
-                <title>{`${r} / ${cols[ci]}: ${v ?? "—"}`}</title>
+                <title>{`${r} / ${cols[ci]}: ${v == null ? "—" : fmt(v)}`}</title>
               </rect>
-              {v != null && (() => {
+              {v != null && showCellText && (() => {
                 // Contrast-aware cell-value text. Dark buckets (deep-green
                 // --idx-0/1) need a light fill; pale-green --idx-2/3 and the
                 // terracotta --idx-4 read fine with the dark ink token.
@@ -58,7 +65,7 @@ export function Heatmap({ rows, cols, values, height = 320, vmax }: HeatmapProps
                         textAnchor="middle" dominantBaseline="middle"
                         fill={txt}
                         style={{ fontFamily: "var(--font-mono)", fontSize: 10 }}>
-                    {v}
+                    {fmt(v)}
                   </text>
                 );
               })()}
