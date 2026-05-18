@@ -417,14 +417,21 @@ function SeasonalityTabInner({
       {isEmpty ? (
         <p className={css.empty}>Нет данных по сезонности.</p>
       ) : (
-        <>
+        <div className={css.layout}>
+          <nav className={css.toc} aria-label="Разделы">
+            <a className={css.tocLink} href="#s-shape">Форма сезона</a>
+            <a className={css.tocLink} href="#s-peak">Пик и стабильность</a>
+            <a className={css.tocLink} href="#s-compare">Сравнение</a>
+            <a className={css.tocLink} href="#s-year">Год к году</a>
+          </nav>
+          <div>
           {/* ═══ Форма сезона ══════════════════════════════════════════ */}
-          <section className={css.section}>
+          <section id="s-shape" className={css.section}>
             <h2 className={css.h}>Форма сезона</h2>
             <div className={css.grid}>
 
               {/* 1. Годовой профиль — все виды */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Годовой профиль (все виды)</h3>
                 <p className={css.ci}>
                   Сравните горбы разных лет: в какой год корзина была полнее всего.
@@ -476,7 +483,7 @@ function SeasonalityTabInner({
               </div>
 
               {/* 3. Тепловая карта неделя×год */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Тепловая карта неделя × год</h3>
                 <p className={css.ci}>
                   Тёплые полосы — удачные недели; горизонтальная структура показывает сдвиги и аномальные годы.
@@ -562,7 +569,7 @@ function SeasonalityTabInner({
               </div>
 
               {/* 6. Состав корзины по неделям (стек 100%) */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Состав корзины по неделям (100%)</h3>
                 <p className={css.ci}>
                   Весной строчки, летом белые, осенью опята — смена состава по сезону.
@@ -587,7 +594,7 @@ function SeasonalityTabInner({
           </section>
 
           {/* ═══ Пик и стабильность ══════════════════════════════════ */}
-          <section className={css.section}>
+          <section id="s-peak" className={css.section}>
             <h2 className={css.h}>Пик и стабильность</h2>
             <div className={css.grid}>
 
@@ -670,7 +677,7 @@ function SeasonalityTabInner({
           </section>
 
           {/* ═══ Сравнение ═══════════════════════════════════════════ */}
-          <section className={css.section}>
+          <section id="s-compare" className={css.section}>
             <h2 className={css.h}>Сравнение</h2>
             <div className={css.grid}>
 
@@ -714,7 +721,7 @@ function SeasonalityTabInner({
               </div>
 
               {/* 12. Лента года (ridgeline) */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Лента года (ridge)</h3>
                 <p className={css.ci}>
                   Календарь природы (ridgeline): каждая полоса — сезонная
@@ -743,7 +750,7 @@ function SeasonalityTabInner({
           </section>
 
           {/* ═══ Год к году ══════════════════════════════════════════ */}
-          <section className={css.section}>
+          <section id="s-year" className={css.section}>
             <h2 className={css.h}>Год к году</h2>
             <div className={css.grid}>
 
@@ -792,7 +799,7 @@ function SeasonalityTabInner({
               </div>
 
               {/* 15. Этот год vs норма */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Год vs норма (вид)</h3>
                 <p className={css.ci}>
                   Где сезон относительно типичного — полоса = межквартильный диапазон нормы.
@@ -890,7 +897,8 @@ function SeasonalityTabInner({
 
             </div>
           </section>
-        </>
+          </div>
+        </div>
       )}
     </div>
   );
