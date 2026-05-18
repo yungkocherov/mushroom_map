@@ -62,6 +62,20 @@ export function weekToMonthIdx(week: number): number {
   return Math.max(0, Math.min(11, idx));
 }
 
+// ─── weekMonthLabel ───────────────────────────────────────────────────────
+/**
+ * Sparse RU month label for an ISO week, for chart X axes that users read
+ * as a calendar (not week numbers — item 1). Returns the month abbr only on
+ * the week each month *starts* (approx week = round(1 + monthIdx*4.345)),
+ * "" otherwise so Recharts shows ~12 evenly-spaced month ticks.
+ */
+export function weekMonthLabel(week: number): string {
+  for (let m = 0; m < 12; m++) {
+    if (week === Math.round(1 + m * 4.345)) return MONTHS_RU[m];
+  }
+  return "";
+}
+
 // ─── latestCompleteYear ───────────────────────────────────────────────────
 
 /**

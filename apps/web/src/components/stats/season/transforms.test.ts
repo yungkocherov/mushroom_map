@@ -28,6 +28,7 @@ import {
   overlapMatrix,
   monthSpeciesShare,
   latestCompleteYear,
+  weekMonthLabel,
 } from "./transforms";
 
 // ─── helpers ───────────────────────────────────────────────────────────────
@@ -1045,5 +1046,14 @@ describe("currentVsNorm — norm is year-independent (item 17)", () => {
     expect(wk30a.p25).toBe(wk30b.p25);
     expect(wk30a.p75).toBe(wk30b.p75);
     expect(wk30a.mean).toBe(75);
+  });
+});
+
+describe("weekMonthLabel (item 1 — date X axis)", () => {
+  it("maps ISO week to RU month, empty between month-starts", () => {
+    expect(weekMonthLabel(1)).toBe("янв");
+    expect(weekMonthLabel(2)).toBe("");
+    expect(weekMonthLabel(31)).toBe("авг");
+    expect(weekMonthLabel(53)).toBe("");
   });
 });
