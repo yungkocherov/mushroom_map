@@ -30,4 +30,11 @@ config.resolver.blockList = [
 // "./native": "./src/native.ts" в exports field.
 config.resolver.unstable_enablePackageExports = true;
 
+// Bundled offline assets: forest/basemap PMTiles + glyph PBF.
+config.resolver.assetExts = [
+  ...config.resolver.assetExts,
+  'pmtiles',
+  'pbf',
+];
+
 module.exports = config;

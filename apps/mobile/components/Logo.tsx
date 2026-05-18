@@ -11,7 +11,7 @@ import { useEffect } from "react";
 import Svg, { G, Path, Rect } from "react-native-svg";
 import Animated, {
   useSharedValue,
-  useAnimatedStyle,
+  useAnimatedProps,
   withRepeat,
   withTiming,
   withSequence,
@@ -51,13 +51,13 @@ export function Logo({
     return () => cancelAnimation(scale);
   }, [breathe, scale]);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+  const animatedProps = useAnimatedProps(() => ({
+    scale: scale.value,
   }));
 
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64">
-      <AnimatedG style={animatedStyle} originX={32} originY={50}>
+      <AnimatedG animatedProps={animatedProps} originX={32} originY={50}>
         {/* Pine — trunk + 3-tier triangle */}
         <Rect x={22} y={46} width={4} height={6} fill={color} />
         <Path
