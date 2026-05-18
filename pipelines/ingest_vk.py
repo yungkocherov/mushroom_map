@@ -305,7 +305,7 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
     # VK-сообществ про грибы практически не было). Фильтр защищает от
     # regex-шума вида "10.08.2030" / "0202" / "15.30".
     def _year_ok(y: int) -> bool:
-        return 2010 <= y <= post_dt.year + 1
+        return 2010 <= y <= post_dt.year
 
     # DD.MM.YYYY / DD-MM-YYYY / DD/MM/YYYY
     m = re.search(r"(\d{1,2})\s*[.\-/]\s*(\d{1,2})\s*[.\-/]\s*(\d{2,4})г?", text)
@@ -317,7 +317,11 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
             year -= 1000
         if 1 <= month <= 12 and 1 <= day <= 31 and _year_ok(year):
             try:
-                return date(year, month, day)
+                d = date(year, month, day)
+                if d > post_dt:
+                    d = date(year - 1, month, day)
+                if d <= post_dt:
+                    return d
             except ValueError:
                 pass
 
@@ -329,7 +333,11 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
             year += 2000
         if 1 <= month <= 12 and 1 <= day <= 31 and _year_ok(year):
             try:
-                return date(year, month, day)
+                d = date(year, month, day)
+                if d > post_dt:
+                    d = date(year - 1, month, day)
+                if d <= post_dt:
+                    return d
             except ValueError:
                 pass
 
