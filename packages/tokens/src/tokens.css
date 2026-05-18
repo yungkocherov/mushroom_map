@@ -51,14 +51,14 @@
   /* ─── Species identity colours (hard-bound per mushroom group) ────── */
   /* Naturalistic, distinct, used wherever a species/group is encoded by
      colour across the project. Light theme values. */
-  --sp-porcini:     #c3a063;  /* белые — beige/tan */
-  --sp-aspen:       #c0532a;  /* подосиновики — orange-red */
-  --sp-pine-bolete: #6e3b2e;  /* колосовики/боровик — chocolate-burgundy */
-  --sp-chanterelle: #d8a534;  /* лисички — gold-yellow */
-  --sp-fly-agaric:  #b23b3b;  /* мухоморы — red */
-  --sp-spring:      #8a6a3f;  /* сморчки и строчки — earth-ochre */
-  --sp-honey:       #b07a3c;  /* опята — warm amber */
-  --sp-other:       #8a8270;  /* прочие — neutral (= ink-faint) */
+  --sp-porcini:     #d2b27a;  /* белые — pale beige-tan */
+  --sp-aspen:       #d4691f;  /* подосиновики — clear orange */
+  --sp-pine-bolete: #7a3b32;  /* колосовики/боровик — dark maroon */
+  --sp-chanterelle: #e3a72b;  /* лисички — gold-yellow */
+  --sp-fly-agaric:  #c0392b;  /* мухоморы — true red */
+  --sp-spring:      #7e7b46;  /* сморчки и строчки — khaki-olive */
+  --sp-honey:       #9c6b34;  /* опята — caramel brown */
+  --sp-other:       #8f8a7a;  /* прочие — neutral grey */
 
   /* ─── A11y ──────────────────────────────────────────────────────── */
   --focus-ring:   #b86a3a;
@@ -140,14 +140,14 @@
   --idx-3:        #cdd8a3;
   --idx-4:        #d88c5a;
 
-  --sp-porcini:     #d8bd86;
-  --sp-aspen:       #e0764a;
-  --sp-pine-bolete: #a86a54;
-  --sp-chanterelle: #e6bd5a;
-  --sp-fly-agaric:  #d46060;
-  --sp-spring:      #b0916a;
-  --sp-honey:       #d09a5c;
-  --sp-other:       #a8a08c;
+  --sp-porcini:     #e2c896;
+  --sp-aspen:       #ec8742;
+  --sp-pine-bolete: #b07060;
+  --sp-chanterelle: #f0bf52;
+  --sp-fly-agaric:  #db5b4e;
+  --sp-spring:      #a8a468;
+  --sp-honey:       #c2904c;
+  --sp-other:       #aaa495;
 
   --focus-ring:   #d88c5a;
 
@@ -189,14 +189,14 @@
     --idx-3:        #cdd8a3;
     --idx-4:        #d88c5a;
 
-    --sp-porcini:     #d8bd86;
-    --sp-aspen:       #e0764a;
-    --sp-pine-bolete: #a86a54;
-    --sp-chanterelle: #e6bd5a;
-    --sp-fly-agaric:  #d46060;
-    --sp-spring:      #b0916a;
-    --sp-honey:       #d09a5c;
-    --sp-other:       #a8a08c;
+    --sp-porcini:     #e2c896;
+    --sp-aspen:       #ec8742;
+    --sp-pine-bolete: #b07060;
+    --sp-chanterelle: #f0bf52;
+    --sp-fly-agaric:  #db5b4e;
+    --sp-spring:      #a8a468;
+    --sp-honey:       #c2904c;
+    --sp-other:       #aaa495;
 
     --focus-ring:   #d88c5a;
 
