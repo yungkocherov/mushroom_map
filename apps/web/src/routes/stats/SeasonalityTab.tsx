@@ -33,7 +33,9 @@ import {
   overlapMatrix,
   monthSpeciesShare,
   latestCompleteYear,
+  weekMonthLabel,
 } from "../../components/stats/season/transforms";
+import { speciesColor } from "../../components/stats/season/speciesColors";
 import css from "../../components/stats/season/SeasonCharts.module.css";
 
 // ─── color helpers ────────────────────────────────────────────────────
@@ -58,17 +60,6 @@ const YEAR_PALETTE = [
 function yearColor(yearIndex: number, _totalYears: number): string {
   return YEAR_PALETTE[yearIndex % YEAR_PALETTE.length] ?? "var(--forest)";
 }
-
-const COMPOSITION_COLORS: string[] = [
-  "var(--idx-4)",
-  "var(--idx-3)",
-  "var(--idx-2)",
-  "var(--idx-1)",
-  "var(--idx-0)",
-  "var(--forest)",
-  "var(--chanterelle)",
-  "var(--moss)",
-];
 
 // ─── data state ───────────────────────────────────────────────────────
 
@@ -301,10 +292,10 @@ function SeasonalityTabInner({
     }
     return out;
   });
-  const compositionSeries = groupKeys.map((k, i) => ({
+  const compositionSeries = groupKeys.map((k) => ({
     key: k,
     label: GROUP_LABELS_RU[k] ?? k,
-    color: COMPOSITION_COLORS[i % COMPOSITION_COLORS.length],
+    color: speciesColor(k),
   }));
 
   // 7. peakBoxData
@@ -320,7 +311,8 @@ function SeasonalityTabInner({
   // 8. season length
   const seasonLenData = qualifyingItems
     .filter((i) => i.season_len_median !== null)
-    .map((i) => ({ label: i.label, len: i.season_len_median! }));
+    .map((i) => ({ label: i.label, len: i.season_len_median! }))
+    .sort((a, b) => b.len - a.len);
 
   // 9. peak trend slope
   const trendData = qualifyingItems
@@ -351,11 +343,11 @@ function SeasonalityTabInner({
     weightedMeanWeek: Math.round(r.weightedMeanWeek * 10) / 10,
   }));
 
-  // 14. year volume normalized
-  const maxTotal = Math.max(...ranking.map((r) => r.total), 1);
+  // 14. season volume normalised by corpus size (finds per post)
+  const maxFpp = Math.max(...ranking.map((r) => r.findsPerPost), 1e-9);
   const volumeData = ranking.map((r) => ({
     year: String(r.year),
-    share: Math.round((r.total / maxTotal) * 100) / 100,
+    fpp: Math.round((r.findsPerPost / maxFpp) * 100) / 100,
   }));
 
   // 15. currentVsNorm — build over full week range 1..52 for uniform axis
@@ -398,8 +390,13 @@ function SeasonalityTabInner({
           marginBottom: "var(--space-4)",
         }}
       >
-        Анализ сезонной динамики: когда, как долго и в каком порядке появляются
-        виды. Данные: корпус VK-постов с фото-классификацией.
+        Анализ сезонной динамики: когда, как долго и в каком порядке
+        появляются виды. Данные — корпус фото-классифицированных постов
+        сообщества{" "}
+        <a href="https://vk.com/grib_spb" target="_blank" rel="noopener noreferrer"
+           style={{ color: "var(--chanterelle)" }}>
+          «Грибы Санкт-Петербурга и Ленинградской области»
+        </a>.
       </p>
 
       {isEmpty ? (
@@ -425,6 +422,9 @@ function SeasonalityTabInner({
                     xKey="week"
                     series={allCurvesSeries}
                     height={280}
+                    connectNulls
+                    xTickFormatter={(w) => weekMonthLabel(Number(w))}
+                    tooltipDecimals={2}
                   />
                 )}
               </div>
@@ -453,6 +453,9 @@ function SeasonalityTabInner({
                     xKey="week"
                     series={speciesCurvesSeries}
                     height={260}
+                    connectNulls
+                    xTickFormatter={(w) => weekMonthLabel(Number(w))}
+                    tooltipDecimals={2}
                   />
                 )}
               </div>
@@ -477,6 +480,7 @@ function SeasonalityTabInner({
                     cols={matrixColLabels}
                     values={matrix.values}
                     height={Math.max(200, matrix.years.length * 28 + 40)}
+                    valueDecimals={0}
                   />
                 )}
               </div>
@@ -537,6 +541,7 @@ function SeasonalityTabInner({
                     xType="number"
                     xDomain={[1, 52]}
                     xTicks={[1, 9, 17, 25, 33, 41, 49]}
+                    xTickFormatter={(w) => weekMonthLabel(Number(w))}
                   />
                 )}
               </div>
@@ -557,6 +562,8 @@ function SeasonalityTabInner({
                     height={300}
                     yDomain={[0, 1]}
                     yTickFormat="percent"
+                    tooltipPercent
+                    xTickFormatter={(w) => weekMonthLabel(Number(w))}
                   />
                 )}
               </div>
@@ -622,9 +629,12 @@ function SeasonalityTabInner({
 
               {/* 9. Фенологический тренд */}
               <div className={css.card}>
-                <h3 className={css.ct}>Фенологический тренд (сдвиг пика, нед/год)</h3>
+                <h3 className={css.ct}>Сдвиг пика во времени (недель за год)</h3>
                 <p className={css.ci}>
-                  Отрицательное значение — пик сдвигается раньше. Exploratory: данных &le;8 лет.
+                  Линейный тренд медианной недели пика по годам. Отрицательное
+                  значение — пик из года в год смещается раньше (на N недель в
+                  год); положительное — позже. Это разведочная оценка по
+                  короткому ряду (&le;8 лет), не прогноз.
                 </p>
                 {trendData.length === 0 ? (
                   <p className={css.empty}>Недостаточно данных для тренда.</p>
@@ -664,6 +674,7 @@ function SeasonalityTabInner({
                     values={overlapMx.values}
                     height={Math.max(240, overlapLabels.length * 32 + 40)}
                     vmax={1}
+                    valueDecimals={2}
                   />
                 )}
               </div>
@@ -682,6 +693,7 @@ function SeasonalityTabInner({
                     cols={monthShare.months}
                     values={monthShareValues}
                     height={Math.max(240, monthShareRowLabels.length * 28 + 40)}
+                    valueDecimals={2}
                   />
                 )}
               </div>
@@ -690,7 +702,10 @@ function SeasonalityTabInner({
               <div className={css.card}>
                 <h3 className={css.ct}>Лента года (ridge)</h3>
                 <p className={css.ci}>
-                  Календарь природы: кто кого сменяет — кривые нормированы к своему максимуму.
+                  Календарь природы (ridgeline): каждая полоса — сезонная
+                  плотность одного вида, нормированная к своему пику. Читать
+                  сверху вниз: кто кого сменяет за сезон. Высота — не
+                  абсолютная численность, а форма сезона.
                 </p>
                 {ridge.series.length === 0 ? (
                   <p className={css.empty}>Недостаточно данных.</p>
@@ -698,7 +713,13 @@ function SeasonalityTabInner({
                   <RidgeLines
                     series={ridge.series}
                     xLabels={ridge.xLabels}
-                    height={ridge.series.length * 46 + 36}
+                    colors={ridge.series.map((s) => {
+                      const gk = Object.keys(GROUP_LABELS_RU).find(
+                        (k) => GROUP_LABELS_RU[k] === s.label,
+                      );
+                      return gk ? speciesColor(gk) : "var(--forest)";
+                    })}
+                    height={ridge.series.length * 52 + 36}
                   />
                 )}
               </div>
@@ -715,7 +736,9 @@ function SeasonalityTabInner({
               <div className={css.card}>
                 <h3 className={css.ct}>Ранний / поздний грибной год</h3>
                 <p className={css.ci}>
-                  Меньше = более ранний год (взвешенная средняя неделя по всем находкам).
+                  Взвешенная средняя неделя всех находок сезона (только недели
+                  &ge;20 — настоящий сезон, без зимнего шума «прошлогодних»
+                  постов). Меньше = грибы пошли раньше в этом году.
                 </p>
                 {rankingData.length === 0 ? (
                   <p className={css.empty}>Нет данных.</p>
@@ -733,7 +756,9 @@ function SeasonalityTabInner({
               <div className={css.card}>
                 <h3 className={css.ct}>Объём сезона по годам (норм.)</h3>
                 <p className={css.ci}>
-                  Доля от максимального года. Зависит от роста корпуса, а не только от обилия грибов.
+                  Находок на один пост (нормировано к лучшему году). Делёж на
+                  объём постов убирает рост самого сообщества — остаётся
+                  «насколько богат был сезон», а не «сколько народу в ВК».
                 </p>
                 {volumeData.length === 0 ? (
                   <p className={css.empty}>Нет данных.</p>
@@ -741,12 +766,13 @@ function SeasonalityTabInner({
                   <BarChart
                     data={volumeData}
                     categoryKey="year"
-                    valueKey="share"
+                    valueKey="fpp"
                     height={volumeData.length * 36 + 40}
                   />
                 )}
                 <p className={css.note}>
-                  Объём растёт вместе с корпусом VK-постов — не интерпретировать как реальное обилие.
+                  Прокси по ВК-корпусу, не полевой учёт; короткий ряд —
+                  интерпретировать осторожно.
                 </p>
               </div>
 
@@ -791,6 +817,9 @@ function SeasonalityTabInner({
                     xType="number"
                     xDomain={[1, 52]}
                     xTicks={[1, 9, 17, 25, 33, 41, 49]}
+                    connectNulls
+                    xTickFormatter={(w) => weekMonthLabel(Number(w))}
+                    tooltipDecimals={2}
                   />
                 )}
                 {(maxWeekByYear.get(selYear) ?? 0) < 40 && (
