@@ -43,6 +43,12 @@ export interface MultiLineChartProps {
   xDomain?: [number, number];
   /** When xType="number": explicit tick positions. */
   xTicks?: number[];
+  /** Connect across null gaps (seasonal curves have missing weeks). Default false. */
+  connectNulls?: boolean;
+  /** Format the tooltip/axis X value (e.g. ISO-week → "май"). */
+  xTickFormatter?: (v: number | string) => string;
+  /** Round numeric tooltip values to this many decimals. Default: no rounding. */
+  tooltipDecimals?: number;
 }
 
 export function MultiLineChart({
@@ -54,6 +60,9 @@ export function MultiLineChart({
   xType,
   xDomain,
   xTicks,
+  connectNulls = false,
+  xTickFormatter,
+  tooltipDecimals,
 }: MultiLineChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -67,6 +76,7 @@ export function MultiLineChart({
           domain={xType === "number" ? xDomain : undefined}
           ticks={xType === "number" ? xTicks : undefined}
           allowDecimals={false}
+          tickFormatter={xTickFormatter}
         />
         <YAxis stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
         <Tooltip
@@ -76,6 +86,12 @@ export function MultiLineChart({
             borderRadius: "var(--radius-md)",
             fontSize: "var(--fs-xs)",
           }}
+          formatter={(val) =>
+            typeof val === "number" && tooltipDecimals != null
+              ? Number(val.toFixed(tooltipDecimals))
+              : val
+          }
+          labelFormatter={(l) => (xTickFormatter ? xTickFormatter(l) : l)}
         />
         <Legend wrapperStyle={{ fontSize: "var(--fs-xs)" }} />
         {band && (
@@ -114,7 +130,7 @@ export function MultiLineChart({
             strokeWidth={2}
             strokeDasharray={s.dashed ? "5 4" : undefined}
             dot={false}
-            connectNulls={false}
+            connectNulls={connectNulls}
           />
         ))}
       </ComposedChart>

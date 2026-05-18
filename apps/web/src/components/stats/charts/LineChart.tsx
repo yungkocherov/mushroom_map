@@ -28,6 +28,10 @@ export interface LineChartProps {
   xDomain?: [number, number];
   /** When xType="number": explicit tick positions. */
   xTicks?: number[];
+  /** Connect across null gaps. Default true (cumulative S-curve is continuous). */
+  connectNulls?: boolean;
+  /** Format the tooltip/axis X value (e.g. ISO-week → "май"). */
+  xTickFormatter?: (v: number | string) => string;
 }
 
 export function LineChart({
@@ -38,6 +42,8 @@ export function LineChart({
   xType,
   xDomain,
   xTicks,
+  connectNulls = true,
+  xTickFormatter,
 }: LineChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -51,6 +57,7 @@ export function LineChart({
           domain={xType === "number" ? xDomain : undefined}
           ticks={xType === "number" ? xTicks : undefined}
           allowDecimals={false}
+          tickFormatter={xTickFormatter}
         />
         <YAxis stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
         <Tooltip
@@ -67,6 +74,7 @@ export function LineChart({
           stroke="var(--forest)"
           strokeWidth={2}
           dot={false}
+          connectNulls={connectNulls}
         />
       </RLineChart>
     </ResponsiveContainer>

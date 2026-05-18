@@ -37,14 +37,32 @@ export interface AreaChartProps {
    * like 1.0000002). Omit for raw numeric ticks (default, unchanged).
    */
   yTickFormat?: "percent";
+  /** Format tooltip values as percent (0.1 → "10%"). */
+  tooltipPercent?: boolean;
+  /** Format the tooltip header / X value (week → month). */
+  xTickFormatter?: (v: number | string) => string;
 }
 
-export function AreaChart({ data, xKey, series, height = 300, yDomain, yTickFormat }: AreaChartProps) {
+export function AreaChart({
+  data,
+  xKey,
+  series,
+  height = 300,
+  yDomain,
+  yTickFormat,
+  tooltipPercent,
+  xTickFormatter,
+}: AreaChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RAreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
         <CartesianGrid stroke="var(--rule)" strokeDasharray="3 3" />
-        <XAxis dataKey={xKey} stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
+        <XAxis
+          dataKey={xKey}
+          stroke="var(--ink-faint)"
+          fontSize="var(--fs-xs)"
+          tickFormatter={xTickFormatter}
+        />
         <YAxis
           stroke="var(--ink-faint)"
           fontSize="var(--fs-xs)"
@@ -66,6 +84,12 @@ export function AreaChart({ data, xKey, series, height = 300, yDomain, yTickForm
             borderRadius: "var(--radius-md)",
             fontSize: "var(--fs-xs)",
           }}
+          formatter={(val) =>
+            tooltipPercent && typeof val === "number"
+              ? `${Math.round(val * 100)}%`
+              : val
+          }
+          labelFormatter={(l) => (xTickFormatter ? xTickFormatter(l) : l)}
         />
         <Legend wrapperStyle={{ fontSize: "var(--fs-xs)" }} />
         {series.map((s) => (
