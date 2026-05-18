@@ -41,6 +41,8 @@ export interface MultiLineChartProps {
   xType?: "number" | "category";
   /** When xType="number": the [min, max] domain. */
   xDomain?: [number, number];
+  /** Optional fixed [min, max] for the Y axis (hard clamp, no data overflow). */
+  yDomain?: [number, number];
   /** When xType="number": explicit tick positions. */
   xTicks?: number[];
   /** Connect across null gaps (seasonal curves have missing weeks). Default false. */
@@ -59,6 +61,7 @@ export function MultiLineChart({
   height = 260,
   xType,
   xDomain,
+  yDomain,
   xTicks,
   connectNulls = false,
   xTickFormatter,
@@ -78,7 +81,12 @@ export function MultiLineChart({
           allowDecimals={false}
           tickFormatter={xTickFormatter}
         />
-        <YAxis stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
+        <YAxis
+          stroke="var(--ink-faint)"
+          fontSize="var(--fs-xs)"
+          domain={yDomain}
+          allowDataOverflow={yDomain !== undefined}
+        />
         <Tooltip
           contentStyle={{
             background: "var(--paper-rise)",

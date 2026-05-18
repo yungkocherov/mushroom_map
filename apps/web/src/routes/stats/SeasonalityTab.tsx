@@ -16,6 +16,7 @@ import { Heatmap } from "../../components/stats/charts/Heatmap";
 import { RangeBars } from "../../components/stats/charts/RangeBars";
 import { RidgeLines } from "../../components/stats/charts/RidgeLines";
 import { MultiLineChart } from "../../components/stats/charts/MultiLineChart";
+import { DivergingBarChart } from "../../components/stats/charts/DivergingBarChart";
 import {
   MONTHS_RU,
   SEASON_GROUP_KEYS,
@@ -180,8 +181,14 @@ function SeasonalityTabInner({
 
   const completeSeason = latestCompleteYear(curves);
 
-  const [selSpecies, setSelSpecies] = useState<string>(defaultSpecies);
-  const [selYear, setSelYear] = useState<number>(completeSeason);
+  const [spProfile, setSpProfile] = useState(defaultSpecies);   // card 2
+  const [spHeat, setSpHeat] = useState<string>(defaultSpecies);  // card 3 (+ "all")
+  const [spCum, setSpCum] = useState(defaultSpecies);            // card 5
+  const [yrCum, setYrCum] = useState(completeSeason);
+  const [spVsN, setSpVsN] = useState(defaultSpecies);            // card 15
+  const [yrVsN, setYrVsN] = useState(completeSeason);
+  const [spAnom, setSpAnom] = useState(defaultSpecies);          // card 16
+  const [yrAnom, setYrAnom] = useState(completeSeason);
 
   const speciesPillOpts = qualifyingItems.map((i) => ({
     value: i.species_key,
@@ -200,7 +207,10 @@ function SeasonalityTabInner({
     };
   });
 
-  const isQualifying = qualifyingItems.some((i) => i.species_key === selSpecies);
+  const isQualProfile = qualifyingItems.some((i) => i.species_key === spProfile);
+  const isQualCum = qualifyingItems.some((i) => i.species_key === spCum);
+  const isQualVsN = qualifyingItems.some((i) => i.species_key === spVsN);
+  const isQualAnom = qualifyingItems.some((i) => i.species_key === spAnom);
   const notQualifyingNote = (
     <p className={css.note}>Мало данных по этому виду для анализа.</p>
   );
@@ -228,7 +238,7 @@ function SeasonalityTabInner({
   }));
 
   // 2. yearCurves per species
-  const speciesCurves = isQualifying ? yearCurves(curves, selSpecies) : [];
+  const speciesCurves = isQualProfile ? yearCurves(curves, spProfile) : [];
   const speciesCurvesWeekSet = [
     ...new Set(speciesCurves.flatMap((c) => c.points.map((p) => p.week))),
   ].sort((a, b) => a - b);
@@ -247,7 +257,7 @@ function SeasonalityTabInner({
   }));
 
   // 3. weekYearMatrix
-  const matrixSpecies = selSpecies === "all" ? "all" : selSpecies;
+  const matrixSpecies = spHeat === "all" ? "all" : spHeat;
   const matrix = weekYearMatrix(curves, matrixSpecies);
   const matrixRowLabels = matrix.years.map(String);
   const matrixColLabels = matrix.weeks.map(String);
@@ -263,9 +273,9 @@ function SeasonalityTabInner({
   }));
 
   // 5. cumulativeShare — build over full week range 1..52, gaps -> 0
-  const cumRaw = isQualifying ? cumulativeShare(curves, selSpecies, selYear) : [];
+  const cumRaw = isQualCum ? cumulativeShare(curves, spCum, yrCum) : [];
   const cumByWeek = new Map(cumRaw.map((p) => [p.week, p.share]));
-  const cumData: { week: number; share: number }[] = isQualifying
+  const cumData: { week: number; share: number }[] = isQualCum
     ? Array.from({ length: 52 }, (_, i) => {
         const w = i + 1;
         return { week: w, share: Math.round((cumByWeek.get(w) ?? (w > 1 ? (cumByWeek.get(w - 1) ?? 0) : 0)) * 100) / 100 };
@@ -351,8 +361,8 @@ function SeasonalityTabInner({
   }));
 
   // 15. currentVsNorm — build over full week range 1..52 for uniform axis
-  const vsNormRaw = isQualifying
-    ? currentVsNorm(curves, selSpecies, selYear)
+  const vsNormRaw = isQualVsN
+    ? currentVsNorm(curves, spVsN, yrVsN)
     : [];
   const vsNormByWeek = new Map(vsNormRaw.map((p) => [p.week, p]));
   const vsNormData = vsNormRaw.length > 0
@@ -369,9 +379,14 @@ function SeasonalityTabInner({
       })
     : [];
 
+  const vsNormYMax = Math.max(
+    1,
+    ...vsNormData.flatMap((d) => [d.p75 ?? 0, d.mean ?? 0, d.value ?? 0]),
+  );
+
   // 16. weeklyAnomaly
-  const anomalyRaw = isQualifying
-    ? weeklyAnomaly(curves, selSpecies, selYear)
+  const anomalyRaw = isQualAnom
+    ? weeklyAnomaly(curves, spAnom, yrAnom)
     : [];
   const anomalyData = anomalyRaw.map((p) => ({
     week: String(p.week),
@@ -438,12 +453,12 @@ function SeasonalityTabInner({
                 {speciesPillOpts.length > 0 && (
                   <Pills
                     options={speciesPillOpts}
-                    value={selSpecies}
-                    onChange={setSelSpecies}
+                    value={spProfile}
+                    onChange={setSpProfile}
                     label="Вид"
                   />
                 )}
-                {!isQualifying ? (
+                {!isQualProfile ? (
                   notQualifyingNote
                 ) : speciesCurvesData.length === 0 ? (
                   <p className={css.empty}>Нет данных.</p>
@@ -468,8 +483,8 @@ function SeasonalityTabInner({
                 </p>
                 <Pills
                   options={speciesPillOptsWithAll}
-                  value={selSpecies === "all" ? "all" : selSpecies}
-                  onChange={(v) => setSelSpecies(v)}
+                  value={spHeat === "all" ? "all" : spHeat}
+                  onChange={setSpHeat}
                   label="Вид"
                 />
                 {matrix.years.length === 0 ? (
@@ -514,21 +529,21 @@ function SeasonalityTabInner({
                   {speciesPillOpts.length > 0 && (
                     <Pills
                       options={speciesPillOpts}
-                      value={selSpecies}
-                      onChange={setSelSpecies}
+                      value={spCum}
+                      onChange={setSpCum}
                       label="Вид"
                     />
                   )}
                   {yearPillOpts.length > 0 && (
                     <Pills
                       options={yearPillOpts}
-                      value={String(selYear)}
-                      onChange={(v) => setSelYear(Number(v))}
+                      value={String(yrCum)}
+                      onChange={(v) => setYrCum(Number(v))}
                       label="Год"
                     />
                   )}
                 </div>
-                {!isQualifying ? (
+                {!isQualCum ? (
                   notQualifyingNote
                 ) : cumData.length === 0 ? (
                   <p className={css.empty}>Нет данных за выбранный год.</p>
@@ -786,21 +801,21 @@ function SeasonalityTabInner({
                   {speciesPillOpts.length > 0 && (
                     <Pills
                       options={speciesPillOpts}
-                      value={selSpecies}
-                      onChange={setSelSpecies}
+                      value={spVsN}
+                      onChange={setSpVsN}
                       label="Вид"
                     />
                   )}
                   {yearPillOpts.length > 0 && (
                     <Pills
                       options={yearPillOpts}
-                      value={String(selYear)}
-                      onChange={(v) => setSelYear(Number(v))}
+                      value={String(yrVsN)}
+                      onChange={(v) => setYrVsN(Number(v))}
                       label="Год"
                     />
                   )}
                 </div>
-                {!isQualifying ? (
+                {!isQualVsN ? (
                   notQualifyingNote
                 ) : vsNormData.length === 0 ? (
                   <p className={css.empty}>Нет данных за выбранный год.</p>
@@ -809,21 +824,22 @@ function SeasonalityTabInner({
                     data={vsNormData}
                     xKey="week"
                     series={[
-                      { key: "value", label: String(selYear), color: "var(--forest)" },
+                      { key: "value", label: String(yrVsN), color: "var(--forest)" },
                       { key: "mean", label: "норма", color: "var(--chanterelle)", dashed: true },
                     ]}
                     band={{ lowerKey: "p25", upperKey: "p75", color: "var(--chanterelle)" }}
                     height={260}
                     xType="number"
                     xDomain={[1, 52]}
+                    yDomain={[0, Math.ceil(vsNormYMax * 1.1)]}
                     xTicks={[1, 9, 17, 25, 33, 41, 49]}
                     connectNulls
                     xTickFormatter={(w) => weekMonthLabel(Number(w))}
                     tooltipDecimals={2}
                   />
                 )}
-                {(maxWeekByYear.get(selYear) ?? 0) < 40 && (
-                  <p className={css.note}>{selYear} — неполный год.</p>
+                {(maxWeekByYear.get(yrVsN) ?? 0) < 40 && (
+                  <p className={css.note}>{yrVsN} — неполный год.</p>
                 )}
               </div>
 
@@ -837,35 +853,36 @@ function SeasonalityTabInner({
                   {speciesPillOpts.length > 0 && (
                     <Pills
                       options={speciesPillOpts}
-                      value={selSpecies}
-                      onChange={setSelSpecies}
+                      value={spAnom}
+                      onChange={setSpAnom}
                       label="Вид"
                     />
                   )}
                   {yearPillOpts.length > 0 && (
                     <Pills
                       options={yearPillOpts}
-                      value={String(selYear)}
-                      onChange={(v) => setSelYear(Number(v))}
+                      value={String(yrAnom)}
+                      onChange={(v) => setYrAnom(Number(v))}
                       label="Год"
                     />
                   )}
                 </div>
-                {!isQualifying ? (
+                {!isQualAnom ? (
                   notQualifyingNote
                 ) : anomalyData.length === 0 ? (
                   <p className={css.empty}>Нет данных за выбранный год.</p>
                 ) : (
                   <>
-                    <BarChart
+                    <DivergingBarChart
                       data={anomalyData}
                       categoryKey="week"
                       valueKey="delta"
-                      height={260}
+                      colorPos="var(--idx-1)"
+                      colorNeg="var(--chanterelle)"
+                      height={Math.max(260, anomalyData.length * 16 + 40)}
                     />
                     <p className={css.note}>
-                      Положительные значения — лучше нормы; отрицательные — хуже.
-                      Цвет не меняется по знаку (ограничение BarChart).
+                      Зелёные недели — выше нормы, терракотовые — ниже.
                     </p>
                   </>
                 )}
