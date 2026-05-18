@@ -52,7 +52,7 @@ _overview_lock = threading.Lock()
 # ключ; «other» на витрине фильтруем.
 SPECIES_LABELS: dict[str, str] = {
     "porcini":         "Белые",
-    "pine_bolete":     "Колосовики",
+    "pine_bolete":     "Боровики",
     "aspen_bolete":    "Подосиновики",
     "birch_bolete":    "Подберёзовики",
     "mokhovik":        "Моховики",
