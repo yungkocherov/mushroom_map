@@ -59,6 +59,7 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   // Cleanup отменённых черновиков — Phase 6 если станет проблемой.
   const [draftUuid, setDraftUuid] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
 
   // Управление через ref-методы (snapToIndex / close). `index` prop у
   // BottomSheet не всегда реагирует на изменение из родителя — особенно
@@ -72,6 +73,7 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
       setRating(4);
       setTags(new Set());
       setPhotos([]);
+      setDone(false);
       setDraftUuid(Crypto.randomUUID());
       sheetRef.current?.snapToIndex(0);
     } else {
@@ -139,7 +141,8 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
         tags: Array.from(tags),
         photos,
       });
-      onClose();
+      // Успех — НЕ закрываем sheet, показываем done-state.
+      setDone(true);
     } catch (err) {
       Alert.alert("Ошибка", err instanceof Error ? err.message : "save-failed");
     } finally {
@@ -162,6 +165,22 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
       android_keyboardInputMode="adjustResize"
     >
       <BottomSheetScrollView contentContainerStyle={styles.content}>
+        {done ? (
+          <View>
+            <Text style={styles.title}>Сохранено</Text>
+            <Text style={styles.doneName}>{name.trim() || "Место"}</Text>
+            <View style={styles.actions}>
+              <Pressable style={styles.btnSecondary} onPress={onClose}>
+                {/* TODO(nav): deep-link to «Мои места» tab — deferred v1 */}
+                <Text style={styles.btnSecondaryText}>Мои места</Text>
+              </Pressable>
+              <Pressable style={styles.btnPrimary} onPress={onClose}>
+                <Text style={styles.btnPrimaryText}>Готово</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : (
+          <>
         <Text style={styles.title}>Сохранить спот</Text>
 
         {effectiveCoords ? (
@@ -307,6 +326,8 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
             </Text>
           </Pressable>
         </View>
+          </>
+        )}
       </BottomSheetScrollView>
     </BottomSheet>
   );
@@ -330,6 +351,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.h2,
     color: palette.light.ink,
     marginBottom: spacing[3],
+  },
+  doneName: {
+    fontSize: fontSize.body,
+    color: palette.light.ink,
+    marginBottom: spacing[5],
   },
   coords: {
     fontSize: fontSize.sm,
