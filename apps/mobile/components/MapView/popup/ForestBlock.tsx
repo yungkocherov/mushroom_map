@@ -16,7 +16,7 @@ export function ForestBlock({ forest }: { forest: ForestInfo }) {
         {forest.age_group ? (
           <KV label="возраст" value={forest.age_group} />
         ) : null}
-        {bonitet ? <KV label="бонитет" value={bonitet} /> : null}
+        {bonitet ? <Text style={styles.kvValue}>{bonitet}</Text> : null}
         {area ? <KV label="площадь" value={area} /> : null}
         {forest.source ? <KV label="источник" value={forest.source} /> : null}
       </View>
