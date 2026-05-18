@@ -55,7 +55,7 @@ export function AreaChart({
 }: AreaChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <RAreaChart data={data} margin={{ top: 8, right: 16, bottom: 4, left: 0 }}>
+      <RAreaChart data={data} margin={{ top: 20, right: 16, bottom: 4, left: 0 }}>
         <CartesianGrid stroke="var(--rule)" strokeDasharray="3 3" />
         <XAxis
           dataKey={xKey}
@@ -90,6 +90,7 @@ export function AreaChart({
               : val
           }
           labelFormatter={(l) => (xTickFormatter ? xTickFormatter(l) : l)}
+          itemSorter={(item: any) => series.findIndex((s) => s.key === item.dataKey)}
         />
         <Legend wrapperStyle={{ fontSize: "var(--fs-xs)" }} />
         {series.map((s) => (

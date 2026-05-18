@@ -294,7 +294,15 @@ function SeasonalityTabInner({
 
   // 6. compositionByWeek (stacked area 100%)
   const compositionData = compositionByWeek(curves);
-  const groupKeys = [...SEASON_GROUP_KEYS, "other"] as string[];
+  // Fixed seasonal stack order (spring → autumn, "other" last) so the
+  // stack, legend and tooltip all read in the same consistent order.
+  const COMPOSITION_ORDER = [
+    "spring_mushroom", "pine_bolete", "chanterelle", "porcini",
+    "aspen_bolete", "fly_agaric", "honey_fungus", "other",
+  ];
+  const groupKeys = COMPOSITION_ORDER.filter((k) =>
+    [...SEASON_GROUP_KEYS, "other"].includes(k),
+  );
   const compositionChartData = compositionData.map((row) => {
     const out: Record<string, number | string | null> = { week: row.week };
     for (const k of groupKeys) {
@@ -410,7 +418,7 @@ function SeasonalityTabInner({
         сообщества{" "}
         <a href="https://vk.com/grib_spb" target="_blank" rel="noopener noreferrer"
            style={{ color: "var(--chanterelle)" }}>
-          «Грибы Санкт-Петербурга и Ленинградской области»
+          «Грибы и Грибники СПб»
         </a>.
       </p>
 
@@ -455,7 +463,7 @@ function SeasonalityTabInner({
               </div>
 
               {/* 2. Профиль вида */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Профиль вида по годам</h3>
                 <p className={css.ci}>
                   У каждого вида своя форма года: взрывной пик или растянутый сезон.
@@ -514,7 +522,7 @@ function SeasonalityTabInner({
               </div>
 
               {/* 4. Полосы сезона */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Полосы сезона по видам</h3>
                 <p className={css.ci}>
                   Кто когда и как долго; вертикальная метка — медианный пик. Только квалифицирующие виды.
@@ -533,7 +541,7 @@ function SeasonalityTabInner({
               </div>
 
               {/* 5. Накопленная доля */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Накопленная доля сезона</h3>
                 <p className={css.ci}>
                   Крутая кривая — взрывной сезон, пологая — растянутый.
@@ -576,7 +584,7 @@ function SeasonalityTabInner({
 
               {/* 6. Состав корзины по неделям (стек 100%) */}
               <div className={`${css.card} ${css.cardWide}`}>
-                <h3 className={css.ct}>Состав корзины по неделям (100%)</h3>
+                <h3 className={css.ct}>Состав корзины по неделям</h3>
                 <p className={css.ci}>
                   Весной строчки, летом белые, осенью опята — смена состава по сезону.
                 </p>
@@ -691,7 +699,7 @@ function SeasonalityTabInner({
             <div className={css.grid}>
 
               {/* 10. Перекрытие сезонов */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Перекрытие сезонов (матрица)</h3>
                 <p className={css.ci}>
                   Что реально собрать в одну поездку — чем теплее клетка, тем выше совпадение сезонов.
@@ -711,7 +719,7 @@ function SeasonalityTabInner({
               </div>
 
               {/* 11. Что собирают в каждом месяце */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Состав по месяцам</h3>
                 <p className={css.ci}>
                   Характерные виды месяца — доля каждой группы в общем объёме находок.
@@ -860,7 +868,7 @@ function SeasonalityTabInner({
               </div>
 
               {/* 16. Аномалия недели vs норма */}
-              <div className={css.card}>
+              <div className={`${css.card} ${css.cardWide}`}>
                 <h3 className={css.ct}>Аномалия по неделям (вид, год)</h3>
                 <p className={css.ci}>
                   Недели сильно лучше или хуже обычного — отклонение от средней нормы.
