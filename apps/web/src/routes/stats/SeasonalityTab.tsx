@@ -19,6 +19,7 @@ import { MultiLineChart } from "../../components/stats/charts/MultiLineChart";
 import { DivergingBarChart } from "../../components/stats/charts/DivergingBarChart";
 import {
   MONTHS_RU,
+  MONTH_START_WEEKS,
   SEASON_GROUP_KEYS,
   GROUP_LABELS_RU,
   yearCurves,
@@ -291,12 +292,18 @@ function SeasonalityTabInner({
   // 7. peakBoxData
   const peakData = peakBoxData(species);
   const peakQualifying = peakData.filter((d) => d.qualifies && d.peak !== null);
-  const peakNonQualifying = peakData.filter((d) => !d.qualifies);
-  const peakChartData = peakQualifying.map((d) => ({
+  const peakRangeItems = peakQualifying.map((d) => ({
     label: d.label,
-    peak: d.peak!,
-    iqr: d.iqr ?? 0,
+    start: d.peak! - (d.iqr ?? 0),
+    end: d.peak! + (d.iqr ?? 0),
+    mark: d.peak!,
   }));
+  const peakRangeMin = peakRangeItems.length
+    ? Math.floor(Math.min(...peakRangeItems.map((i) => i.start)) - 1)
+    : 1;
+  const peakRangeMax = peakRangeItems.length
+    ? Math.ceil(Math.max(...peakRangeItems.map((i) => i.end)) + 1)
+    : 52;
 
   // 8. season length
   const seasonLenData = qualifyingItems
@@ -332,6 +339,9 @@ function SeasonalityTabInner({
     year: String(r.year),
     weightedMeanWeek: Math.round(r.weightedMeanWeek * 10) / 10,
   }));
+  const wmwMax = rankingData.length
+    ? Math.ceil(Math.max(...rankingData.map((r) => r.weightedMeanWeek))) + 1
+    : 40;
 
   // 14. season volume normalised by corpus size (finds per post)
   const maxFpp = Math.max(...ranking.map((r) => r.findsPerPost), 1e-9);
@@ -427,7 +437,7 @@ function SeasonalityTabInner({
                     connectNulls
                     xType="number"
                     xDomain={[1, 52]}
-                    xTicks={[1, 5, 10, 14, 19, 23, 27, 32, 36, 40, 45, 49]}
+                    xTicks={MONTH_START_WEEKS}
                     xTickFormatter={(w) => weekMonthLabel(Number(w))}
                     tooltipDecimals={2}
                   />
@@ -461,7 +471,7 @@ function SeasonalityTabInner({
                     connectNulls
                     xType="number"
                     xDomain={[1, 52]}
-                    xTicks={[1, 5, 10, 14, 19, 23, 27, 32, 36, 40, 45, 49]}
+                    xTicks={MONTH_START_WEEKS}
                     xTickFormatter={(w) => weekMonthLabel(Number(w))}
                     tooltipDecimals={2}
                   />
@@ -548,7 +558,7 @@ function SeasonalityTabInner({
                     height={240}
                     xType="number"
                     xDomain={[1, 52]}
-                    xTicks={[1, 5, 10, 14, 19, 23, 27, 32, 36, 40, 45, 49]}
+                    xTicks={MONTH_START_WEEKS}
                     xTickFormatter={(w) => weekMonthLabel(Number(w))}
                   />
                 )}
@@ -588,32 +598,22 @@ function SeasonalityTabInner({
               <div className={css.card}>
                 <h3 className={css.ct}>Медиана пика (неделя) по видам</h3>
                 <p className={css.ci}>
-                  Насколько стабилен пик от года к году — чем меньше IQR, тем предсказуемее.
+                  Медиана недели пика (метка) и межквартильный разброс (полоса
+                  ±IQR) — чем уже полоса, тем стабильнее вид от года к году.
                 </p>
-                {peakQualifying.length === 0 ? (
+                {peakRangeItems.length === 0 ? (
                   <p className={css.empty}>Недостаточно данных.</p>
                 ) : (
-                  <>
-                    <BarChart
-                      data={peakChartData}
-                      categoryKey="label"
-                      valueKey="peak"
-                      height={peakQualifying.length * 36 + 40}
-                    />
-                    <p className={css.note}>
-                      IQR (межквартильный диапазон неделей):{" "}
-                      {peakQualifying
-                        .map((d) => `${d.label}: ±${d.iqr ?? "—"}`)
-                        .join(", ")}
-                    </p>
-                  </>
-                )}
-                {peakNonQualifying.length > 0 && (
-                  <ul className={css.greyList}>
-                    {peakNonQualifying.map((d) => (
-                      <li key={d.species_key}>{d.label} — мало данных</li>
-                    ))}
-                  </ul>
+                  <RangeBars
+                    items={peakRangeItems}
+                    min={peakRangeMin}
+                    max={peakRangeMax}
+                    ticks={MONTH_START_WEEKS.map((w, i) => ({
+                      at: w,
+                      label: ["янв","фев","мар","апр","май","июн","июл","авг","сен","окт","ноя","дек"][i],
+                    }))}
+                    height={peakRangeItems.length * 44 + 64}
+                  />
                 )}
               </div>
 
@@ -651,8 +651,8 @@ function SeasonalityTabInner({
                     data={trendData}
                     categoryKey="label"
                     valueKey="slope"
-                    colorPos="var(--chanterelle)"
-                    colorNeg="var(--idx-1)"
+                    colorPos="var(--idx-1)"
+                    colorNeg="var(--chanterelle)"
                     height={trendData.length * 36 + 40}
                     categoryWidth={150}
                   />
@@ -724,13 +724,8 @@ function SeasonalityTabInner({
                   <RidgeLines
                     series={ridge.series}
                     xLabels={ridge.xLabels}
-                    colors={ridge.series.map((s) => {
-                      const gk = Object.keys(GROUP_LABELS_RU).find(
-                        (k) => GROUP_LABELS_RU[k] === s.label,
-                      );
-                      return gk ? speciesColor(gk) : "var(--forest)";
-                    })}
-                    height={ridge.series.length * 52 + 36}
+                    colors={ridge.series.map((s) => speciesColor(s.key))}
+                    height={ridge.series.length * 58 + 44}
                   />
                 )}
               </div>
@@ -747,9 +742,10 @@ function SeasonalityTabInner({
               <div className={css.card}>
                 <h3 className={css.ct}>Ранний / поздний грибной год</h3>
                 <p className={css.ci}>
-                  Взвешенная средняя неделя всех находок сезона (только недели
-                  &ge;20 — настоящий сезон, без зимнего шума «прошлогодних»
-                  постов). Меньше = грибы пошли раньше в этом году.
+                  Средневзвешенная неделя всех находок года (сезон, недели
+                  &ge;20). Меньше — год в целом «пошёл» раньше. Это агрегат по
+                  всем видам сразу; для конкретного гриба смотрите его «Профиль
+                  вида» и «Полосы сезона».
                 </p>
                 {rankingData.length === 0 ? (
                   <p className={css.empty}>Нет данных.</p>
@@ -758,6 +754,7 @@ function SeasonalityTabInner({
                     data={rankingData}
                     categoryKey="year"
                     valueKey="weightedMeanWeek"
+                    xDomain={[20, wmwMax]}
                     height={rankingData.length * 36 + 40}
                   />
                 )}
@@ -828,9 +825,10 @@ function SeasonalityTabInner({
                     xType="number"
                     xDomain={[1, 52]}
                     yDomain={[0, Math.ceil(vsNormYMax * 1.1)]}
-                    xTicks={[1, 5, 10, 14, 19, 23, 27, 32, 36, 40, 45, 49]}
+                    xTicks={MONTH_START_WEEKS}
                     connectNulls
                     xTickFormatter={(w) => weekMonthLabel(Number(w))}
+                    tooltipLabelFormatter={(w) => `неделя ${w}`}
                     tooltipDecimals={2}
                   />
                 )}
@@ -875,7 +873,8 @@ function SeasonalityTabInner({
                       valueKey="delta"
                       colorPos="var(--idx-1)"
                       colorNeg="var(--chanterelle)"
-                      height={Math.max(260, anomalyData.length * 16 + 40)}
+                      categoryOnX
+                      height={320}
                     />
                     <p className={css.note}>
                       Зелёные недели — выше нормы, терракотовые — ниже.

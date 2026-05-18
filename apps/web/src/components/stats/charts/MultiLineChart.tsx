@@ -49,6 +49,8 @@ export interface MultiLineChartProps {
   connectNulls?: boolean;
   /** Format the tooltip/axis X value (e.g. ISO-week → "май"). */
   xTickFormatter?: (v: number | string) => string;
+  /** Format ONLY the tooltip header label (axis keeps xTickFormatter). */
+  tooltipLabelFormatter?: (v: number | string) => string;
   /** Round numeric tooltip values to this many decimals. Default: no rounding. */
   tooltipDecimals?: number;
 }
@@ -65,6 +67,7 @@ export function MultiLineChart({
   xTicks,
   connectNulls = false,
   xTickFormatter,
+  tooltipLabelFormatter,
   tooltipDecimals,
 }: MultiLineChartProps) {
   return (
@@ -99,13 +102,20 @@ export function MultiLineChart({
               ? Number(val.toFixed(tooltipDecimals))
               : val
           }
-          labelFormatter={(l) => (xTickFormatter ? xTickFormatter(l) : l)}
+          labelFormatter={(l) =>
+            tooltipLabelFormatter
+              ? tooltipLabelFormatter(l)
+              : xTickFormatter
+                ? xTickFormatter(l)
+                : l
+          }
         />
         <Legend wrapperStyle={{ fontSize: "var(--fs-xs)" }} />
         {band && (
           <Area
             type="monotone"
             dataKey={band.upperKey}
+            name="норма ↑ p75"
             stroke="none"
             fill={band.color}
             fillOpacity={0.18}
@@ -119,6 +129,7 @@ export function MultiLineChart({
           <Area
             type="monotone"
             dataKey={band.lowerKey}
+            name="норма ↓ p25"
             stroke="none"
             fill="var(--paper-rise)"
             fillOpacity={1}
