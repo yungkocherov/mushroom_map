@@ -36,14 +36,31 @@ Mobile forest popup (`apps/mobile/components/MapView/` ForestPopup
 season months**.
 
 - Add soil / water / terrain blocks to the mobile popup, matching the
-  data web shows. **Reuse the shared `@mushroom-map/api-client`
-  functions** `fetchForestAt`, `fetchSoilAt`, `fetchWaterDistanceAt`,
-  `fetchTerrainAt` — the exact same ones web's `useMapPopup.ts` calls
-  (`Promise.all`, each non-forest source wrapped `.catch(() => null)`).
-  Do NOT hand-roll endpoint URLs or re-parse `res.json()` in mobile —
-  reusing the typed client is what prevents the rename-blind-spot bug
-  class. (Underlying routes, for reference only: `/api/soil/at`,
-  `/api/water/distance/at`, `/api/terrain/at` — verified to exist.)
+  data web shows. **Verified constraint:** the shared
+  `@mushroom-map/api-client` is NOT React-Native-safe — it resolves
+  base URL via `import.meta.env.VITE_API_URL`, which Metro/Hermes does
+  not support (the package header itself defers an RN baseUrl factory
+  to "when the mobile app arrives"). Mobile already has an RN-safe
+  `apps/mobile/services/api.ts` (`getApiBaseUrl()`) and currently
+  reads forest only from MVT tile properties, never the API. Therefore:
+  - **Reuse the shared response *types* `@mushroom-map/types`**
+    (`ForestAtResponse`, `SoilAtResponse`, `WaterDistanceResponse`,
+    `TerrainAtResponse`, `SpeciesRef`, `Edibility`) as the contract —
+    do NOT redefine shapes mobile-side (this is what prevents the
+    `res.json()` rename-blind-spot bug class).
+  - Add thin mobile fetchers in `apps/mobile/services/` built on the
+    existing `getApiBaseUrl()`, returning those shared types, calling
+    `/api/forest/at`, `/api/soil/at`, `/api/water/distance/at`,
+    `/api/terrain/at` (verified to exist) — mirroring web
+    `useMapPopup.ts`: one `Promise.all`, forest required, soil/water/
+    terrain each wrapped `.catch(() => null)`.
+  - The tapped-feature handler currently has only a screen point +
+    tile props (no lat/lon). It must obtain tap coordinates (same way
+    `onLongPress` reads `feature.geometry.coordinates`) to call the
+    API. Forest API also yields `species_theoretical` (with
+    `edibility` + `season_months`) — use it when online; keep the
+    existing bundled offline-affinity ("Виды по биотопу") as the
+    offline fallback species source.
 - Apply edibility colour coding to the species list and add the season
   (months) indicator, consistent with web's mapping.
 - **Offline-first constraint (mobile-specific design):** forest +
@@ -95,10 +112,21 @@ spotTags — reuse, do not fork.
 
 ### 5. «Споты» → «Мои места» rename
 
-Rename the tab label (`apps/mobile/app/(tabs)/_layout.tsx`), the
-screen heading (`apps/mobile/app/(tabs)/spots.tsx`), and empty-state
-copy. Pure terminology alignment with shipped web. Verify no code
-identifiers depend on the user-facing string.
+Align all user-facing "спот" terminology with shipped web («Мои
+места»). Verified exact strings to change (only `options.title` /
+display strings, no code identifiers):
+- `apps/mobile/app/(tabs)/_layout.tsx` L21 `title: "Споты"` → `"Мои
+  места"` (expo-router uses it as the tab label).
+- `apps/mobile/app/(tabs)/spots.tsx` L172 heading `Споты`; L258
+  empty-state `Спотов пока нет…`.
+- `apps/mobile/components/SaveSpotSheet.tsx` L158 sheet title
+  `Сохранить спот` → e.g. `Сохранить место`.
+Also fix the **stale empty-state copy** at spots.tsx L258 ("Тапни
+оранжевую кнопку на карте…" — no such button exists; save is
+long-press, and item 2 adds a popup CTA): reword to reference the
+real save paths (tap a выдел → «Сохранить место», or long-press the
+map). This bullet's reword must stay consistent with item 2's CTA
+label.
 
 ### Out of scope — explicit cuts (overkill for mobile)
 
@@ -126,10 +154,13 @@ identifiers depend on the user-facing string.
   with a coords (+ optional species context) payload. Validation and
   done-state are sheet-internal state, not new screens.
 - **Shared contracts**: reuse `@mushroom-map/tokens`,
-  `@mushroom-map/types` spotTags, and the same API endpoints/response
-  shapes web uses. No mobile-only forks of shared vocab. Confirm
-  API client typing parity (api-client package) to avoid the
-  `res.json()` rename-blind-spot class of bug.
+  `@mushroom-map/types` (spotTags AND the popup response interfaces
+  `ForestAtResponse`/`SoilAtResponse`/`WaterDistanceResponse`/
+  `TerrainAtResponse`/`SpeciesRef`/`Edibility`). New mobile fetchers
+  live in `apps/mobile/services/` on the existing RN-safe
+  `getApiBaseUrl()` and return those shared types verbatim. `@mushroom-
+  map/api-client` is NOT consumed (RN-incompatible — see item 1). No
+  mobile-only forks of shared shapes.
 
 ## Testing
 
@@ -145,10 +176,9 @@ identifiers depend on the user-facing string.
 
 ## Risks / open questions for the plan
 
-- `@mushroom-map/api-client` must be consumable from RN/Expo (it is
-  used by web; confirm no web-only deps like `window`/DOM at planning
-  time). If not directly importable, the typed response shapes still
-  define the contract to mirror.
+- RESOLVED: `@mushroom-map/api-client` is NOT RN-safe (`import.meta`);
+  decision is mobile-side fetchers + shared `@mushroom-map/types`
+  (see item 1 / Architecture). No open question remains here.
 - Offline behaviour can lean on per-source `.catch(() => null)` (same
   as web) rather than an explicit NetInfo gate; confirm whether an
   explicit offline signal (existing NetworkBanner / NetInfo) gives a
