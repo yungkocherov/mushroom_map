@@ -653,3 +653,44 @@ The controller (not a single subagent) owns this, exactly as the Лес Task 9 l
 - **Spec coverage:** all 20 approved ideas map to a card in the Card→chart map; the dual-axis «грибное окно» is deliberately re-expressed (documented). 7 snapshot tables cover every card's data. ✓
 - **Placeholder scan:** every SQL/TS/TSX step has literal code; transforms list exact signatures + test cases; no "similar to" hand-waving except explicit "mirror ForestTab" (the established in-repo pattern, with exact file paths given). ✓
 - **Type consistency:** endpoint JSON keys ↔ api-client interfaces ↔ transforms inputs use one naming set (`clim/year/ym/gdd/precip_hist/district/district_month`; `t_mean/precip/soil_moist/...`). `fullYears` is the single gate for the partial-2026 rule. `shortDistrict` single definition (import or one copy). ✓
+
+---
+
+## Exit-state (2026-05-18) — ALL TASKS DONE, branch unpushed
+
+Tasks 1–9 complete. Branch `claude/upbeat-archimedes-da0d9c`, **not pushed**
+(awaiting user review before deploy, per the autonomous-review mandate).
+
+**Task 9 visual-QA loop — DONE.** All 20 Погода cards reviewed with own
+eyes; the only defect was a degraded-source soil-data artifact in
+`forecast.weather_daily` (read-only sister schema), fixed defensively in
+two layers:
+
+1. `transforms.ts::districtMonthMatrix` — drops a district whose every
+   month cell for the chosen field is null (no misleading all-zero
+   heatmap row); per-field independent (a soil-moist-artifact district
+   keeps its valid soil-temp row). +3 vitest cases (17/17). Commit
+   `3e10995`.
+2. `build_stats_snapshot.py` — `quality` CTE NULLs degraded districts:
+   soil-moisture `sm_n=0 OR sm_sd<0.02`, soil-temp `st_n=0 OR
+   st_sd<0.05`, `warm_precip` untouched. Threshold widened `0.005→0.02`
+   in commit `0f3fe78` after Волховский (sd 0.00625, flat 0.11–0.14
+   series) slipped the first cut — genuine LO districts have sd
+   0.042–0.064 (7× gap → 0.02 is a safe cut, 3× margin both sides).
+
+Final honest result: Кингисеппский (100% NULL soil) dropped from all
+soil cards; Кировский + Волховский (flat soil-moisture artifact, but
+genuine soil-temp) dropped from soil-moisture cards 16/17/18 yet
+**retained** in soil-temp card 19 (17 rows = 18 − Кингисеппский). Cards
+16/17 = 15 healthy bars, card 18 = 15-row heatmap, card 19 = 17-row
+heatmap, all visually verified clean.
+
+**Обзор tab:** left as the placeholder by explicit user decision
+(2026-05-18) — composition to be decided later. 6 pre-built digest
+components (`KpiStrip`/`SeasonPulse`/`ForestComposition`/
+`TrendingSpecies`/`WeatherSnapshot`/`SpeciesLeaderboardMini`) remain
+orphaned-but-ready for whichever direction is chosen.
+
+**Deploy when approved:** push branch → merge → rebuild + ship the
+`stats_*` snapshot on TimeWeb (and Oracle) prod DBs (`build_stats_snapshot.py`
+must run there — endpoints read the snapshot, not live `forecast.*`).
