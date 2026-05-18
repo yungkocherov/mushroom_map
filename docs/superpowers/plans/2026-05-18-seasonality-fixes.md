@@ -755,3 +755,42 @@ Restart the worktree API (`uvicorn api.main:app` on :8000) and confirm `curl -s 
 **3. Type consistency:** `yearRanking` return gains `findsPerPost` (Task 3) consumed in Task 6 Step 10 (`r.findsPerPost`). `weekMonthLabel` defined Task 4, used Task 6. `SPECIES_COLOR`/`speciesColor` defined Task 5, used Task 6. New chart props (`connectNulls`,`xTickFormatter`,`tooltipDecimals`,`tooltipPercent`,`yDomain`) defined Task 1/2/7, used Task 6/7. `--sp-*` tokens defined Task 5, referenced by speciesColors.ts same task. `.cardWide`/`.layout`/`.toc` defined Task 8 CSS, used Task 8 TSX. No dangling refs. ✔
 
 **4. Decisions stated (autonomous, user delegated "придумай"/"найди способ"):** species palette = naturalistic per-group hexes; popularity normalisation = finds-per-post within season window (divides out corpus growth, data already in `stats_season_week.posts`); calendar X = sparse RU month labels at month-start weeks; ridge fix = reduce overlap + per-species colour; March artefact = absolute 1%-of-annual volume floor. All reversible/token-based.
+
+---
+
+## Exit-state (2026-05-18) — ALL TASKS DONE, branch unpushed
+
+Tasks 1–9 complete via subagent-driven-development. Branch
+`claude/upbeat-archimedes-da0d9c`, **not pushed** (autonomous-review
+mandate). Commits: plan `34a926e`; impl `92667c5` (chart props) ·
+`da39528` (heatmap/ridge legibility) · `39d50cd` (transforms: March
+floor + season-window/posts ranking + pinned norm, TDD) · `09d1f5b`
+(weekMonthLabel) · `eceb8b6` (species colour tokens+map) · `cde7ef9`
+(SeasonalityTab wiring) · `d93fec4` (per-card pill state + fixed-norm Y
++ diverging anomaly) · `16bc501` (2-up grid + sticky TOC) ; QA-loop
+fixes `3f0087b` (DF-1 reliable month X ticks + DF-2 diverging
+phenology) · `127defd` (DF-3 unclip phenology labels). vitest 103/103,
+tsc clean throughout.
+
+**Per-card visual-QA (Task 9) — DONE, controller eyes-on every one of
+16 cards at full resolution** (NOT downscaled fullPage — the failure
+mode that let the original 17 defects through; see
+feedback_per_card_visual_qa.md). All 17 user items verified fixed:
+calendar month X (all line charts, numeric fixed ticks), 2dp tooltips,
+VK group link, per-card independent species/year pills, no line gaps
+(connectNulls), heatmap text rounded + density-suppressed (no
+collisions), canonical species→colour binding (composition + ridge),
+%-tooltip, season-length sorted, clearer phenology/early-late/volume
+captions, porcini-March artefact gone (1%-annual floor), ridge
+separated+coloured+explained, finds-per-post corpus-normalised volume,
+year-independent fixed-Y norm band, anomaly + phenology diverging
+(sign-coloured), 2-up grid + sticky section TOC. 3 QA-loop regressions
+(DF-1 unreliable month labels, DF-2 monochrome signed phenology bars,
+DF-3 clipped species labels on the new DivergingBarChart) found and
+fixed in-loop.
+
+**Deploy when approved:** push → merge → no schema/snapshot change
+needed (item 14 uses `stats_season_week.posts` already present); a
+`build_stats_snapshot.py` rerun on TimeWeb+Oracle prod DBs is only for
+freshness alignment, not correctness. New `--sp-*` tokens ship with the
+frontend build.
