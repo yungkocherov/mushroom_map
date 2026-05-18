@@ -48,6 +48,7 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   const sheetRef = useRef<BottomSheet>(null);
 
   const [name, setName] = useState("");
+  const [nameError, setNameError] = useState(false);
   const [note, setNote] = useState("");
   const [rating, setRating] = useState(4);
   const [tags, setTags] = useState<Set<string>>(new Set());
@@ -66,6 +67,7 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
   useEffect(() => {
     if (visible) {
       setName("");
+      setNameError(false);
       setNote("");
       setRating(4);
       setTags(new Set());
@@ -120,6 +122,11 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
       Alert.alert("Нет координат", "Подожди GPS-фикса или коснись карты длительно.");
       return;
     }
+    if (!name.trim()) {
+      setNameError(true);
+      return;
+    }
+    setNameError(false);
     setBusy(true);
     try {
       await add({
@@ -172,13 +179,19 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
 
         <Text style={styles.label}>Название</Text>
         <BottomSheetTextInput
-          style={styles.input}
+          style={[styles.input, nameError && styles.inputError]}
           placeholder="Поляна с боровиками…"
           placeholderTextColor={palette.light.inkDim}
           value={name}
-          onChangeText={setName}
+          onChangeText={(t) => {
+            setName(t);
+            if (nameError) setNameError(false);
+          }}
           maxLength={100}
         />
+        {nameError ? (
+          <Text style={styles.errorHint}>Введите название</Text>
+        ) : null}
 
         <Text style={styles.label}>Заметка</Text>
         <BottomSheetTextInput
@@ -349,6 +362,15 @@ const styles = StyleSheet.create({
   inputMulti: {
     minHeight: 70,
     textAlignVertical: "top",
+  },
+  inputError: {
+    borderColor: palette.light.danger,
+    borderWidth: 1,
+  },
+  errorHint: {
+    fontSize: fontSize.sm,
+    color: palette.light.danger,
+    marginTop: spacing[2],
   },
   ratingRow: {
     flexDirection: "row",
