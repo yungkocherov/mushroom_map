@@ -298,7 +298,9 @@ export function SpikeMap() {
       <ForestPopup
         visible={popupFeature !== null}
         feature={popupFeature}
+        coords={null}
         onClose={() => setPopupFeature(null)}
+        onSaveSpot={() => {}}
       />
 
       <SaveSpotSheet

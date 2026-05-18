@@ -13,6 +13,12 @@ import {
   type SpeciesForTree,
 } from "../../services/affinity";
 import { speciesNameRu } from "../../services/speciesCatalog";
+import { fetchPopupData, type PopupData } from "../../services/mapPopupApi";
+import { ForestBlock } from "./popup/ForestBlock";
+import { SpeciesList } from "./popup/SpeciesList";
+import { SoilBlock } from "./popup/SoilBlock";
+import { WaterBlock } from "./popup/WaterBlock";
+import { TerrainBlock } from "./popup/TerrainBlock";
 
 export type ForestFeatureProps = {
   dominant_species?: string | null;
@@ -69,11 +75,27 @@ function formatAge(props: ForestFeatureProps): string {
 type Props = {
   visible: boolean;
   feature: ForestFeatureProps | null;
+  coords: { lat: number; lon: number } | null;
   onClose: () => void;
+  onSaveSpot: (args: {
+    lat: number;
+    lon: number;
+    speciesContext: string[];
+  }) => void;
 };
 
-export function ForestPopup({ visible, feature, onClose }: Props) {
+export function ForestPopup({
+  visible,
+  feature,
+  coords,
+  onClose,
+  onSaveSpot,
+}: Props) {
   const [topSpecies, setTopSpecies] = useState<SpeciesForTree[]>([]);
+  const [data, setData] = useState<PopupData | null>(null);
+  const [loadState, setLoadState] = useState<
+    "idle" | "loading" | "online" | "offline"
+  >("idle");
 
   useEffect(() => {
     if (!feature?.dominant_species) {
@@ -89,7 +111,51 @@ export function ForestPopup({ visible, feature, onClose }: Props) {
     };
   }, [feature?.dominant_species]);
 
+  useEffect(() => {
+    if (!visible || !coords) {
+      setData(null);
+      setLoadState("idle");
+      return;
+    }
+    let cancelled = false;
+    setLoadState("loading");
+    fetchPopupData(coords.lat, coords.lon)
+      .then((res) => {
+        if (cancelled) return;
+        setData(res);
+        setLoadState("online");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setData(null);
+        setLoadState("offline");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [visible, coords?.lat, coords?.lon]);
+
   if (!feature) return null;
+
+  const onlineForest =
+    loadState === "online" && data?.forest.forest ? data.forest.forest : null;
+  const onlineSpecies =
+    loadState === "online" && data?.forest.species_theoretical?.length
+      ? data.forest.species_theoretical
+      : null;
+
+  function handleSave() {
+    if (!coords) return;
+    const composition = data?.forest.forest?.species_composition;
+    let speciesContext = composition ? Object.keys(composition) : [];
+    if (speciesContext.length === 0) {
+      speciesContext = feature?.dominant_species
+        ? [feature.dominant_species]
+        : [];
+    }
+    onSaveSpot({ lat: coords.lat, lon: coords.lon, speciesContext });
+    onClose();
+  }
 
   return (
     <Modal
@@ -102,16 +168,28 @@ export function ForestPopup({ visible, feature, onClose }: Props) {
         <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
           <ScrollView contentContainerStyle={styles.content}>
             <View style={styles.handle} />
-            <Text style={styles.title}>{formatTitle(feature)}</Text>
 
-            <View style={styles.kvBlock}>
-              <KV label="порода" value={SPECIES_RU[feature.dominant_species ?? ""] ?? feature.dominant_species ?? "—"} />
-              <KV label="возраст" value={formatAge(feature)} />
-              <KV label="бонитет" value={feature.bonitet != null ? String(feature.bonitet) : "—"} />
-              {feature.source ? <KV label="источник" value={feature.source} /> : null}
-            </View>
+            {onlineForest ? (
+              <ForestBlock forest={onlineForest} />
+            ) : (
+              <>
+                <Text style={styles.title}>{formatTitle(feature)}</Text>
+                <View style={styles.kvBlock}>
+                  <KV label="порода" value={SPECIES_RU[feature.dominant_species ?? ""] ?? feature.dominant_species ?? "—"} />
+                  <KV label="возраст" value={formatAge(feature)} />
+                  <KV label="бонитет" value={feature.bonitet != null ? String(feature.bonitet) : "—"} />
+                  {feature.source ? <KV label="источник" value={feature.source} /> : null}
+                </View>
+              </>
+            )}
 
-            {topSpecies.length > 0 ? (
+            {loadState === "loading" ? (
+              <Text style={styles.mutedLine}>Загрузка…</Text>
+            ) : null}
+
+            {onlineSpecies ? (
+              <SpeciesList species={onlineSpecies} />
+            ) : topSpecies.length > 0 ? (
               <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Виды по биотопу</Text>
                 {topSpecies.map((sp, i) => (
@@ -124,6 +202,28 @@ export function ForestPopup({ visible, feature, onClose }: Props) {
                   </View>
                 ))}
               </View>
+            ) : null}
+
+            {loadState === "online" ? (
+              <>
+                {data?.soil ? <SoilBlock soil={data.soil} /> : null}
+                {data?.water ? <WaterBlock water={data.water} /> : null}
+                {data?.terrain ? (
+                  <TerrainBlock terrain={data.terrain} />
+                ) : null}
+              </>
+            ) : null}
+
+            {loadState === "offline" ? (
+              <Text style={styles.mutedLine}>
+                Доп. данные (почва/вода/рельеф) — нет сети
+              </Text>
+            ) : null}
+
+            {coords ? (
+              <Pressable style={styles.saveBtn} onPress={handleSave}>
+                <Text style={styles.saveBtnText}>Сохранить место</Text>
+              </Pressable>
             ) : null}
 
             <Pressable style={styles.closeBtn} onPress={onClose}>
@@ -224,8 +324,24 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     fontVariant: ["tabular-nums"],
   },
-  closeBtn: {
+  mutedLine: {
+    marginTop: spacing[4],
+    color: palette.light.inkDim,
+    fontSize: fontSize.sm,
+  },
+  saveBtn: {
     marginTop: spacing[5],
+    padding: spacing[3],
+    borderRadius: radius.md,
+    backgroundColor: palette.light.chanterelle,
+    alignItems: "center",
+  },
+  saveBtnText: {
+    color: palette.light.paper,
+    fontSize: fontSize.body,
+  },
+  closeBtn: {
+    marginTop: spacing[3],
     padding: spacing[3],
     borderRadius: radius.md,
     backgroundColor: palette.light.paperRise,
