@@ -36,19 +36,25 @@ Mobile forest popup (`apps/mobile/components/MapView/` ForestPopup
 season months**.
 
 - Add soil / water / terrain blocks to the mobile popup, matching the
-  data web shows. Reuse the same backend endpoints web uses
-  (`/api/soil/at`, `/api/water/distance/at`, `/api/terrain/at`; forest
-  comes from the tapped feature). Confirm exact endpoints/params from
-  `apps/web/src/components/mapView/utils/popup.ts` during planning.
+  data web shows. **Reuse the shared `@mushroom-map/api-client`
+  functions** `fetchForestAt`, `fetchSoilAt`, `fetchWaterDistanceAt`,
+  `fetchTerrainAt` — the exact same ones web's `useMapPopup.ts` calls
+  (`Promise.all`, each non-forest source wrapped `.catch(() => null)`).
+  Do NOT hand-roll endpoint URLs or re-parse `res.json()` in mobile —
+  reusing the typed client is what prevents the rename-blind-spot bug
+  class. (Underlying routes, for reference only: `/api/soil/at`,
+  `/api/water/distance/at`, `/api/terrain/at` — verified to exist.)
 - Apply edibility colour coding to the species list and add the season
   (months) indicator, consistent with web's mapping.
 - **Offline-first constraint (mobile-specific design):** forest +
   species must keep working fully offline (already bundled). Soil /
-  water / terrain are server-derived and NOT bundled — design the
-  popup so these blocks render **when online and degrade gracefully
-  when offline** (hidden or "нет сети" placeholder), never blocking
-  the always-available forest/species core. This is a deliberate
-  divergence from web (web is online-only); it is correct for mobile.
+  water / terrain are server-derived and NOT bundled. Web already
+  degrades per-source via `.catch(() => null)`; mobile mirrors that
+  pattern — each block renders when its fetch succeeds (online) and is
+  **hidden / "нет сети" placeholder** on failure or offline, never
+  blocking the always-available forest/species core. Web tolerates
+  this only incidentally (web is online-only); on mobile it is a
+  first-class designed state.
 - Componentize: split the popup body into focused sub-components
   (ForestBlock, SoilBlock, WaterBlock, TerrainBlock, SpeciesList)
   behind a single popup container, presentation separated from the
@@ -74,14 +80,18 @@ lacks a confirmation state and input validation.
 - Keep mobile's richer photo capture (camera + gallery) — do not
   regress it to match web.
 
-### 4. Tree-tags filtered by forest legend
+### 4. Tree-tags filtered by tapped выдел species
 
-In SaveSpotSheet, filter the tree tag dictionary by the species
-actually present in the tapped выдел (web V4.4 behaviour) so the form
-does not offer tree species absent from that polygon. Falls back to
-the full dictionary when species context is unavailable (e.g. saved
-via long-press on a no-data area). Shared tag dictionary is
-`@mushroom-map/types` spotTags — reuse, do not fork.
+Mobile-side enhancement (NOT a web port — verified that shipped web's
+SaveSpot form does NOT filter tags by выдел; web's `legendFilter` is a
+map-layer render filter, unrelated). In SaveSpotSheet, when the save
+originates from a forest выдел with known species
+(dominant + `species_composition`), filter the tree tag dictionary to
+those species so the form does not offer tree species absent from that
+polygon. **Falls back to the full dictionary** whenever species
+context is unavailable (long-press on no-data area, or popup with
+failed forest fetch). Shared tag dictionary is `@mushroom-map/types`
+spotTags — reuse, do not fork.
 
 ### 5. «Споты» → «Мои места» rename
 
@@ -135,12 +145,18 @@ identifiers depend on the user-facing string.
 
 ## Risks / open questions for the plan
 
-- Exact soil/water/terrain endpoint params and response fields — pull
-  from web `popup.ts` at planning time, not assumed here.
-- Offline detection mechanism for the degrade-gracefully behaviour
-  (reuse mobile's existing NetInfo / NetworkBanner signal).
-- Whether выдел→species context is reliably available at popup time to
-  feed the tree-tag filter, or only on explicit feature tap.
+- `@mushroom-map/api-client` must be consumable from RN/Expo (it is
+  used by web; confirm no web-only deps like `window`/DOM at planning
+  time). If not directly importable, the typed response shapes still
+  define the contract to mirror.
+- Offline behaviour can lean on per-source `.catch(() => null)` (same
+  as web) rather than an explicit NetInfo gate; confirm whether an
+  explicit offline signal (existing NetworkBanner / NetInfo) gives a
+  better placeholder UX than a silent failed fetch.
+- Whether the tapped выдел's species (dominant + composition) is
+  carried into the SaveSpot payload at popup-save time, or only the
+  coordinates — determines whether item 4's filter has input or always
+  falls back.
 
 ## Deliverable of this session
 
