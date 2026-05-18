@@ -48,6 +48,18 @@
   --idx-3:        #bcc890;  /* можно ехать */
   --idx-4:        #b86a3a;  /* хороший день — same hue as chanterelle/terra */
 
+  /* ─── Species identity colours (hard-bound per mushroom group) ────── */
+  /* Naturalistic, distinct, used wherever a species/group is encoded by
+     colour across the project. Light theme values. */
+  --sp-porcini:     #c3a063;  /* белые — beige/tan */
+  --sp-aspen:       #c0532a;  /* подосиновики — orange-red */
+  --sp-pine-bolete: #6e3b2e;  /* колосовики/боровик — chocolate-burgundy */
+  --sp-chanterelle: #d8a534;  /* лисички — gold-yellow */
+  --sp-fly-agaric:  #b23b3b;  /* мухоморы — red */
+  --sp-spring:      #8a6a3f;  /* сморчки и строчки — earth-ochre */
+  --sp-honey:       #b07a3c;  /* опята — warm amber */
+  --sp-other:       #8a8270;  /* прочие — neutral (= ink-faint) */
+
   /* ─── A11y ──────────────────────────────────────────────────────── */
   --focus-ring:   #b86a3a;
 
@@ -128,6 +140,15 @@
   --idx-3:        #cdd8a3;
   --idx-4:        #d88c5a;
 
+  --sp-porcini:     #d8bd86;
+  --sp-aspen:       #e0764a;
+  --sp-pine-bolete: #a86a54;
+  --sp-chanterelle: #e6bd5a;
+  --sp-fly-agaric:  #d46060;
+  --sp-spring:      #b0916a;
+  --sp-honey:       #d09a5c;
+  --sp-other:       #a8a08c;
+
   --focus-ring:   #d88c5a;
 
   --shadow-1:     0 1px 2px rgba(0, 0, 0, 0.35);
@@ -167,6 +188,15 @@
     --idx-2:        #a9c290;
     --idx-3:        #cdd8a3;
     --idx-4:        #d88c5a;
+
+    --sp-porcini:     #d8bd86;
+    --sp-aspen:       #e0764a;
+    --sp-pine-bolete: #a86a54;
+    --sp-chanterelle: #e6bd5a;
+    --sp-fly-agaric:  #d46060;
+    --sp-spring:      #b0916a;
+    --sp-honey:       #d09a5c;
+    --sp-other:       #a8a08c;
 
     --focus-ring:   #d88c5a;
 
