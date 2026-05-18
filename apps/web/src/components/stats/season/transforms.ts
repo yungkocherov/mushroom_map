@@ -485,44 +485,48 @@ export function ridgeDensity(
  */
 export function yearRanking(
   c: SeasonCurvesResponse,
-): { year: number; weightedMeanWeek: number; total: number }[] {
-  const { byYearWeek, years } = accumulateRaw(c.weeks, "all");
-
-  if (years.length === 0) return [];
-
-  // Build max-week per year to filter out partial years
+): { year: number; weightedMeanWeek: number; total: number; findsPerPost: number }[] {
+  const SEASON_START_WEEK = 20;
+  const findsByYW = new Map<string, number>();
+  const postsByYW = new Map<string, number>();
+  const yearSet = new Set<number>();
   const maxWeekByYear = new Map<number, number>();
-  for (const [key] of byYearWeek) {
-    const [kyStr, kwStr] = key.split(":");
-    const yr = Number(kyStr);
-    const wk = Number(kwStr);
-    const prev = maxWeekByYear.get(yr) ?? 0;
-    if (wk > prev) maxWeekByYear.set(yr, wk);
+  for (const p of c.weeks) {
+    yearSet.add(p.year);
+    const k = `${p.year}:${p.week}`;
+    findsByYW.set(k, (findsByYW.get(k) ?? 0) + p.finds);
+    postsByYW.set(k, (postsByYW.get(k) ?? 0) + p.posts);
+    const prev = maxWeekByYear.get(p.year) ?? 0;
+    if (p.week > prev) maxWeekByYear.set(p.year, p.week);
   }
+  const years = [...yearSet].sort((a, b) => a - b);
+  if (years.length === 0) return [];
+  const completeYears = years.filter((y) => (maxWeekByYear.get(y) ?? 0) >= 40);
 
-  const completeYears = years.filter(y => (maxWeekByYear.get(y) ?? 0) >= 40);
-
-  return completeYears.map(year => {
+  return completeYears.map((year) => {
     const weeksForYear: number[] = [];
-    for (const [key] of byYearWeek) {
-      const [kyStr, kwStr] = key.split(":");
-      if (Number(kyStr) === year) weeksForYear.push(Number(kwStr));
+    for (const key of findsByYW.keys()) {
+      const [ky, kw] = key.split(":");
+      if (Number(ky) === year && Number(kw) >= SEASON_START_WEEK) {
+        weeksForYear.push(Number(kw));
+      }
     }
     weeksForYear.sort((a, b) => a - b);
-
-    const pts = smoothedYearPoints(byYearWeek, year, weeksForYear);
-
+    const raw = weeksForYear.map((w) => findsByYW.get(`${year}:${w}`) ?? 0);
+    const smoothed = smooth7(raw);
     let weightedSum = 0;
     let totalFinds = 0;
-    for (const pt of pts) {
-      weightedSum += pt.week * pt.finds;
-      totalFinds += pt.finds;
+    let totalPosts = 0;
+    for (let i = 0; i < weeksForYear.length; i++) {
+      weightedSum += weeksForYear[i] * smoothed[i];
+      totalFinds += smoothed[i];
+      totalPosts += postsByYW.get(`${year}:${weeksForYear[i]}`) ?? 0;
     }
-
     return {
       year,
       weightedMeanWeek: totalFinds > 0 ? weightedSum / totalFinds : 0,
       total: totalFinds,
+      findsPerPost: totalPosts > 0 ? totalFinds / totalPosts : 0,
     };
   });
 }
@@ -552,6 +556,7 @@ export function currentVsNorm(
   const smoothed = smooth7(raw);
 
   // Build norm lookup
+  // Norm is the all-years baseline (c.norm), keyed by week only — never by the selected year. Do not filter c.norm by year.
   const normByWeek = new Map<number, SeasonNormPoint>();
   const normFilter = species === "all"
     ? c.norm
@@ -682,10 +687,18 @@ export function monthSpeciesShare(c: SeasonCurvesResponse): {
   // Normalize each month to shares; treat near-empty months as all-zero
   // (threshold: < 2% of max monthly total -> renders as muted empty color)
   const emptyThreshold = maxMonthTotal * 0.02;
+  // Absolute floor: a month with < 1% of the *annual* find total is
+  // off-season noise (dried-stock / "last year" / abroad posts). A tiny
+  // count becomes a misleadingly hot SHARE in a low-volume month
+  // (porcini "30% of March" from 0.14% of porcini). Zero such months.
+  const annualTotal = monthTotals.reduce((s, v) => s + v, 0);
+  const absFloor = annualTotal * 0.01;
   const values: number[][] = monthGroupTotals.map((row, mi) => {
     const total = monthTotals[mi];
-    if (total === 0 || total < emptyThreshold) return row.map(() => 0);
-    return row.map(v => v / total);
+    if (total === 0 || total < emptyThreshold || total < absFloor) {
+      return row.map(() => 0);
+    }
+    return row.map((v) => v / total);
   });
 
   return {

@@ -978,3 +978,72 @@ describe("monthSpeciesShare", () => {
     expect(Math.abs(augTotal - 1)).toBeLessThan(1e-6);
   });
 });
+
+// ─── new TDD tests: items 11, 13, 14, 17 ──────────────────────────────────
+
+const W = (species_key: string, year: number, week: number, finds: number, posts = 1) =>
+  ({ species_key, year, week, posts, finds });
+
+describe("monthSpeciesShare — volume floor (item 11)", () => {
+  it("zeroes a month whose group has tiny absolute support even if its share is high", () => {
+    const c: any = {
+      species: "all",
+      weeks: [
+        W("porcini", 2020, 11, 5),
+        W("porcini", 2020, 33, 5000),
+        W("chanterelle", 2020, 33, 5000),
+      ],
+      norm: [],
+    };
+    const r = monthSpeciesShare(c);
+    const marchIdx = 2;
+    expect(r.values[marchIdx].every((v) => v === 0)).toBe(true);
+  });
+});
+
+describe("yearRanking — season window (item 13) + posts-normalised volume (item 14)", () => {
+  const c: any = {
+    species: "all",
+    weeks: [
+      W("porcini", 2020, 3, 100, 50),
+      W("porcini", 2020, 30, 200, 10),
+      W("porcini", 2020, 42, 100, 5),
+      W("porcini", 2020, 50, 10, 1),
+    ],
+    norm: [],
+  };
+  it("weightedMeanWeek ignores weeks < 20 (winter noise)", () => {
+    const r = yearRanking(c);
+    expect(r).toHaveLength(1);
+    expect(r[0].weightedMeanWeek).toBeGreaterThan(30);
+  });
+  it("exposes findsPerPost (corpus-growth-normalised volume)", () => {
+    const r = yearRanking(c);
+    expect(r[0].findsPerPost).toBeGreaterThan(0);
+    expect(Number.isFinite(r[0].findsPerPost)).toBe(true);
+  });
+});
+
+describe("currentVsNorm — norm is year-independent (item 17)", () => {
+  const mk = (): any => ({
+    species: "porcini",
+    weeks: [
+      W("porcini", 2020, 30, 100), W("porcini", 2020, 31, 120),
+      W("porcini", 2021, 30, 50),  W("porcini", 2021, 31, 60),
+    ],
+    norm: [
+      { species_key: "porcini", week: 30, finds_mean: 75, finds_p25: 50, finds_p75: 100 },
+      { species_key: "porcini", week: 31, finds_mean: 90, finds_p25: 60, finds_p75: 120 },
+    ],
+  });
+  it("mean/p25/p75 do not depend on the selected year", () => {
+    const a = currentVsNorm(mk(), "porcini", 2020);
+    const b = currentVsNorm(mk(), "porcini", 2021);
+    const wk30a = a.find((p) => p.week === 30)!;
+    const wk30b = b.find((p) => p.week === 30)!;
+    expect(wk30a.mean).toBe(wk30b.mean);
+    expect(wk30a.p25).toBe(wk30b.p25);
+    expect(wk30a.p75).toBe(wk30b.p75);
+    expect(wk30a.mean).toBe(75);
+  });
+});
