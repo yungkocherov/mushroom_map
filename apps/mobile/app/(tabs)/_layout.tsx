@@ -18,7 +18,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Карта" }} />
-      <Tabs.Screen name="spots" options={{ title: "Споты" }} />
+      <Tabs.Screen name="spots" options={{ title: "Мои места" }} />
       <Tabs.Screen name="species" options={{ title: "Виды" }} />
       <Tabs.Screen name="settings" options={{ title: "Настройки" }} />
     </Tabs>
