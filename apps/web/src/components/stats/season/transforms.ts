@@ -41,7 +41,7 @@ export const SEASON_GROUP_KEYS = [
 export const GROUP_LABELS_RU: Record<string, string> = {
   porcini: "Белые",
   aspen_bolete: "Подосиновики",
-  pine_bolete: "Колосовики",
+  pine_bolete: "Боровики",
   chanterelle: "Лисички",
   fly_agaric: "Мухоморы",
   spring_mushroom: "Сморчки и строчки",
@@ -75,6 +75,14 @@ export function weekMonthLabel(week: number): string {
   }
   return "";
 }
+
+/**
+ * The ISO weeks at which each month "starts" — exactly the 12 values
+ * `Math.round(1 + m * 4.345)` produces for m=0..11. Exported so call
+ * sites (axis ticks, scrubber snapping) stop re-deriving the formula
+ * and risking off-by-one drift against weekMonthLabel.
+ */
+export const MONTH_START_WEEKS = [1, 5, 10, 14, 18, 23, 27, 31, 36, 40, 45, 49];
 
 // ─── latestCompleteYear ───────────────────────────────────────────────────
 
@@ -457,7 +465,7 @@ export function seasonBands(
 export function ridgeDensity(
   c: SeasonCurvesResponse,
   s: SeasonSpeciesResponse,
-): { series: { label: string; values: number[] }[]; xLabels: string[] } {
+): { series: { key: string; label: string; values: number[] }[]; xLabels: string[] } {
   const qualifying = s.items
     .filter(item => item.qualifies)
     .sort((a, b) => {
@@ -467,7 +475,7 @@ export function ridgeDensity(
       return a.peak_week_median - b.peak_week_median;
     });
 
-  const series: { label: string; values: number[] }[] = [];
+  const series: { key: string; label: string; values: number[] }[] = [];
 
   for (const sp of qualifying) {
     const normPoints = c.norm
@@ -483,7 +491,7 @@ export function ridgeDensity(
       ? rawValues.map(v => v / maxVal)
       : rawValues.map(() => 0);
 
-    series.push({ label: sp.label, values });
+    series.push({ key: sp.species_key, label: sp.label, values });
   }
 
   return { series, xLabels: [...MONTHS_RU] };

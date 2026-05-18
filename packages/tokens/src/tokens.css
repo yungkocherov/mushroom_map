@@ -59,6 +59,16 @@
   --sp-spring:      #7e7b46;  /* сморчки и строчки — khaki-olive */
   --sp-honey:       #9c6b34;  /* опята — caramel brown */
   --sp-other:       #8f8a7a;  /* прочие — neutral grey */
+  --sp-birch-bolete:  #b5894e;  /* подберёзовики — light brown */
+  --sp-mokhovik:      #6f8f4e;  /* моховики — moss green */
+  --sp-saffron:       #e07a3c;  /* рыжики — saffron orange */
+  --sp-white-milkcap: #ccc2a8;  /* белые грузди — pale grey-cream */
+  --sp-woolly-milkcap:#c98fa0;  /* волнушки — dusty pink */
+  --sp-russula:       #9c5fae;  /* сыроежки — muted violet */
+  --sp-oyster:        #6f9aa8;  /* вёшенки — slate teal */
+  --sp-blueberry:     #4f6db5;  /* черника — blue */
+  --sp-cloudberry:    #e8b54a;  /* морошка — amber-gold */
+  --sp-cranberry:     #b23a55;  /* клюква — crimson */
 
   /* ─── A11y ──────────────────────────────────────────────────────── */
   --focus-ring:   #b86a3a;
@@ -148,6 +158,16 @@
   --sp-spring:      #a8a468;
   --sp-honey:       #c2904c;
   --sp-other:       #aaa495;
+  --sp-birch-bolete:  #cda06a;
+  --sp-mokhovik:      #8aa968;
+  --sp-saffron:       #f0935a;
+  --sp-white-milkcap: #ddd4bd;
+  --sp-woolly-milkcap:#dba9b8;
+  --sp-russula:       #b681c6;
+  --sp-oyster:        #8fb6c2;
+  --sp-blueberry:     #7088c8;
+  --sp-cloudberry:    #f0c968;
+  --sp-cranberry:     #cf5a72;
 
   --focus-ring:   #d88c5a;
 
@@ -197,6 +217,16 @@
     --sp-spring:      #a8a468;
     --sp-honey:       #c2904c;
     --sp-other:       #aaa495;
+    --sp-birch-bolete:  #cda06a;
+    --sp-mokhovik:      #8aa968;
+    --sp-saffron:       #f0935a;
+    --sp-white-milkcap: #ddd4bd;
+    --sp-woolly-milkcap:#dba9b8;
+    --sp-russula:       #b681c6;
+    --sp-oyster:        #8fb6c2;
+    --sp-blueberry:     #7088c8;
+    --sp-cloudberry:    #f0c968;
+    --sp-cranberry:     #cf5a72;
 
     --focus-ring:   #d88c5a;
 

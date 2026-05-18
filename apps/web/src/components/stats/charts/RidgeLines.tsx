@@ -8,10 +8,9 @@ export interface RidgeLinesProps {
   colors?: string[];
 }
 export function RidgeLines({ series, xLabels, height, colors }: RidgeLinesProps) {
-  const W = 900, padL = 130, padR = 16, padT = 10, padB = 24;
-  const rowH = 46;
-  const overlap = 14;
-  const H = height ?? padT + padB + series.length * rowH;
+  const W = 900, padL = 130, padR = 16, padT = 18, padB = 24;
+  const H = height ?? padT + padB + series.length * 46;
+  const rowH = (H - padT - padB) / Math.max(series.length, 1);
   const n = Math.max(series[0]?.values.length ?? xLabels.length, 1);
   const xx = (i: number) => padL + (i / Math.max(n - 1, 1)) * (W - padL - padR);
   return (
@@ -22,7 +21,7 @@ export function RidgeLines({ series, xLabels, height, colors }: RidgeLinesProps)
         const col = colors?.[si] ?? "var(--forest)";
         const mx = Math.max(...s.values, 1);
         const pts = s.values
-          .map((v, i) => `${xx(i)},${baseY - (v / mx) * (rowH + overlap)}`)
+          .map((v, i) => `${xx(i)},${baseY - (v / mx) * (rowH * 0.92)}`)
           .join(" ");
         const area = `${padL},${baseY} ${pts} ${xx(n - 1)},${baseY}`;
         return (

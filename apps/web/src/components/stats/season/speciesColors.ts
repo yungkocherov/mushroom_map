@@ -15,6 +15,16 @@ export const SPECIES_COLOR: Record<string, string> = {
   spring_mushroom: "var(--sp-spring)",
   honey_fungus: "var(--sp-honey)",
   other: "var(--sp-other)",
+  birch_bolete: "var(--sp-birch-bolete)",
+  mokhovik: "var(--sp-mokhovik)",
+  saffron_milkcap: "var(--sp-saffron)",
+  white_milkcap: "var(--sp-white-milkcap)",
+  woolly_milkcap: "var(--sp-woolly-milkcap)",
+  russula: "var(--sp-russula)",
+  oyster: "var(--sp-oyster)",
+  blueberry: "var(--sp-blueberry)",
+  cloudberry: "var(--sp-cloudberry)",
+  cranberry: "var(--sp-cranberry)",
 };
 
 /** Colour for a group key; unknown keys fall back to the neutral token. */

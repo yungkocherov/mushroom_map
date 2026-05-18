@@ -90,7 +90,7 @@ export function AreaChart({
               : val
           }
           labelFormatter={(l) => (xTickFormatter ? xTickFormatter(l) : l)}
-          itemSorter={(item: any) => series.findIndex((s) => s.key === item.dataKey)}
+          itemSorter={(item: any) => -series.findIndex((s) => s.key === item.dataKey)}
         />
         <Legend wrapperStyle={{ fontSize: "var(--fs-xs)" }} />
         {series.map((s) => (

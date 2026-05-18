@@ -18,14 +18,26 @@ export interface BarChartProps {
   categoryKey: string;
   valueKey: string;
   height?: number;
+  /**
+   * Optional fixed [min, max] for the numeric (X) axis. When given,
+   * the axis is hard-clamped (allowDataOverflow) so bars share a scale
+   * across small-multiples. Omit for the default data-driven domain.
+   */
+  xDomain?: [number, number];
 }
 
-export function BarChart({ data, categoryKey, valueKey, height = 280 }: BarChartProps) {
+export function BarChart({ data, categoryKey, valueKey, height = 280, xDomain }: BarChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RBarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 8 }}>
         <CartesianGrid stroke="var(--rule)" strokeDasharray="3 3" horizontal={false} />
-        <XAxis type="number" stroke="var(--ink-faint)" fontSize="var(--fs-xs)" />
+        <XAxis
+          type="number"
+          stroke="var(--ink-faint)"
+          fontSize="var(--fs-xs)"
+          domain={xDomain}
+          allowDataOverflow={xDomain !== undefined}
+        />
         <YAxis
           type="category"
           dataKey={categoryKey}
