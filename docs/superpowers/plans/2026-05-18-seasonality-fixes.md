@@ -823,3 +823,41 @@ touch forecast.*).
 Minor cosmetics deferred ("остальное позже"): RangeBars rightmost month
 tick slightly clipped; composition Legend keeps Recharts default order
 (colours now distinct — the dominant ask — is fixed; tooltip ordered).
+
+---
+
+## Round 3 (2026-05-18) — third live-review, 11 items, unpushed
+
+Commits: `b3a90a5` (foundation: MONTH_START_WEEKS, Боровики rename in
+GROUP_LABELS_RU, reversed AreaChart tooltip itemSorter, BarChart
+xDomain, DivergingBarChart categoryOnX vertical mode, RidgeLines
+adaptive rowH+padT, +10 species `--sp-*` tokens & speciesColors keys),
+`1c12144` (SeasonalityTab: month ticks via MONTH_START_WEEKS, peak card
+→ RangeBars ±IQR + median mark [removed text note + "мало данных"
+list], phenology colours = anomaly convention, ridge colours by
+species_key, early/late caption reword + xDomain [20,…], vs-norm
+tooltip week-label + named band p25/p75, anomaly vertical via
+categoryOnX), `b48e098` (#1 dates-extract fix), `04d776e` (API
+SPECIES_LABELS pine_bolete Колосовики→Боровики — peak/ridge/bands use
+the API label, not web GROUP_LABELS_RU; found in QA).
+
+**#1 dates-extract bug (fixed at source).** `parse_date_regex`:
+`_year_ok` allowed `post_dt.year+1` and explicit-year `DD.MM.YYYY` /
+range branches lacked the `d>post_dt → year-1` rollback the day-less
+branches had. Users typo a future year in post text (post made
+Aug-2025, text says "27.08.2026"). Fix: ceiling = `post_dt.year`,
+rollback added to both explicit-year branches. Re-ran
+`refresh_foray_dates_after_bugfix_2026_05_15.py` (re-extracts
+`date_source='regex'` rows with the fixed parser): **551 rows
+corrected** (547 year rolled back across all years, 2 → none, 2 misc).
+Snapshot rebuilt. 2026 future-week masses (wk25/27/34/35) eliminated;
+2026 now stops at wk20. **forecast.* untouched.**
+
+**#3** = the two off-season mechanisms (future-typo #1 fixed here +
+classifier misclassification = spawned v14 task). Heatmap is the
+data-quality lens, kept as-is.
+
+Per-card visual-QA'd all 16 cards. #10 (vs-norm tooltip week+p25/p75)
+is hover-only — wired (tsc clean, band areas named), user verifies on
+live site. Branch still unpushed; deploy still needs prod snapshot
+rebuild + (now) the foray-date refresh on prod DBs.
