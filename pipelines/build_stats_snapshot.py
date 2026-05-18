@@ -360,6 +360,12 @@ _WEATHER_DISTRICT_SQL = """
     INSERT INTO stats_weather_district
         (district_id, warm_precip, warm_soil_moist, mushroom_days)
     WITH quality AS (
+        -- Degraded-source guard. A real LO soil-moisture series has a
+        -- strong seasonal swing (genuine districts: sm_sd 0.042..0.064,
+        -- max ~0.43). Upstream model emits flat/near-constant fill on
+        -- no-soil grid cells (artifacts: Kirovsky sd 0.000 max 0.05,
+        -- Volkhovsky sd 0.006 max 0.14). The 7x gap makes sm_sd < 0.02
+        -- a safe cut (3x margin both sides) -> NULL the bad districts.
         SELECT district_id,
                COUNT(soil_moisture_1_to_3cm)  AS sm_n,
                STDDEV_POP(soil_moisture_1_to_3cm) AS sm_sd
@@ -384,9 +390,9 @@ _WEATHER_DISTRICT_SQL = """
     )
     SELECT p.district_id,
            AVG(p.warm_p),
-           CASE WHEN q.sm_n = 0 OR q.sm_sd < 0.005
+           CASE WHEN q.sm_n = 0 OR q.sm_sd < 0.02
                 THEN NULL ELSE AVG(p.warm_sm) END,
-           CASE WHEN q.sm_n = 0 OR q.sm_sd < 0.005
+           CASE WHEN q.sm_n = 0 OR q.sm_sd < 0.02
                 THEN NULL ELSE AVG(p.mush) END
     FROM per_year p
     JOIN quality q ON q.district_id = p.district_id
@@ -417,7 +423,7 @@ _WEATHER_DISTRICT_MONTH_SQL = """
         GROUP BY district_id, EXTRACT(MONTH FROM date)
     )
     SELECT pm.district_id, pm.m,
-           CASE WHEN q.sm_n = 0 OR q.sm_sd < 0.005
+           CASE WHEN q.sm_n = 0 OR q.sm_sd < 0.02
                 THEN NULL ELSE pm.sm END,
            CASE WHEN q.st_n = 0 OR q.st_sd < 0.05
                 THEN NULL ELSE pm.st END
