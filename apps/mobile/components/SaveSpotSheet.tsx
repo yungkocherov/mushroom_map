@@ -204,7 +204,7 @@ export function SaveSpotSheet({ visible, onClose, coords, speciesContext }: Prop
           </View>
         ) : (
           <>
-        <Text style={styles.title}>Сохранить спот</Text>
+        <Text style={styles.title}>Сохранить место</Text>
 
         {effectiveCoords ? (
           <Text style={styles.coords}>

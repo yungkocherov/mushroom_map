@@ -169,7 +169,7 @@ export default function SpotsScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.h1}>Споты</Text>
+      <Text style={styles.h1}>Мои места</Text>
 
       <View style={styles.searchRow}>
         <TextInput
@@ -255,7 +255,7 @@ export default function SpotsScreen() {
             <Text style={styles.emptyText}>
               {hasFilters
                 ? "Под фильтр ничего не попадает. Сбрось фильтры или измени запрос."
-                : "Спотов пока нет. Тапни оранжевую кнопку на карте чтобы сохранить место."}
+                : "Пока пусто. Нажми на лесной выдел и «Сохранить место», или удерживай палец на карте."}
             </Text>
           </View>
         }

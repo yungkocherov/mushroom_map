@@ -34,7 +34,7 @@ export function NetworkBanner() {
     >
       <Text style={styles.text}>
         {pendingCount > 0
-          ? `Офлайн · ${pendingCount} спот${pendingCount === 1 ? "" : pendingCount < 5 ? "а" : "ов"} не синкнуто`
+          ? `Офлайн · ${pendingCount} мест${pendingCount === 1 ? "о" : pendingCount < 5 ? "а" : ""} не синкнуто`
           : "Офлайн · карта работает из скачанных районов"}
       </Text>
     </Animated.View>

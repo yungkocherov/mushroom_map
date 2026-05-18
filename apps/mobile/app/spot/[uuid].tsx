@@ -122,9 +122,9 @@ export default function SpotDetailScreen() {
   if (!spot) {
     return (
       <View style={styles.container}>
-        <Stack.Screen options={{ title: "Спот" }} />
+        <Stack.Screen options={{ title: "Место" }} />
         <Text style={styles.notFound}>
-          Спот не найден. Возможно был удалён.
+          Место не найдено. Возможно было удалено.
         </Text>
       </View>
     );
@@ -202,7 +202,7 @@ export default function SpotDetailScreen() {
 
   const onShare = async () => {
     if (!spot) return;
-    const name = spot.name?.trim() || "Грибной спот";
+    const name = spot.name?.trim() || "Грибное место";
     const lat = spot.lat.toFixed(5);
     const lon = spot.lon.toFixed(5);
     // Универсальный geo: URI открывают навигаторы; web-link на Я.Карты —
@@ -228,7 +228,7 @@ export default function SpotDetailScreen() {
 
   const onDelete = () => {
     Alert.alert(
-      "Удалить спот?",
+      "Удалить место?",
       spot.name?.trim() || "Без названия",
       [
         { text: "Отмена", style: "cancel" },
@@ -248,7 +248,7 @@ export default function SpotDetailScreen() {
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       <Stack.Screen
         options={{
-          title: spot.name?.trim() || "Спот",
+          title: spot.name?.trim() || "Место",
           headerStyle: { backgroundColor: palette.light.paperRise },
           headerTintColor: palette.light.ink,
         }}
@@ -287,7 +287,7 @@ export default function SpotDetailScreen() {
               {formatDistance(distance ?? 0)}
             </Text>
             <Text style={styles.distanceHint}>
-              стрелка показывает на спот, держи телефон горизонтально
+              стрелка показывает на место, держи телефон горизонтально
             </Text>
           </>
         ) : (
@@ -359,11 +359,11 @@ export default function SpotDetailScreen() {
       </Pressable>
 
       <Pressable style={styles.shareBtn} onPress={onShare}>
-        <Text style={styles.shareBtnText}>Поделиться спотом</Text>
+        <Text style={styles.shareBtnText}>Поделиться местом</Text>
       </Pressable>
 
       <Pressable style={styles.deleteBtn} onPress={onDelete}>
-        <Text style={styles.deleteBtnText}>Удалить спот</Text>
+        <Text style={styles.deleteBtnText}>Удалить место</Text>
       </Pressable>
     </ScrollView>
   );
