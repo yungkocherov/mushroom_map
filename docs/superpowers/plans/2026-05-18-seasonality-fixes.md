@@ -794,3 +794,32 @@ needed (item 14 uses `stats_season_week.posts` already present); a
 `build_stats_snapshot.py` rerun on TimeWeb+Oracle prod DBs is only for
 freshness alignment, not correctness. New `--sp-*` tokens ship with the
 frontend build.
+
+---
+
+## Round 2 (2026-05-18) — second live-review pass, 8 more items, unpushed
+
+User reviewed the running site again, found 8 more. Fixed via subagents,
+per-card visual-QA'd. Commits: `758ceca` (much more distinct `--sp-*`
+palette — aspen/fly-agaric/honey/porcini were too close), `e972265`
+(VK name «Грибы и Грибники СПб»; all line/area/heatmap/ridge/rangebars
+cards full-width so none is a lonely half; «Состав корзины по неделям»
+title drop "(100%)" + AreaChart top margin 8→20 un-clip; fixed seasonal
+COMPOSITION_ORDER + Tooltip itemSorter so tooltip follows the stack),
+`dff48ba` (TOC `top:42vh` mid-height; RangeBars font 11→14, rowH 26→39,
+padL 150→200, card height `*44+64`; new compact `SelectControl`
+dropdown replacing the bulky `Pills` grid at all 8 filter sites, `Pills`
+deleted). vitest 103/103, tsc clean.
+
+**Item 4 (deep data finding):** spring_mushroom (сморчки/строчки) autumn
+tail (wk30–44, ~1000 finds) = VK vision-model misclassification —
+Sparassis crispa, multi-photo roundups, autumn forays tagged
+spring_mushroom; ~95% have date_source regex/not_found → date falls
+back to the autumn post date. The chart is correct (acts as a
+data-quality lens). Root-cause fix = classifier prompt v14 +
+reclassify — spawned as a separate task (out of scope here; never
+touch forecast.*).
+
+Minor cosmetics deferred ("остальное позже"): RangeBars rightmost month
+tick slightly clipped; composition Legend keeps Recharts default order
+(colours now distinct — the dominant ask — is fixed; tooltip ordered).
