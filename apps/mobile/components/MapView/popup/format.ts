@@ -1,10 +1,21 @@
 import type { Edibility } from "@mushroom-map/types";
 
 export const FOREST_NAMES: Record<string, string> = {
-  pine: "Сосновый лес", spruce: "Еловый лес", birch: "Берёзовый лес",
-  aspen: "Осиновый лес", oak: "Дубовый лес", alder: "Ольховый лес",
-  larch: "Лиственничный лес", linden: "Липовый лес", maple: "Кленовый лес",
-  ash: "Ясеневый лес", fir: "Пихтовый лес", cedar: "Кедровый лес",
+  pine: "Сосновый лес",
+  spruce: "Ельник",
+  larch: "Лиственничник",
+  fir: "Пихтовый лес",
+  cedar: "Кедровник",
+  birch: "Берёзовый лес",
+  aspen: "Осинник",
+  alder: "Ольшаник",
+  oak: "Дубрава",
+  linden: "Липовый лес",
+  maple: "Кленовый лес",
+  mixed_coniferous: "Смешанный хвойный",
+  mixed_broadleaved: "Смешанный лиственный",
+  mixed: "Смешанный лес",
+  unknown: "Лес (тип не определён)",
 };
 export const forestName = (slug?: string | null) =>
   (slug && FOREST_NAMES[slug]) || "Лес";
