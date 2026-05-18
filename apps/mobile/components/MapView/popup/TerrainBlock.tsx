@@ -10,7 +10,7 @@ export function TerrainBlock({ terrain }: { terrain: TerrainAtResponse }) {
   if (terrain.elevation_m == null) return null;
   return (
     <Text style={styles.line}>
-      {`⛰ Высота: ${Math.round(terrain.elevation_m)} м`}
+      {`Высота: ${Math.round(terrain.elevation_m)} м`}
     </Text>
   );
 }
