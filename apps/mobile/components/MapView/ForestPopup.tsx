@@ -146,6 +146,8 @@ export function ForestPopup({
 
   function handleSave() {
     if (!coords) return;
+    // speciesContext = forest species slugs (pine/spruce/birch/...), NOT spot-tag slugs.
+    // Task 5/8 consumer must map these to the @mushroom-map/types spotTags vocabulary.
     const composition = data?.forest.forest?.species_composition;
     let speciesContext = composition ? Object.keys(composition) : [];
     if (speciesContext.length === 0) {
