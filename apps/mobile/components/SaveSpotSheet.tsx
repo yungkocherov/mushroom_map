@@ -24,26 +24,49 @@ import {
 
 const RATING_LABELS = ["плохое", "скучное", "норм", "хорошее", "отличное"];
 
-// Группы для рендера (заголовки + tag-list). Совпадают с web SaveSpotModal:
-// деревья → грибы → ягоды.
-const TAG_GROUPS: Array<{ title: string; tags: SpotTag[] }> = [
-  { title: "Деревья", tags: TREE_TAGS },
-  { title: "Грибы", tags: MUSHROOM_TAGS },
-  { title: "Ягоды", tags: BERRY_TAGS },
-];
-
 type Props = {
   visible: boolean;
   onClose: () => void;
   /** Координаты сохраняемой точки. Если не переданы — берём GPS fix. */
   coords?: { lat: number; lon: number } | null;
+  /**
+   * Породы тапнутого выдела (slug'и forest species: pine/spruce/birch…).
+   * Если непусто — список «Деревья» фильтруется до пород этого полигона
+   * (меньше скролла, меньше неверных тэгов). Если ни один tree-tag не
+   * совпал — fallback на полный TREE_TAGS (группа никогда не пустая).
+   * Long-press по карте → speciesContext отсутствует/пуст → все деревья.
+   *
+   * Вокабуляр совпадает: TREE_TAGS[].slug берутся из
+   * geodata.dominant_species enum'а (см. packages/types/src/spotTags.ts
+   * docstring), те же slug'и, что в species_composition/dominant_species
+   * выдела — поэтому фильтр прямой, без маппинга.
+   */
+  speciesContext?: string[];
 };
 
-export function SaveSpotSheet({ visible, onClose, coords }: Props) {
+export function SaveSpotSheet({ visible, onClose, coords, speciesContext }: Props) {
   const fix = useUserLocation((s) => s.fix);
   const add = useSpots((s) => s.add);
   // Берём явные координаты (long-press на карте) или fallback на GPS.
   const effectiveCoords = coords ?? (fix ? { lat: fix.lat, lon: fix.lon } : null);
+
+  // Список «Деревья»: если есть species-контекст выдела — фильтруем до
+  // его пород (slug'и TREE_TAGS == forest species slug'и, прямой match).
+  // Fallback на полный TREE_TAGS чтобы группа НИКОГДА не была пустой
+  // (нет контекста — long-press; контекст есть, но ни один tree-tag не
+  // совпал — деградируем мягко, показываем всё).
+  const tagGroups = useMemo<Array<{ title: string; tags: SpotTag[] }>>(() => {
+    const filtered =
+      speciesContext && speciesContext.length > 0
+        ? TREE_TAGS.filter((t) => speciesContext.includes(t.slug))
+        : TREE_TAGS;
+    const effectiveTreeTags = filtered.length > 0 ? filtered : TREE_TAGS;
+    return [
+      { title: "Деревья", tags: effectiveTreeTags },
+      { title: "Грибы", tags: MUSHROOM_TAGS },
+      { title: "Ягоды", tags: BERRY_TAGS },
+    ];
+  }, [speciesContext]);
 
   const sheetRef = useRef<BottomSheet>(null);
 
@@ -282,7 +305,7 @@ export function SaveSpotSheet({ visible, onClose, coords }: Props) {
           </Text>
         ) : null}
 
-        {TAG_GROUPS.map((group) => (
+        {tagGroups.map((group) => (
           <View key={group.title}>
             <Text style={styles.label}>{group.title}</Text>
             <View style={styles.tagsRow}>

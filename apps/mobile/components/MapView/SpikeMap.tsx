@@ -325,6 +325,7 @@ export function SpikeMap() {
       <SaveSpotSheet
         visible={saveSpotOpen}
         coords={saveSpotCoords}
+        speciesContext={saveSpotSpecies}
         onClose={() => {
           setSaveSpotOpen(false);
           setSaveSpotCoords(null);
