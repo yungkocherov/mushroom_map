@@ -445,6 +445,9 @@ function SeasonalityTabInner({
                     series={allCurvesSeries}
                     height={280}
                     connectNulls
+                    xType="number"
+                    xDomain={[1, 52]}
+                    xTicks={[1, 5, 10, 14, 19, 23, 27, 32, 36, 40, 45, 49]}
                     xTickFormatter={(w) => weekMonthLabel(Number(w))}
                     tooltipDecimals={2}
                   />
@@ -476,6 +479,9 @@ function SeasonalityTabInner({
                     series={speciesCurvesSeries}
                     height={260}
                     connectNulls
+                    xType="number"
+                    xDomain={[1, 52]}
+                    xTicks={[1, 5, 10, 14, 19, 23, 27, 32, 36, 40, 45, 49]}
                     xTickFormatter={(w) => weekMonthLabel(Number(w))}
                     tooltipDecimals={2}
                   />
@@ -562,7 +568,7 @@ function SeasonalityTabInner({
                     height={240}
                     xType="number"
                     xDomain={[1, 52]}
-                    xTicks={[1, 9, 17, 25, 33, 41, 49]}
+                    xTicks={[1, 5, 10, 14, 19, 23, 27, 32, 36, 40, 45, 49]}
                     xTickFormatter={(w) => weekMonthLabel(Number(w))}
                   />
                 )}
@@ -661,10 +667,12 @@ function SeasonalityTabInner({
                 {trendData.length === 0 ? (
                   <p className={css.empty}>Недостаточно данных для тренда.</p>
                 ) : (
-                  <BarChart
+                  <DivergingBarChart
                     data={trendData}
                     categoryKey="label"
                     valueKey="slope"
+                    colorPos="var(--chanterelle)"
+                    colorNeg="var(--idx-1)"
                     height={trendData.length * 36 + 40}
                   />
                 )}
@@ -839,7 +847,7 @@ function SeasonalityTabInner({
                     xType="number"
                     xDomain={[1, 52]}
                     yDomain={[0, Math.ceil(vsNormYMax * 1.1)]}
-                    xTicks={[1, 9, 17, 25, 33, 41, 49]}
+                    xTicks={[1, 5, 10, 14, 19, 23, 27, 32, 36, 40, 45, 49]}
                     connectNulls
                     xTickFormatter={(w) => weekMonthLabel(Number(w))}
                     tooltipDecimals={2}
