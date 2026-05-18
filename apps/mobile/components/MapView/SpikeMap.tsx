@@ -72,8 +72,10 @@ export function SpikeMap() {
   const [glyphsBaseUri, setGlyphsBaseUri] = useState<string | null>(null);
   const [assetError, setAssetError] = useState<string | null>(null);
   const [popupFeature, setPopupFeature] = useState<ForestFeatureProps | null>(null);
+  const [popupCoords, setPopupCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [saveSpotOpen, setSaveSpotOpen] = useState(false);
   const [saveSpotCoords, setSaveSpotCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [saveSpotSpecies, setSaveSpotSpecies] = useState<string[]>([]);
   const [baseMap, setBaseMap] = useState<BaseMapMode>("scheme");
   const [statusExpanded, setStatusExpanded] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
@@ -230,6 +232,8 @@ export function SpikeMap() {
           const coords = geom?.coordinates;
           if (!coords) return;
           setSaveSpotCoords({ lon: coords[0], lat: coords[1] });
+          // Long-press = тап по карте без контекста выдела: species пуст.
+          setSaveSpotSpecies([]);
           setSaveSpotOpen(true);
         }}
         onRegionWillChange={() => {
@@ -251,7 +255,16 @@ export function SpikeMap() {
             const hit = fc?.features?.find(
               (f) => typeof (f.properties as { dominant_species?: unknown })?.dominant_species === "string",
             );
-            if (hit?.properties) setPopupFeature(hit.properties as ForestFeatureProps);
+            if (hit?.properties) {
+              // Координаты тапа берём из geometry press-фичи — тот же
+              // путь, что в onLongPress (MapLibre кладёт [lon,lat] точку
+              // тапа в feature.geometry). Если недоступны — popupCoords
+              // = null, попап всё равно работает из tile-props (Task 4).
+              const geom = feature.geometry as { coordinates?: [number, number] };
+              const tap = geom?.coordinates;
+              setPopupCoords(tap ? { lon: tap[0], lat: tap[1] } : null);
+              setPopupFeature(hit.properties as ForestFeatureProps);
+            }
           } catch {
             // ignore — query может фейлить пока стиль ещё не готов
           }
@@ -298,9 +311,15 @@ export function SpikeMap() {
       <ForestPopup
         visible={popupFeature !== null}
         feature={popupFeature}
-        coords={null}
-        onClose={() => setPopupFeature(null)}
-        onSaveSpot={() => {}}
+        coords={popupCoords}
+        onClose={() => { setPopupFeature(null); setPopupCoords(null); }}
+        onSaveSpot={({ lat, lon, speciesContext }) => {
+          setSaveSpotCoords({ lat, lon });
+          setSaveSpotSpecies(speciesContext);
+          setPopupFeature(null);
+          setPopupCoords(null);
+          setSaveSpotOpen(true);
+        }}
       />
 
       <SaveSpotSheet
@@ -309,6 +328,7 @@ export function SpikeMap() {
         onClose={() => {
           setSaveSpotOpen(false);
           setSaveSpotCoords(null);
+          setSaveSpotSpecies([]);
         }}
       />
 
