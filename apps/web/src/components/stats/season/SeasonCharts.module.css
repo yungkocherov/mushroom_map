@@ -25,7 +25,7 @@
 }
 .toc {
   position: sticky;
-  top: var(--space-5);
+  top: 42vh;
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
@@ -84,6 +84,28 @@
 .pillOn {
   border-color: var(--chanterelle);
   color: var(--chanterelle);
+}
+
+.selectWrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  margin-right: var(--space-3);
+}
+.selectLabel {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink-faint);
+}
+.select {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--ink);
+  background: var(--paper-rise);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-md);
+  padding: 4px 8px;
 }
 
 .note {

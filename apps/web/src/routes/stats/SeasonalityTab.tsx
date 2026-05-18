@@ -37,6 +37,7 @@ import {
   weekMonthLabel,
 } from "../../components/stats/season/transforms";
 import { speciesColor } from "../../components/stats/season/speciesColors";
+import { SelectControl } from "../../components/stats/season/SelectControl";
 import css from "../../components/stats/season/SeasonCharts.module.css";
 
 // ─── color helpers ────────────────────────────────────────────────────
@@ -71,35 +72,6 @@ type DataState =
 
 function initState(): DataState {
   return { phase: "loading" };
-}
-
-// ─── Pill control ──────────────────────────────────────────────────────
-
-function Pills<T extends string>({
-  options,
-  value,
-  onChange,
-  label,
-}: {
-  options: { value: T; label: string }[];
-  value: T;
-  onChange: (v: T) => void;
-  label?: string;
-}) {
-  return (
-    <div className={css.controls} aria-label={label}>
-      {options.map((o) => (
-        <button
-          key={o.value}
-          type="button"
-          className={`${css.pill} ${value === o.value ? css.pillOn : ""}`}
-          onClick={() => onChange(o.value)}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
 }
 
 // ─── SeasonalityTab ────────────────────────────────────────────────────
@@ -469,7 +441,7 @@ function SeasonalityTabInner({
                   У каждого вида своя форма года: взрывной пик или растянутый сезон.
                 </p>
                 {speciesPillOpts.length > 0 && (
-                  <Pills
+                  <SelectControl
                     options={speciesPillOpts}
                     value={spProfile}
                     onChange={setSpProfile}
@@ -502,7 +474,7 @@ function SeasonalityTabInner({
                 <p className={css.ci}>
                   Тёплые полосы — удачные недели; горизонтальная структура показывает сдвиги и аномальные годы.
                 </p>
-                <Pills
+                <SelectControl
                   options={speciesPillOptsWithAll}
                   value={spHeat === "all" ? "all" : spHeat}
                   onChange={setSpHeat}
@@ -535,7 +507,7 @@ function SeasonalityTabInner({
                     min={bandMin}
                     max={bandMax}
                     ticks={monthTicks}
-                    height={bands.length * 28 + 44}
+                    height={bands.length * 44 + 64}
                   />
                 )}
               </div>
@@ -548,7 +520,7 @@ function SeasonalityTabInner({
                 </p>
                 <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", marginBottom: "var(--space-3)" }}>
                   {speciesPillOpts.length > 0 && (
-                    <Pills
+                    <SelectControl
                       options={speciesPillOpts}
                       value={spCum}
                       onChange={setSpCum}
@@ -556,7 +528,7 @@ function SeasonalityTabInner({
                     />
                   )}
                   {yearPillOpts.length > 0 && (
-                    <Pills
+                    <SelectControl
                       options={yearPillOpts}
                       value={String(yrCum)}
                       onChange={(v) => setYrCum(Number(v))}
@@ -823,7 +795,7 @@ function SeasonalityTabInner({
                 </p>
                 <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", marginBottom: "var(--space-3)" }}>
                   {speciesPillOpts.length > 0 && (
-                    <Pills
+                    <SelectControl
                       options={speciesPillOpts}
                       value={spVsN}
                       onChange={setSpVsN}
@@ -831,7 +803,7 @@ function SeasonalityTabInner({
                     />
                   )}
                   {yearPillOpts.length > 0 && (
-                    <Pills
+                    <SelectControl
                       options={yearPillOpts}
                       value={String(yrVsN)}
                       onChange={(v) => setYrVsN(Number(v))}
@@ -875,7 +847,7 @@ function SeasonalityTabInner({
                 </p>
                 <div style={{ display: "flex", gap: "var(--space-3)", flexWrap: "wrap", marginBottom: "var(--space-3)" }}>
                   {speciesPillOpts.length > 0 && (
-                    <Pills
+                    <SelectControl
                       options={speciesPillOpts}
                       value={spAnom}
                       onChange={setSpAnom}
@@ -883,7 +855,7 @@ function SeasonalityTabInner({
                     />
                   )}
                   {yearPillOpts.length > 0 && (
-                    <Pills
+                    <SelectControl
                       options={yearPillOpts}
                       value={String(yrAnom)}
                       onChange={(v) => setYrAnom(Number(v))}
