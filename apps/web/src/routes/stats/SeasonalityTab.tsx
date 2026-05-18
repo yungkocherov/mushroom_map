@@ -674,6 +674,7 @@ function SeasonalityTabInner({
                     colorPos="var(--chanterelle)"
                     colorNeg="var(--idx-1)"
                     height={trendData.length * 36 + 40}
+                    categoryWidth={150}
                   />
                 )}
                 <p className={css.note}>

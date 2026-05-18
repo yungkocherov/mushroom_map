@@ -15,10 +15,12 @@ export interface DivergingBarChartProps {
   colorPos: string;
   colorNeg: string;
   height?: number;
+  categoryWidth?: number;
 }
 
 export function DivergingBarChart({
   data, categoryKey, valueKey, colorPos, colorNeg, height = 280,
+  categoryWidth = 60,
 }: DivergingBarChartProps) {
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -30,7 +32,7 @@ export function DivergingBarChart({
                fontSize="var(--fs-xs)" />
         <YAxis type="category" dataKey={categoryKey}
                stroke="var(--ink-faint)" fontSize="var(--fs-xs)"
-               width={60} interval={0} />
+               width={categoryWidth} interval={0} />
         <Tooltip
           contentStyle={{
             background: "var(--paper-rise)",
