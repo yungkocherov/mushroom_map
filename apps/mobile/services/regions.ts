@@ -101,19 +101,68 @@ export async function getInstalledVersion(slug: string): Promise<string | null> 
   return row?.value ?? null;
 }
 
+const B64_ALPHABET =
+  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+let _b64Lut: Int16Array | null = null;
+function b64Lut(): Int16Array {
+  if (_b64Lut) return _b64Lut;
+  const lut = new Int16Array(256).fill(-1);
+  for (let i = 0; i < B64_ALPHABET.length; i++) {
+    lut[B64_ALPHABET.charCodeAt(i)] = i;
+  }
+  _b64Lut = lut;
+  return lut;
+}
+
+/**
+ * Decode a standard base64 string to raw bytes. Dependency-free and does
+ * NOT rely on `atob`/`Buffer` globals (RN/Hermes availability varies).
+ * expo-file-system Base64 output has no line breaks; `\s` strip is a
+ * cheap defensive no-op.
+ */
+function base64ToBytes(b64: string): Uint8Array {
+  const s = b64.replace(/\s/g, "");
+  const len = s.length;
+  if (len === 0) return new Uint8Array(0);
+  const pad = s.endsWith("==") ? 2 : s.endsWith("=") ? 1 : 0;
+  const out = new Uint8Array((len / 4) * 3 - pad);
+  const lut = b64Lut();
+  let o = 0;
+  for (let i = 0; i < len; i += 4) {
+    const a = lut[s.charCodeAt(i)];
+    const b = lut[s.charCodeAt(i + 1)];
+    const c = lut[s.charCodeAt(i + 2)]; // -1 when '='
+    const d = lut[s.charCodeAt(i + 3)]; // -1 when '='
+    const n = (a << 18) | (b << 12) | ((c & 63) << 6) | (d & 63);
+    out[o++] = (n >> 16) & 0xff;
+    if (c !== -1) out[o++] = (n >> 8) & 0xff;
+    if (d !== -1) out[o++] = n & 0xff;
+  }
+  return out;
+}
+
 async function sha256File(uri: string): Promise<string> {
-  // expo-crypto digestStringAsync принимает строку. Для бинарника
-  // читаем base64 и считаем SHA256 поверх. Для больших файлов это
-  // создаёт строку в памяти — приемлемо до ~100 МБ. Для типичного
-  // региона ~30-70 МБ ОК.
+  // ВАЖНО: хешируем РАW-БИНАРЬ файла, не base64-текст. Сервер в
+  // манифесте отдаёт SHA256 поверх бинарника pmtiles; раньше тут было
+  // digestStringAsync(SHA256, base64) — это хеш UTF-8-байт base64-
+  // СТРОКИ, он никогда не совпадал → любой регион не скачивался.
+  // expo-file-system читает только UTF8/Base64 → читаем base64,
+  // декодируем в байты, хешируем байты через Crypto.digest (binary).
   const base64 = await FileSystem.readAsStringAsync(uri, {
     encoding: FileSystem.EncodingType.Base64,
   });
-  return Crypto.digestStringAsync(
+  const bytes = base64ToBytes(base64);
+  const buf = await Crypto.digest(
     Crypto.CryptoDigestAlgorithm.SHA256,
-    base64,
-    { encoding: Crypto.CryptoEncoding.HEX },
+    bytes,
   );
+  const view = new Uint8Array(buf);
+  let hex = "";
+  for (let i = 0; i < view.length; i++) {
+    hex += view[i].toString(16).padStart(2, "0");
+  }
+  return hex;
 }
 
 /**
