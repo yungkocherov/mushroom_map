@@ -119,4 +119,52 @@ cd - && git worktree remove /c/tmp/gbpN --force; git worktree prune
 ```
 (`/c/tmp/gbpN` may stay file-locked "busy" on Windows — harmless,
 prune drops the registration; it frees later.) Then `gh run list
---branch main` until CI green.
+--branch main` until CI green. Capture the change as a patch first
+(`git diff -- <path> > /c/tmp/x.patch`; `git apply` it in the fresh
+origin/main worktree) when the local working tree is too messy to
+pathspec-commit cleanly.
+
+## 7. Dev-build verify blockers (READ before promising ForestPopup/map verification)
+
+Full detail + the sha256 root cause: memory
+`feedback_mobile_dev_verify_blockers.md`. Hard truths:
+
+- **Black screen + adb `offline` after launch = stale snapshot boot.**
+  Kill qemu, cold-boot per §1 (`-no-snapshot …`). Not RAM (that's §0).
+- **Debug RN on the Windows emulator dials Metro at `10.0.2.2:8081`**
+  which the host firewall / QEMU-NAT blocks (logcat:
+  `ReactNativeJNI … Failed to connect to /10.0.2.2:8081`). `adb
+  reverse` alone is NOT enough (it only maps `localhost`). Fix: with
+  the app stopped, write into the debuggable app's prefs via
+  `run-as`, then relaunch:
+  `MSYS_NO_PATHCONV=1 adb shell "run-as ru.geobiom.mobile sh -c 'echo <b64> | base64 -d > /data/data/ru.geobiom.mobile/shared_prefs/ru.geobiom.mobile_preferences.xml'"`
+  with `<string name="debug_http_host">localhost:8081</string>`
+  (preserve existing keys) + `adb reverse tcp:8081 tcp:8081`.
+- **`nohup … &` (Metro, gradle) DIES across Bash-tool turns.** Use the
+  harness `run_in_background:true` — survives, notifies on exit.
+- **Emulator may have NO internet** (host AdGuard VPN breaks QEMU NAT,
+  same as Tailscale-broken): `adb shell ping 8.8.8.8` →
+  `Network is unreachable` even with `-dns-server`. Then: no region
+  download, no online soil/water/terrain, AND dev-build bundled
+  assets fail (next point). Only the user can fix (disable VPN).
+- **`maplibre-react-native@10.0.0-alpha.30` blanks the WHOLE map when
+  glyphs fail to load** (not just symbols). Symptom: empty paper +
+  only `Mbgl [Style]: Failed to load glyph range … Noto Sans …`.
+- **Dev (Metro) build fetches the bundled basemap pmtiles + 18 glyph
+  PBFs over the network** (`Asset…downloadAsync()` ← Metro). No net →
+  glyphs/basemap fail → (prev point) blank map. A RELEASE APK embeds
+  them → renders offline. So forest-render / ForestPopup verification
+  needs either a stable emulator network OR a release APK; it is NOT
+  a feature-code defect.
+- **Release APK in this monorepo is broken**: `:app:createBundleRelease
+  JsAndAssets` → `Unable to resolve … expo-router/entry.js from
+  <repo-root>/.` (`@expo/cli export:embed` uses repo root, not
+  `apps/mobile`). `react{ root=file("../../") }` did NOT fix it.
+  Separate build-infra task — do not grind it in a verify session.
+- A **debug-signed release APK** (`GEOBIOM_KS_PATH=<…/app/debug.
+  keystore> -PGEOBIOM_KS_PASSWORD=android -PGEOBIOM_KS_ALIAS=
+  androiddebugkey`) keeps the installed app's signature, so
+  `adb install -r` PRESERVES app data (downloaded regions) — no
+  re-download / no net. (Useful once §7 monorepo bundle is fixed.)
+- Screenshots are 1080x2400; downscale via PIL (~760px) before Read,
+  or the multi-image API rejects them.
