@@ -341,13 +341,36 @@ def parse_date_regex(text: str, post_dt: date) -> Optional[date]:
             except ValueError:
                 pass
 
-    # DD.MM без года
-    m = re.search(r"\b(\d{1,2})[./\\](\d{1,2})\b", text)
+    # DD.MM без года. `/` — РАСПРОСТРАНЁННЫЙ date-separator в этом
+    # корпусе ("Рощино 23/08", "8/09 2023 г") — нельзя просто его
+    # выкинуть (harness: 60 реальных дат). Дискриминатор — КОНТЕКСТ,
+    # не separator: дробь = backslash ("1\2 корзины"; реальные даты
+    # `\` не используют НИКОГДА) ИЛИ slash+счётный noun в коротком
+    # сразу следом ("2/3 червивые", "1/3 от найденого", "1/2 ведра").
+    # Остаток "2/3 12 литровой..." (число между) — accepted residual,
+    # доберёт classifier-проход. При дроби — НЕ return, проваливаемся
+    # дальше: реальная «DD месяц»-дата ниже в посте перестаёт
+    # затеняться (двойной ущерб), либо честный None. Bug fix
+    # 2026-05-19 (см. test_parse_date_regex.py fraction-секцию).
+    # Core fraction-nouns ТОЛЬКО надёжные: harvest-units (литр/кг/шт)
+    # после реальной даты — это объём улова ("18.08 15 литров",
+    # "06.08 2 баночки"), НЕ дробь — их в список нельзя. Без `\s*` в
+    # самом regex: "Часть 2. 20.07.2019" иначе матчит "2. 20"
+    # (month=20→invalid→None, реальная 20.07 теряется).
+    _FRACTION_TAIL = re.compile(
+        r"^\s*(червив|корзин|ведр|от\s+найд|от\s+собр)"
+    )
+    m = re.search(r"\b(\d{1,2})([./\\])(\d{1,2})\b", text)
     if m:
-        day, month = int(m.group(1)), int(m.group(2))
+        day, month = int(m.group(1)), int(m.group(3))
+        sep = m.group(2)
+        is_fraction = sep == "\\" or bool(
+            _FRACTION_TAIL.match(text[m.end():m.end() + 16].lower())
+        )
         # Отсекаем «15.30» = время
         looks_like_time = (day <= 23 and month <= 59 and month > 12)
-        if not looks_like_time and 1 <= month <= 12 and 1 <= day <= 31:
+        if (not is_fraction and not looks_like_time
+                and 1 <= month <= 12 and 1 <= day <= 31):
             year = post_dt.year
             try:
                 d = date(year, month, day)

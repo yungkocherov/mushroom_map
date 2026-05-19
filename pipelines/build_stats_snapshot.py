@@ -435,14 +435,26 @@ _WEATHER_DISTRICT_MONTH_SQL = """
 _SEASON_WEEK_SQL = """
     INSERT INTO stats_season_week (species_key, year, week, posts, finds)
     WITH e AS (
+        -- «Календарь природы» = фенология: неделя должна быть РЕАЛЬНОЙ
+        -- датой наблюдения (foray_date из regex/llm), НЕ датой
+        -- публикации поста. Прежний COALESCE(foray_date, post_date)
+        -- инъецировал в сезонную кривую дату ПУБЛИКАЦИИ для постов без
+        -- извлечённой даты (date_source not_found/no_text/skipped/
+        -- year_only_other → foray_date NULL): весенние «скоро сезон»
+        -- и зимние «итоги/до следующего года» со старым фото давали
+        -- ложные апрельские/зимние горбы у летне-осенних видов (бакет
+        -- A; ~1271 апрельских fallback на одни porcini/pine/aspen).
+        -- Недатированные посты остаются в corpus/timeline-карточках
+        -- (там дата публикации корректна), но НЕ в фенологии.
+        -- Data-quality fix 2026-05-19.
         SELECT (s->>'species')::text AS sk,
-               COALESCE(v.foray_date,
-                 (v.date_ts AT TIME ZONE 'Europe/Moscow')::date) AS d,
+               v.foray_date AS d,
                v.id AS pid,
                COALESCE((s->>'count')::int, 0) AS cnt
         FROM vk_post v, LATERAL jsonb_array_elements(v.photo_species) s
         WHERE v.photo_species IS NOT NULL
           AND s->>'species' IS NOT NULL AND s->>'species' <> 'other'
+          AND v.foray_date IS NOT NULL
     )
     SELECT sk,
            EXTRACT(YEAR FROM d)::smallint,
