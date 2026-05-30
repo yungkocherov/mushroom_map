@@ -46,6 +46,21 @@ data/glyphs/
 
 # VK report outputs (regenerable)
 vk_photos_report*.html
+/report.html
+
+# Logs (regenerable)
+logs/
+
+# Stray root-level generated native project (real app is apps/mobile)
+/android/
+
+# Data scratch: regenerable id-lists, scraper progress DBs, downloaded sources
+data/rosleshoz/*.txt
+data/rosleshoz/*.db
+data/rosleshoz/*.db.bak-*
+data/rosleshoz/*.tsv
+data/sources/
+data/tile_weights.tsv.gz
 
 # Claude Code session data
 .claude/*

@@ -8,11 +8,16 @@
   min-height: calc(100vh - 64px);
   padding: var(--space-6) var(--space-5);
   box-sizing: border-box;
-  /* V4.9: убираем зазор между лендингом и футером. .contentMain имеет
-     padding-top + padding-bottom = var(--space-6), мы перекрываем bottom
-     отрицательным margin-bottom чтобы footer прижимался сразу к
-     concentu_landing без полосы paper-фона. */
-  margin-bottom: calc(-1 * var(--space-6));
+  /* V4.9 + 2026-05-12: убираем зазоры между лендингом и Header/Footer.
+     .contentMain имеет padding: var(--space-6) 0 (32px top+bottom);
+     .footer имеет margin-top: var(--space-8) (64px). Компенсируем
+     отрицательными margins:
+       - top: -space-6 (32px) перекрывает contentMain padding-top
+       - bottom: -(space-6 + space-8) (96px) — contentMain padding-bottom + footer margin-top
+     На других страницах эти отступы остаются: Layout/Footer глобальные,
+     лендинг перекрывает локально. */
+  margin-top: calc(-1 * var(--space-6));
+  margin-bottom: calc(-1 * (var(--space-6) + var(--space-8)));
 }
 
 .washGradient {
@@ -209,6 +214,14 @@
 .cameoWrap {
   position: relative;
   animation: geobiom-fadeup 1s 0.25s ease both;
+  /* «Прибиты» к карте: на hover translateY переезжает и карта, и
+     индекс-карточка одновременно (раньше только карта прыгала через
+     .cameo:hover, карточка стояла на месте). */
+  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.cameoWrap:hover {
+  transform: translateY(-2px);
 }
 
 .cameoCard {

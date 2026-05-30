@@ -16,11 +16,12 @@ export function addRoadsLayer(m: Map): void {
     type: "line",
     source: "roads",
     "source-layer": "roads",
-    minzoom: 10,
+    minzoom: 7,
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
       "line-color": "#ffffff",
-      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.2, 14, 5.5],
+      // На z=7..9 видимые казинги магистралей; с z=10 поведение прежнее.
+      "line-width": ["interpolate", ["linear"], ["zoom"], 7, 1.4, 9, 2.4, 10, 2.8, 14, 5.5],
       "line-opacity": 0.85,
     } as unknown as maplibregl.LineLayerSpecification["paint"],
   });
@@ -29,11 +30,11 @@ export function addRoadsLayer(m: Map): void {
     type: "line",
     source: "roads",
     "source-layer": "roads",
-    minzoom: 10,
+    minzoom: 7,
     layout: { "line-cap": "round", "line-join": "round" },
     paint: {
       "line-color": "#4a2c20",
-      "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.0, 14, 2.6],
+      "line-width": ["interpolate", ["linear"], ["zoom"], 7, 0.7, 9, 1.2, 10, 1.4, 14, 2.6],
       "line-opacity": 0.95,
       "line-dasharray": [2, 1.5],
     } as unknown as maplibregl.LineLayerSpecification["paint"],

@@ -97,7 +97,13 @@ export async function ensureGlyphsExtracted(): Promise<string> {
       }
     }
 
-    cachedBaseUri = `file://${base}`;
+    // ВАЖНО: `base` уже начинается с `file:///...` (expo-file-system
+    // documentDirectory всегда префиксован file://). Конкатенация
+    // `file://${base}` давала `file://file:///data/.../glyphs` —
+    // MapLibre Native такой URL не открывал, ВСЯ карта гасла из-за
+    // glyph-load fail в maplibre-react-native@10-alpha (blank map
+    // вместо "fall back to text-less symbol layers").
+    cachedBaseUri = base;
     return cachedBaseUri;
   })();
 

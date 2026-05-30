@@ -1,91 +1,159 @@
-# mushroom-map
+# Geobiom — лес Ленобласти как атлас
 
-Сайт и интерактивная карта грибных мест Ленинградской области.
+Открытый некоммерческий проект про лес Ленинградской области: интерактивная
+карта 1.2 млн выделов с породой, бонитетом и возрастом, индекс плодоношения
+по 18 районам, личные грибные точки в кабинете.
 
-## Что это
+**Live:** [geobiom.ru](https://geobiom.ru/) · _mirror:_ [app.geobiom.ru](https://app.geobiom.ru/)
 
-Многостраничный сайт с картой в центре:
-- `/` — главная
-- `/map` — полноэкранная карта (всё что ниже)
-- `/species` — каталог видов (в работе)
-- `/guide`, `/methodology` — гайды и методология (в работе)
-- `/about` — об авторе
+![Главная страница Geobiom](docs/images/landing.jpg)
 
-Карта:
-- леса всей Ленобласти раскрашены по данным Rosleshoz/ФГИСЛК (~2M полигонов: порода, бонитет, возрастная группа)
-- при клике на полигон — попап с теоретическими видами грибов (по справочнику «вид ↔ тип леса»)
-- 7 слоёв: леса, водоохранные зоны, ООПТ, лесные дороги, болота, вырубки, защитные леса
-- подписи населённых пунктов из OSM (7k точек)
-- поиск по виду гриба и по месту (геокодер)
-- 4 подложки: OSM / Схема / Спутник / Гибрид
-- сезонный фильтр видов в попапе
-- адаптив под мобильные устройства
+---
+
+## Что внутри
+
+Карта раскрашена по реальным данным Рослесхоза/ФГИС ЛК (порода, бонитет,
+возраст), поверх — слои воды, болот, ООПТ, лесных дорог и админ-границ.
+Клик по выделу открывает список грибов, которые теоретически с этой
+породой образуют микоризу. В кабинете — личные точки сбора со рейтингом
+и тегами.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/map-bonitet.jpg" alt="Карта с раскраской по бонитету" /></td>
+    <td width="50%"><img src="docs/images/map-species.jpg" alt="Карта с раскраской по доминирующей породе" /></td>
+  </tr>
+  <tr>
+    <td><sub><b>Бонитет</b> — продуктивность древостоя от I (тёмно-зелёный, лучший) до V (красный, низший). Шкала Орлова.</sub></td>
+    <td><sub><b>Породы</b> — доминирующая порода: сосна / ель / берёза / осина / ольха / дуб / смешанный лес.</sub></td>
+  </tr>
+</table>
+
+### Слои карты
+
+13 слоёв с собственными PMTiles (range-запросы напрямую из браузера):
+
+| Слой | Источник | Размер |
+|---|---|---|
+| **Леса** (порода / бонитет / возраст / прогноз) | Рослесхоз / ФГИС ЛК | 41 MB |
+| Водоохранные зоны | ФГИС ЛК | 6 MB |
+| ООПТ | OSM Overpass | 1 MB |
+| Лесные дороги (OSM) | OSM Overpass | 31 MB |
+| Болота | OSM Overpass | 20 MB |
+| Линейные водотоки (реки/ручьи) | OSM Overpass | 41 MB |
+| Вырубки и гари | ФГИС ЛК | 6 MB |
+| Защитные леса | ФГИС ЛК | 14 MB |
+| Почвенные зоны | Докучаевский ин-т (ЕГРПР, 1:2.5М) | 2 MB |
+| Рельеф (hillshade) | Copernicus GLO-30 DEM | 453 MB |
+| 18 районов ЛО | OSM Overpass (level=6) | 0.7 MB |
+| Населённые пункты | OSM + Natasha NER | 21 k записей |
+| Личные точки | пользовательские | приватный слой |
+
+### Прогноз грибного сезона
+
+Index плодоношения по 18 районам строит сестринский ML-репо
+[`mushroom-forecast`](https://github.com/yungkocherov/mushroom-forecast)
+(private). Сейчас живёт детерминированный hash-baseline; iter-11 hybrid
+модель (LightGBM unified clim_w28 v4 + per-group v5+Optuna small) подключится
+к `forecast.prediction` в iter-12. Сигнал из 69 k VK-постов сообщества
+`grib_spb`: текст → Natasha NER + regex pump → район → группа гриба →
+обучающая выборка.
+
+---
 
 ## Стек
 
-- **PostgreSQL 16 + PostGIS** — хранилище (Docker)
-- **Python 3.14 + FastAPI + psycopg3** — бэкенд
-- **React 18 + TypeScript + Vite 5 + MapLibre GL JS + react-router-dom** — фронтенд
-- **PMTiles** — векторные тайлы (range-запросы, без тайлового сервера)
-- **Tippecanoe** — генерация PMTiles из PostGIS
-- **Docker Compose** — локальная среда (db + api + web)
-- **GitHub Actions** — CI: pytest + tsc + vite build на каждый push
+**Хранилище** PostgreSQL 16 + PostGIS, две схемы — `public.*` для гео-данных
+mushroom-map, `forecast.*` для весовых результатов sister-репо.
+**Бэкенд** Python 3.14 + FastAPI + psycopg3.
+**Фронтенд** React 19 + TypeScript + Vite + MapLibre GL JS + Zustand +
+Radix UI + Fraunces / Inter / IBM Plex Mono.
+**Тайлы** PMTiles (HTTP Range), сборка через `pmtiles.writer` (нативный
+Python для большинства слоёв) и tippecanoe (для леса с coalesce-densest-as-needed).
+**Mobile (отдельный voile)** React Native + Expo bare + maplibre-react-native,
+Android-first (RuStore + APK).
+**Deploy** Docker Compose + Caddy на двух VM (TimeWeb primary RU, Oracle Stockholm
+foreign replica). Nightly pg_dump → age → R2 backup. Daily DB-sync TimeWeb→Oracle.
+
+---
 
 ## Архитектура
 
 ```
 mushroom-map/
-├── db/                     # миграции PostGIS (001..016) + сиды
+├── apps/
+│   ├── web/                # React SPA: routes/, components/, store/ (Zustand)
+│   └── mobile/             # React Native + Expo (отдельный README)
 ├── services/
-│   ├── geodata/            # ForestSource абстракция (OSM, Copernicus, Rosleshoz)
+│   ├── api/                # FastAPI: /api/forest, /api/species, /api/cabinet, /tiles/
+│   ├── geodata/            # ForestSource ABC (OSM, Copernicus, Rosleshoz)
 │   ├── placenames/         # NER топонимов (Natasha) + газеттир
 │   ├── species_registry/   # справочник видов (yaml → sql)
-│   ├── api/                # FastAPI: /api/forest/at, /api/species/search, /tiles/
-│   └── web/                # React SPA: routes/ + components/ + lib/
-├── pipelines/              # ETL-скрипты (ingest_*, build_*_tiles, tile_utils)
-├── .github/workflows/      # CI
-└── docs/                   # architecture, roadmap, website_plan, и т.д.
+│   └── observability/      # GlitchTip Sentry + Umami self-hosted
+├── packages/
+│   ├── tokens/             # design tokens — палитра/типографика, общая web+mobile
+│   ├── types/              # shared TS types (UserSpot, spotTags, etc.)
+│   └── api-client/         # типизированный fetch-клиент
+├── db/migrations/          # 040+ миграций PostGIS
+├── pipelines/              # ETL: ingest_forest, scrape_fgislk, build_*_tiles, extract_vk_districts
+├── scripts/
+│   ├── deploy/             # two-stack runbooks + systemd units
+│   └── backup/             # age + rclone + restore_drill
+├── infra/                  # Caddyfiles for prod
+├── docs/                   # architecture, redesign plans, data analyses
+└── .github/workflows/      # CI: tests + deploy-api + deploy-web (matrix TimeWeb/Oracle)
 ```
 
-Подробнее — [docs/architecture.md](docs/architecture.md),
-полный план сайта — [docs/website_plan.md](docs/website_plan.md).
+Подробнее:
+- [`docs/architecture.md`](docs/architecture.md) — поток данных и контракты
+- [`docs/redesign-2026-05/plan.md`](docs/redesign-2026-05/plan.md) — последний редизайн (D1 v2 «лес как атлас»)
+- [`docs/mobile-app-2026-05.md`](docs/mobile-app-2026-05.md) — мобильное приложение
+- [`scripts/deploy/README.md`](scripts/deploy/README.md) — runbook двух-стека и DB-sync systemd
+- [`scripts/backup/README.md`](scripts/backup/README.md) — backup pipeline
 
-## Быстрый старт
-
-```bash
-# Поднять все сервисы (db + api + web)
-docker compose --profile full up -d
-
-# Только база (для локальной разработки)
-docker compose up -d db
-
-# Миграции
-.venv/Scripts/python db/migrate.py
-
-# Сайт доступен на http://localhost:5173 (главная), /map — сама карта
-```
-
-**Прим.** npm-пакеты для web ставятся внутри контейнера:
-`docker compose exec web npm install <pkg>`. Anonymous volume
-`/app/node_modules` в docker-compose изолирует контейнер от хостового
-`node_modules`.
+---
 
 ## Данные
 
-| Слой | Источник | Статус |
-|------|----------|--------|
-| Лесные полигоны | Rosleshoz/ФГИСЛК | ✅ ~2M полигонов (вся Ленобласть 27.8–36.0°E), PMTiles 496 MB |
-| Лесные полигоны | OSM | ✅ 47 000 полигонов (88% unknown, перекрыты Rosleshoz) |
-| Водоохранные зоны | Rosleshoz/ФГИСЛК | ✅ PMTiles 6 MB |
-| ООПТ | OSM (Overpass) | ✅ 419 полигонов, PMTiles 1.2 MB |
-| Лесные дороги | OSM (Overpass) | ✅ 318 884 линии, PMTiles 31 MB |
-| Болота | OSM (Overpass) | ✅ 34 177 полигонов, PMTiles 20 MB |
-| Вырубки и гари | ФГИСЛК | ✅ 1 270 полигонов, PMTiles 6 MB |
-| Защитные леса | ФГИСЛК | ✅ 598 полигонов, PMTiles 14 MB |
-| Населённые пункты | OSM (Overpass) | ✅ 7 116 точек, GeoJSON 1.2 MB |
-| Виды грибов (справочник) | вручную | ✅ 24 вида |
-| Наблюдения (VK) | ВК-группы | 📋 парсер готов, прогона не было |
+### Лес: Рослесхоз / ФГИС ЛК
 
-## Лицензия
+~1.23 млн выделов всей Ленинградской области через публичный WMS-Geoserver
+ФГИС Лесного Комплекса. Атрибутика: dominant_species, species_composition
+(JSONB с долями), бонитет (I-V), возрастная группа (молодняки / средневозрастные
+/ приспевающие / спелые / перестойные), запас древесины (m³/га).
 
-TBD
+Скрапер `pipelines/scrape_fgislk_attrinfo.py` гонит batch'ами через ФГИС
+WMS GetFeatureInfo с sanity-check на bogus inflate / cross-batch dups /
+quarter-fill gaps. Подробный анализ источников и калибровка качества —
+[`docs/forest_sources_analysis.md`](docs/forest_sources_analysis.md).
+
+### VK-сигнал: 69 k постов из `grib_spb`
+
+Пост → Qwen-3.5 9B (LM Studio local) → доли видов на фото → район через
+Natasha NER + regex pump. 60.2 % постов с район-атрибуцией. Текущий
+покрытый период: 2018–2026, 13 группа-кластеров видов. Используется в
+sister-репо как target signal для модели.
+
+### Внешние слои
+
+OSM (Overpass) для дорог / болот / водотоков / ООПТ / населённых пунктов.
+Copernicus GLO-30 DEM для рельефа (81 тайл → mosaic UTM 36N → hillshade
+PMTiles). EGRPR (Докучаевский ин-т) для почвенной зональности.
+
+---
+
+## Лицензия и кредиты
+
+**Код:** TBD (планируется AGPL-3.0 или MIT после стабилизации API).
+
+**Данные:**
+- Лесная инвентаризация — [Рослесхоз / ФГИС ЛК](https://lk.rosleshoz.gov.ru/), открытые данные.
+- OSM-слои — © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright), ODbL.
+- DEM — [Copernicus GLO-30](https://spacedata.copernicus.eu/), ESA / EU.
+- Почвенная карта — Докучаевский ин-т, [ЕГРПР](https://egrpr.esoil.ru/), 1:2.5М.
+- Метеоданные — [Open-Meteo](https://open-meteo.com/), CC-BY 4.0.
+
+**Авторство и contact:** Иван Кочеров,
+[ikocherov1111@gmail.com](mailto:ikocherov1111@gmail.com).
+Обратная связь по сайту — кнопка-конверт в правом нижнем углу
+[geobiom.ru](https://geobiom.ru/).

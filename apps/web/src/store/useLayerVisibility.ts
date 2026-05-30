@@ -48,9 +48,7 @@ export interface LayerVisibilityState {
   setBaseMap: (mode: BaseMapMode) => void;
   /** Текст ошибки, отображаемый красным toast'ом ~5 сек. null = тоста нет. */
   errorMsg: string | null;
-  /** Тост «спутник может не загружаться при VPN». 'visible' → 'fading' (800ms) → 'hidden'. */
-  vpnToast: ToastFadeState;
-  /** Тост-подсказка после первого включения forest. Тот же lifecycle. */
+  /** Тост-подсказка после первого включения forest. visible → fading (800ms) → hidden. */
   forestHint: ToastFadeState;
   /** Тост «ссылка скопирована». Boolean — короткий 2-сек pulse. */
   shareToast: boolean;
@@ -79,7 +77,6 @@ export interface LayerVisibilityState {
   /** Выключить все слои (visible: false по всем ключам). loaded не трогаем — слои уже закешированы в карте, повторный toggle on не будет re-load'ить. */
   resetAllVisibility: () => void;
   setErrorMsg: (msg: string | null) => void;
-  setVpnToast: (state: ToastFadeState) => void;
   setForestHint: (state: ToastFadeState) => void;
   setShareToast: (value: boolean) => void;
   setSpeciesFilterLabel: (label: string | null) => void;
@@ -115,7 +112,6 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
   baseMap: "scheme",
   setBaseMap: (mode) => set({ baseMap: mode }),
   errorMsg: null,
-  vpnToast: "hidden",
   forestHint: "hidden",
   shareToast: false,
   speciesFilterLabel: null,
@@ -156,7 +152,6 @@ export const useLayerVisibility = create<LayerVisibilityState>((set) => ({
       ) as Record<LayerKey, boolean>,
     })),
   setErrorMsg: (msg) => set({ errorMsg: msg }),
-  setVpnToast: (state) => set({ vpnToast: state }),
   setForestHint: (state) => set({ forestHint: state }),
   setShareToast: (value) => set({ shareToast: value }),
   setSpeciesFilterLabel: (label) => set({ speciesFilterLabel: label }),

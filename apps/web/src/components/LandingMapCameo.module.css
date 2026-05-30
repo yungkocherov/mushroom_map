@@ -11,12 +11,14 @@
   box-shadow:
     0 28px 70px rgba(60, 50, 30, 0.22),
     0 0 0 1px rgba(0, 0, 0, 0.06);
-  transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1),
-    box-shadow 0.35s;
+  transition: box-shadow 0.35s;
 }
 
+/* translateY на hover вынесен на .cameoWrap (см. LandingPage.module.css),
+   чтобы и карта, и индекс-карточка прыгали вместе. Здесь оставлен
+   только box-shadow «лифт» — он привязан к самой картинке, не к
+   карточке снизу. */
 .cameo:hover {
-  transform: translateY(-2px);
   box-shadow:
     0 34px 80px rgba(60, 50, 30, 0.26),
     0 0 0 1px rgba(0, 0, 0, 0.08);
