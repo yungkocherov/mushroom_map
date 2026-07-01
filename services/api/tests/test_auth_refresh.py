@@ -97,12 +97,17 @@ def test_refresh_rotates_cookie_and_returns_access(
     assert _alive_in_family(db_conn, family) == 1
 
 
+# usefixtures(db_conn): сами тесты в БД не ходят, но без db-фикстуры
+# conftest не скипает их когда стек не поднят — и они бьются в неподнятый
+# API вместо skip.
+@pytest.mark.usefixtures("db_conn")
 def test_refresh_with_no_cookie_returns_401() -> None:
     from _test_env import API_BASE
     r = httpx.post(f"{API_BASE}/api/auth/refresh", timeout=5.0)
     assert r.status_code == 401
 
 
+@pytest.mark.usefixtures("db_conn")  # см. коммент у test_refresh_with_no_cookie
 def test_refresh_with_unknown_token_returns_401_and_clears_cookie() -> None:
     from _test_env import API_BASE
     fake = secrets.token_urlsafe(32)
