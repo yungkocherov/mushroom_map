@@ -27,6 +27,16 @@ on:
       - ".github/workflows/deploy-api.yml"
   workflow_dispatch:
 
+# Деплои строго по одному. Параллельные push'и в main (например серия
+# dependabot-мёржей) иначе гонятся за пересоздание контейнера на VM:
+# 2026-07-01 три одновременных deploy'а снесли mushroom_api_prod
+# (compose «No such container» на переименованном старике + 502 до
+# ручного up -d). cancel-in-progress выключен — каждый деплой докатывает
+# свой (одинаковый по содержимому api) образ до конца.
+concurrency:
+  group: deploy-api
+  cancel-in-progress: false
+
 jobs:
   build-and-push:
     name: build & push image to GHCR

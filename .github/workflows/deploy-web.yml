@@ -33,6 +33,13 @@ on:
       - ".github/workflows/deploy-web.yml"
   workflow_dispatch:
 
+# По одному деплою за раз — параллельные rsync --delete в /srv/web
+# могут погонять друг друга (см. аналогичный инцидент deploy-api
+# 2026-07-01).
+concurrency:
+  group: deploy-web
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
