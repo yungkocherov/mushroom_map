@@ -281,10 +281,16 @@ TimeWeb-primary; только автор → переезд на Oracle полн
 (Москва-2), 1 vCPU / 1 GB. Caddyfile в `infra/Caddyfile.ru-proxy`.
 Бесплатно до ~2026-10-30.
 
-**Observability + Backup runbooks** — `services/observability/README.md`,
-`scripts/backup/README.md`. Stack: GlitchTip (`sentry.geobiom.ru`) +
-Umami (`analytics.geobiom.ru`); nightly pg_dump → age → Yandex Object
-Storage с restore-drill через `scripts/backup/restore_drill.sh`.
+**Backup runbook** — `scripts/backup/README.md`: nightly pg_dump → age →
+Cloudflare R2 (YOS_*-имена env-переменных исторические) с restore-drill
+через `scripts/backup/restore_drill.sh`. rclone на VM — ручной 1.74+ под
+`apt-mark hold` (apt-версия 1.60 ломает R2-upload 501-ошибкой;
+unattended-upgrades уже один раз перезатёр бинарь — 2026-05-27, месяц
+красных бэкапов).
+
+**Observability (GlitchTip/Umami) НЕ задеплоен.**
+`services/observability/README.md` — runbook на будущее; DNS-записей
+`sentry.`/`analytics.geobiom.ru` не существует, контейнеров на VM нет.
 
 ## Deprecated (don't extend, don't rely on)
 
