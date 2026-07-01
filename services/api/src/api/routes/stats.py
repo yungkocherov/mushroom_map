@@ -245,7 +245,8 @@ def species_now(
             (limit,),
         ).fetchall()
 
-    total_current = sum(r[1] for r in rows) or 1
+    total_current = sum(int(r[1]) for r in rows)
+    pct_denom = total_current or 1  # только против деления на 0 при пустом окне
     items = []
     for species_key, count_current, count_previous in rows:
         current = int(count_current)
@@ -264,7 +265,7 @@ def species_now(
             "species_key": species_key,
             "label":       SPECIES_LABELS.get(species_key, species_key),
             "post_count":  current,
-            "pct":         round(100.0 * current / total_current, 1),
+            "pct":         round(100.0 * current / pct_denom, 1),
             "trend":       trend,
         })
 
