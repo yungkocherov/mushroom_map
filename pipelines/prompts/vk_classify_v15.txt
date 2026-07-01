@@ -1,0 +1,101 @@
+Classify mushrooms AND berries in this photo. If there is NO mushroom and NO
+berry, return [] (an empty array). List ONLY items you can clearly identify.
+Don't guess from texture / colour alone. Typical photo has 2-4 species —
+listing 8+ usually means guessing. One entry per species.
+
+NO MUSHROOM -> []: if the photo is a landscape, forest floor, foliage, grass,
+flowers, a person / selfie, a screenshot, a drawing / illustration, a text
+card, or food on a plate with no identifiable wild mushroom — return [].
+It is better to return [] than to invent a single low-count item. Do NOT
+force an answer just to fill the array.
+
+STEM FIRST (for any bolete — fleshy cap over a sponge of pores, no gills):
+before you name a brown-capped bolete, look at the STEM and cap surface —
+  - thick stem, smooth or with a fine WHITE NET, NO dark scales, often bulbous,
+      cap dry and matte  -> porcini (белый).
+  - slender white stem covered in DARK / BLACK SCALES or speckles (rough,
+      freckled)  -> a Leccinum (подосиновик / подберёзовик), NEVER porcini.
+      Then split by cap colour: orange / red / brick -> aspen_bolete;
+      grey-brown / tan -> birch_bolete.
+  - SLIMY / glossy / wet-looking cap (often with debris stuck to it), pale
+      yellow pores, often a ring on the stem, growing under pine -> suillus.
+Do NOT default to porcini for every brown cap — that is the most common mistake.
+
+Mushroom keys (distinctive features):
+- porcini: bolete whose thick stem is smooth or carries a white NET and has NO
+    dark scales (often a bulbous base); cream / yellow pores under the cap (no
+    gills); white unchanging flesh; cap DRY and matte. Cap colour does NOT
+    matter — pale tan, cream, hazel, light or dark olive-brown, chestnut,
+    mahogany, dark-brown are ALL porcini as long as the stem is smooth / netted.
+    (The light Boletus edulis and the dark pine form B. pinophilus are ONE key.)
+- aspen_bolete: Leccinum-type bolete — white stem with DARK / BLACK SCALES and
+    an ORANGE / RED / brick-red / yellow-orange cap. The orange-to-red cap on a
+    Leccinum is diagnostic on its own: call aspen_bolete even if the stem is cut,
+    hidden, or its scales are hard to see. Never downgrade an orange/red-capped
+    bolete to porcini on cap tone.
+- birch_bolete: Leccinum-type bolete with a plain GREY-BROWN / tan / mushroom-
+    brown cap (no red, no orange) on a SLENDER white stem, usually dark-scaled.
+    The slim, freckled-stem Leccinum build is what separates it from the thick
+    smooth-stemmed porcini. A plain grey-brown bolete on a slim speckled stem is
+    birch_bolete, NOT porcini — do not relabel it porcini just because the cap
+    is brown.
+- suillus: маслёнок — SLIMY / glossy / wet-looking brown cap (chestnut to
+    yellow-brown, often with pine needles or leaf bits stuck to it), pale-yellow
+    pores, a slender stem usually with a ring (luteus) or fine granular dots
+    (granulatus), grows under pine. The shiny slimy cap (and ring) separate it
+    from the dry matte porcini and from the dry velvety mokhovik.
+- mokhovik: small-to-medium bolete, DRY velvety olive / yellow-brown cap (often
+    cracked into a mosaic), bright yellow pores that bruise blue, slim stem.
+    Not slimy (that would be suillus) and not white-netted (that would be porcini).
+- chanterelle: ANY chanterelle / funnel mushroom — funnel / trumpet / vase shape
+    with a ribbed (NOT gilled) underside and false gills running down the stem.
+    Variants: classic (bright golden-yellow), trumpet (small grey-brown funnel,
+    yellow inside, hollow stem), horn of plenty (dark grey-black). One entry
+    summing all.
+- saffron_milkcap: orange cap with concentric rings, orange milk
+- white_milkcap: white cap with wavy / fringed edges, white milk
+- woolly_milkcap: pink cap with concentric zones, hairy edge
+- spring_mushroom: ANY morel, verpa, or gyromitra. DIAGNOSTIC: the cap is NOT a
+    smooth disc — it is wrinkled, pitted, lobed, brain-like, saddle-shaped, or
+    honeycomb-textured.
+      · morel — honeycomb cap with deep pits, brown, hollow, fused to stem
+      · verpa — small brown wrinkled thimble cap hanging FREE from a tall
+        pale HOLLOW stem. Baskets look like pale stems topped with little
+        brown caps — do NOT call those brown caps porcini.
+      · gyromitra — brain-like or saddle lobes, dark reddish-brown,
+        no honeycomb
+- honey_fungus: clusters of small-to-medium tan caps with a ring on the stem,
+    growing on wood / stumps. Two visual variants — both go here:
+      · autumn type — yellow-brown cap with small darker scales, slightly larger
+      · summer type — smaller, smooth two-tone cap (darker centre fading to
+        lighter edge, water-marked look), no scales
+- oyster: large shell / fan caps sideways on tree trunk, no central stem
+- russula: brittle flat cap (smooth disc), bright colour (red / yellow / green /
+    violet), WHITE stem, NO ring, NO white spots on cap.
+    NOT russula: small bright-red CUP / bowl with no real stem sitting on ground
+    or wood (a spring cup-fungus) -> use sarcoscypha.
+- fly_agaric: BRIGHT RED cap with WHITE WART-LIKE SPOTS, white stem with a ring
+    and a bulbous base. The white spots distinguish it from russula. If the cap
+    is red but spotless -> russula, not fly_agaric.
+- sarcoscypha: bright SCARLET / vermilion-red CUP or ear-shaped fungus, smooth
+    red inner surface, paler (whitish-felty) outside, sitting on mossy fallen
+    branches or bare leaf-litter in early spring — often the only splash of red
+    around. No gills, no pores, no real stem (a shallow stalk at most). The
+    "scarlet elf cup". NOT a bolete / russula / fly_agaric (those are a domed cap
+    on a stem) and NOT a morel (no honeycomb pits).
+
+Berry keys (only if clearly visible as the main subject):
+- blueberry: small round dark blue / purple-black berries
+- cloudberry: orange / amber raspberry-shaped berries on low plants
+- cranberry: small round bright red berries on moss
+
+- other: any mushroom clearly visible but not matching a key. USE THIS rather
+    than forcing a wrong key — e.g. a tall parasol (Macrolepiota), scaly Sarcodon,
+    saddle / lobed Helvella, bracket / shelf polypores on wood, puffballs, or a
+    Tricholoma. If it is clearly a mushroom but no key fits, it is other.
+
+count = TOTAL of that species across the WHOLE photo, summed across all
+baskets / piles. Full basket ≈ 30-50, half ≈ 15-25, handful ≈ 5-10.
+
+scene: basket (in container/stacked/cut) | kitchen (cooking/drying) |
+forest (growing/held outdoors) | other (close-up, neutral bg).
