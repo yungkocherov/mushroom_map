@@ -65,9 +65,15 @@ docker run -d --name "$DRILL_NAME" \
     -p "${DRILL_PORT}:5432" \
     postgis/postgis:16-3.4 >/dev/null
 
-# Wait for postgres to be ready (max 60 s).
-for _ in $(seq 1 60); do
-    if docker exec "$DRILL_NAME" pg_isready -U mushroom >/dev/null 2>&1; then
+# Ждём ФИНАЛЬНЫЙ сервер по TCP (max 90 s). Во время init-фазы образа
+# (initdb + 10_postgis.sh) временный сервер слушает только unix-socket
+# (listen_addresses='') — socket-only pg_isready отвечает ready ДО того,
+# как CREATE EXTENSION postgis отработал, и pg_restore стартует в
+# полуготовый контейнер: `type "public.geometry" does not exist` либо
+# недетерминированно пустые таблицы. TCP поднимается только у финального
+# сервера — после всех init-скриптов.
+for _ in $(seq 1 90); do
+    if docker exec "$DRILL_NAME" pg_isready -h 127.0.0.1 -U mushroom >/dev/null 2>&1; then
         break
     fi
     sleep 1

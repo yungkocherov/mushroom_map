@@ -125,8 +125,13 @@ chmod 600 /etc/geobiom/.env.backup
 ### 4. rclone config на VM (R2 backend)
 
 ```bash
-# На VM:
-apt-get update && apt-get install -y rclone age
+# На VM. ВАЖНО: apt-версия rclone (1.60 в Ubuntu 24.04) ломается на R2
+# (501 NotImplemented на rcat). Ставить официальный бинарь и ХОЛДИТЬ пакет —
+# иначе unattended-upgrades перезатрёт его дистрибутивным (случилось
+# 2026-05-27: месяц красных бэкапов).
+apt-get update && apt-get install -y age unzip
+curl -fsSL https://rclone.org/install.sh | bash
+apt-mark hold rclone
 mkdir -p /root/.config/rclone
 cat >/root/.config/rclone/rclone.conf <<EOF
 [geobiom-yos]
