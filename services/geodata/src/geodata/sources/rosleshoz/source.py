@@ -86,6 +86,26 @@ DEFAULT_ID_FIELD_CANDIDATES: tuple[str, ...] = (
     "выдел",
 )
 
+#: Канонические группы возраста (их ждут Legend.tsx и forestStyle paint-выражения).
+#: ФГИС в разных регионах уточняет молодняки классом возраста — Свердловская
+#: область отдаёт «молодняки II класса возраста», Ленинградская просто
+#: «молодняки». Приводим к общему виду, остальные значения не трогаем.
+AGE_GROUP_CANONICAL: tuple[str, ...] = (
+    "молодняки",
+    "средневозрастные",
+    "приспевающие",
+    "спелые",
+    "перестойные",
+)
+
+
+def _normalize_age_group(raw: str) -> str:
+    norm = " ".join(raw.strip().lower().replace("ё", "е").split())
+    for canon in AGE_GROUP_CANONICAL:
+        if norm.startswith(canon):
+            return canon
+    return raw.strip()
+
 
 @dataclass
 class RosleshozConfig:
@@ -279,7 +299,7 @@ class RosleshozForestSource(ForestSource):
             except (ValueError, TypeError):
                 pass
         if (ag := attrs.get("age_group")) is not None:
-            meta_out["age_group"] = str(ag)
+            meta_out["age_group"] = _normalize_age_group(str(ag))
         # Новые поля (attributesinfo pipeline 2026-05).
         if (td := attrs.get("taxation_date")) is not None:
             meta_out["taxation_date"] = str(td)

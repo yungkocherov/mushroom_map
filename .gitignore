@@ -57,6 +57,8 @@ logs/
 # Data scratch: regenerable id-lists, scraper progress DBs, downloaded sources
 data/rosleshoz/*.txt
 data/rosleshoz/*.db
+data/rosleshoz/*.db-shm
+data/rosleshoz/*.db-wal
 data/rosleshoz/*.db.bak-*
 data/rosleshoz/*.tsv
 data/sources/

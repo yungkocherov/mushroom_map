@@ -19,6 +19,7 @@ ingest_adjacent_subjects.py.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import sys
@@ -52,6 +53,9 @@ SUBJECTS = [
     ("Вологодская область",      "Vologda Oblast",     "vologda_oblast",
      "Europe/Moscow",
      ["Вологодская область"]),
+    ("Свердловская область",     "Sverdlovsk Oblast",  "sverdlovsk_oblast",
+     "Asia/Yekaterinburg",
+     ["Свердловская область"]),
 ]
 
 
@@ -117,8 +121,23 @@ def fetch(query_str: str, timeout_s: int = 400) -> dict:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--only", default=None,
+                    help="Скачать только эти субъекты (коды через запятую). "
+                         "Без флага — все SUBJECTS.")
+    ap.add_argument("--out", default="data/osm/adjacent_subjects.geojson",
+                    help="Куда сохранить FeatureCollection")
+    args = ap.parse_args()
+
+    subjects = SUBJECTS
+    if args.only:
+        wanted = {c.strip() for c in args.only.split(",") if c.strip()}
+        subjects = [s for s in SUBJECTS if s[2] in wanted]
+        if not subjects:
+            sys.exit(f"--only={args.only}: нет таких кодов в SUBJECTS")
+
     features = []
-    for name_ru, name_en, code, tz, alt_names in SUBJECTS:
+    for name_ru, name_en, code, tz, alt_names in subjects:
         print(f"=== {name_ru} ===")
         rel = None
         data = None
@@ -157,8 +176,8 @@ def main() -> None:
         })
         print(f"  OK rel={rel.get('id')} geom={geom['type']}")
 
-    os.makedirs("data/osm", exist_ok=True)
-    out_path = "data/osm/adjacent_subjects.geojson"
+    out_path = args.out
+    os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump({"type": "FeatureCollection", "features": features}, f,
                   ensure_ascii=False, separators=(",", ":"))
